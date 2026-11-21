@@ -1,8 +1,8 @@
 <script>
 /* Runs before the game: works out what this browser can do.
    - Edge on Xbox: hand the controller to the game instead of the browser's cursor.
-   - Browsers with modules but no import maps (older Safari and TV browsers): load a small shim.
-   - No 3D at all (the PS4 browser turns WebGL off for websites): say so instead of a blank page. */
+   - Browsers without import maps or modern JavaScript (the PS4 browser): load the compatibility build.
+   - No WebGL (the PS4 browser turns it off for websites): the game draws with its own software renderer. */
 (function () {
   var ua = navigator.userAgent || '';
   var P = window.DS_PLATFORM = {
@@ -17,7 +17,11 @@
   P.webgl2 = !!(gl && typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext);
   var modules = 'noModule' in document.createElement('script');
   var maps = !!(window.HTMLScriptElement && HTMLScriptElement.supports && HTMLScriptElement.supports('importmap'));
-  if (P.webgl && modules && !maps) {
+  var legacy = window.DS_LEGACY_SRC && (!maps || P.ps4 || P.ps5 || /[?&]legacy\b/.test(location.search));
+  if (legacy) {
+    window.__dsLegacy = true;
+    document.addEventListener('DOMContentLoaded', function () { var l = document.createElement('script'); l.src = window.DS_LEGACY_SRC; document.body.appendChild(l); });
+  } else if (modules && !maps) {
     var s = document.createElement('script'); s.async = true;
     s.src = 'https://cdn.jsdelivr.net/npm/es-module-shims@1.10.0/dist/es-module-shims.js';
     document.head.appendChild(s);
@@ -35,16 +39,12 @@
     if (detail) { var q = document.createElement('p'); q.textContent = detail; q.setAttribute('style', 'margin:0;font:13px/1.4 monospace;color:#6e7a86'); b.appendChild(q); }
     d.appendChild(b); document.body.appendChild(d);
   }
-  var ps = P.ps4 || P.ps5;
   function verdict() {
-    if (!P.webgl) {
-      if (ps) say("This browser can't draw 3D", 'Sony turns off WebGL, the 3D graphics websites use, in the PlayStation web browser, so Drill Season cannot run here. It runs in Microsoft Edge on Xbox, and in Chrome, Edge, Safari or Firefox on a computer, phone or tablet.');
-      else say('3D graphics are off', 'Drill Season needs WebGL, and this browser has it turned off or does not support it. Try an up-to-date Chrome, Edge, Safari or Firefox. On a computer, check that hardware acceleration is on in the browser settings.');
-    } else if (!modules) say('This browser is too old', 'Drill Season needs a newer browser. Try an up-to-date Chrome, Edge, Safari or Firefox.');
+    if (!modules && !legacy) say('This browser is too old', 'Drill Season needs a newer browser. Try an up-to-date Chrome, Edge, Safari or Firefox.');
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', verdict); else verdict();
   // if the game never starts, explain instead of leaving a dark screen
-  setTimeout(function () { if (!window.__dsBooted && (firstErr || P.console)) say("The game didn't start", 'This browser could not run Drill Season. Try an up-to-date Chrome, Edge, Safari or Firefox' + (P.xbox ? ', or update Microsoft Edge on your Xbox.' : '.'), firstErr); }, 45000);
+  setTimeout(function () { if (!window.__dsBooted && ((firstErr && !legacy) || P.console)) say("The game didn't start", 'This browser could not run Drill Season. Try an up-to-date Chrome, Edge, Safari or Firefox' + (P.xbox ? ', or update Microsoft Edge on your Xbox.' : '.'), firstErr); }, legacy ? 120000 : 45000);
   // Edge on Xbox: a tip until the controller reaches the game
   if (P.xbox) document.addEventListener('DOMContentLoaded', function () {
     var t = document.createElement('div'); t.id = 'xbox-tip';

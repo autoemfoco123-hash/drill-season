@@ -19,7 +19,19 @@ body > dist/artifact.html
   printf '<!doctype html>\n<html lang="en">\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n'
   # peer-to-peer transport for multiplayer outside claude.ai (Trystero, MIT; see vendor/LICENSES.txt)
   printf '<script>\n'; cat vendor/trystero-nostr.js; printf '\n</script>\n'
+  # browsers without import maps or modern JavaScript (the PS4 browser) load this instead
+  printf '<script>window.DS_LEGACY_SRC = "drill-season-legacy.js";</script>\n'
   body
   printf '</html>\n'
 } > index.html
 echo "built index.html and dist/artifact.html"
+# compatibility build: the same game as one classic script, three.js included, lowered to ES2017
+if [ -x node_modules/.bin/esbuild ]; then
+  mkdir -p build
+  { for p in $PARTS; do cat "src/$p"; echo; done; } > build/legacy-entry.js
+  node_modules/.bin/esbuild build/legacy-entry.js --bundle --format=iife --target=es2017,safari11 --minify --legal-comments=none \
+    --banner:js='window.__dsIsLegacyBundle=true;' --outfile=drill-season-legacy.js --log-level=warning
+  echo "built drill-season-legacy.js ($(( $(stat -c %s drill-season-legacy.js) / 1024 )) KB)"
+else
+  echo "skipped drill-season-legacy.js (run npm install for esbuild)"
+fi

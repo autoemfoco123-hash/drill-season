@@ -57,8 +57,10 @@ function updatePlayer(dt) {
     return;
   }
   let ix = 0, iz = 0;
-  if (keys.KeyW || keys.ArrowUp) iz += 1; if (keys.KeyS || keys.ArrowDown) iz -= 1;
-  if (keys.KeyA || keys.ArrowLeft) ix -= 1; if (keys.KeyD || keys.ArrowRight) ix += 1;
+  const AL = LITE_MODE; // arrows turn the camera instead of walking
+  if (keys.KeyW || (keys.ArrowUp && !AL)) iz += 1; if (keys.KeyS || (keys.ArrowDown && !AL)) iz -= 1;
+  if (keys.KeyA || (keys.ArrowLeft && !AL)) ix -= 1; if (keys.KeyD || (keys.ArrowRight && !AL)) ix += 1;
+  if (AL && MODE === 'play') { const kx = (keys.ArrowRight ? 1 : 0) - (keys.ArrowLeft ? 1 : 0), ky = (keys.ArrowDown ? 1 : 0) - (keys.ArrowUp ? 1 : 0); if (kx || ky) look(kx * 950 * dt / (S.settings.sens || 1), ky * 620 * dt / (S.settings.sens || 1)); }
   if (TOUCH.joy.active) { ix += TOUCH.joy.x; iz += TOUCH.joy.y; }
   if (GP.lx || GP.ly) { ix += GP.lx; iz -= GP.ly; }
   const il = Math.hypot(ix, iz); if (il > 1) { ix /= il; iz /= il; }
@@ -109,7 +111,7 @@ function updatePlayer(dt) {
   const H = P.human;
   H.group.position.copy(P.pos);
   H.group.rotation.y = P.bodyYaw;
-  animHuman(H, dt, { speed: P.speed, crouch: P.crouch && !P.aiming ? 1 : (P.crouch ? 0.6 : 0), aim: S.fists ? 0 : Math.max(P.aimT, GAME_T - P.lastShot < 0.5 ? 1 : 0), pitch: camPitch, fists: S.fists && !(P.handsUp > 0), guard: S.fists && P.aiming, punch: P.punchT > 0 ? P.punchT / (P.punchDur || 0.3) : 0, punchSide: P.punchSide, hook: P.punchHook, down: down ? clamp(P.downT, 0, 1) : 0, twoHand: S.cur !== 'k9', shiver: S.warmth < 30 ? 1 : 0, hands: P.handsUp > 0, pose: P.pose > 0 || (PHONE.selfie && MODE === 'phone') , wave: (P.waveT || 0) > 0 && !P.aiming, pose: (P.poseT || 0) > 0, flip: flipping() });
+  animHuman(H, dt, { speed: P.speed, crouch: P.crouch && !P.aiming ? 1 : (P.crouch ? 0.6 : 0), aim: S.fists ? 0 : Math.max(P.aimT, GAME_T - P.lastShot < 0.5 ? 1 : 0), pitch: camPitch, fists: S.fists && !(P.handsUp > 0), guard: S.fists && P.aiming, punch: P.punchT > 0 ? P.punchT / (P.punchDur || 0.3) : 0, punchSide: P.punchSide, hook: P.punchHook, down: down ? clamp(P.downT, 0, 1) : 0, twoHand: S.cur !== 'k9', shiver: S.warmth < 30 ? 1 : 0, hands: P.handsUp > 0, pose: P.pose > 0 || (PHONE.selfie && MODE === 'phone') || (P.poseT || 0) > 0, wave: (P.waveT || 0) > 0 && !P.aiming, flip: flipping() });
   P.waveT = Math.max(0, (P.waveT || 0) - dt); P.poseT = Math.max(0, (P.poseT || 0) - dt);
   if (P.gun) P.gun.visible = !S.fists && !(P.handsUp > 0) && !(PHONE.selfie && MODE === 'phone');
   // timers

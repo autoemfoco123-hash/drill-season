@@ -196,7 +196,7 @@ function startGame(state) {
   P.gunKey = ''; refreshPlayerGun(); hudDirty = true;
   spawnOwnedCar(0, false);
   syncFollowers();
-  if (IS_TOUCH) { $('touch').hidden = false; setupTouch(); }
+  if (SHOW_TOUCH) { $('touch').hidden = false; setupTouch(); }
   if (!NET.started) { NET.started = true; initNet(); }
   if (!S.flags.introSeen) { S.flags.introSeen = true; playCutscene(cutIntro(), () => banner('@' + S.name, 'Calder Park · Day ' + S.day)); }
   else { banner('@' + S.name, 'Calder Park · Day ' + S.day); lockPointer(); }
@@ -293,11 +293,11 @@ function frame(now) {
   U.uTime.value = REAL_T % 100;
   U.uHurt.value = Math.max(U.uHurt.value * Math.exp(-dt * 1.8), MODE !== 'title' && S.health < 30 ? 0.3 + Math.sin(REAL_T * 5) * 0.08 : 0);
   if (MODE !== 'title' && MODE !== 'ending' && MODE !== 'cutscene') updateHUD(dt);
-  $('touch').hidden = !(IS_TOUCH && (MODE === 'play' || MODE === 'phone'));
+  $('touch').hidden = !(SHOW_TOUCH && (MODE === 'play' || MODE === 'phone'));
   if (MODE === 'phone' && REAL_T % 1 < dt) phoneClock();
   if (MODE === 'rhythm') { rhUpdate(); drawRhythm(); }
   else if (MODE === 'bench') drawBench(dt);
-  else { composer.render(dt); phoneAfterRender(); }
+  else { if (LITE_MODE) liteRender(dt); else composer.render(dt); phoneAfterRender(); }
 }
 
 /* ---- boot ---- */

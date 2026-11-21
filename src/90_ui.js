@@ -204,7 +204,7 @@ function updatePrompts() {
     else if (rp) html = `${keyCap('E')}Talk to ${esc(rp.rqName)} · ${RTYPES[rp.rq].name}`;
     else { const v = nearestCar(); if (v) html = `${keyCap('F')}${v.owned ? 'Get in your ' : v.driver === 'ai' ? 'Carjack the ' : v.locked ? 'Locked · ' : 'Break into the '}${esc(v.sp.name)}`; }
   }
-  if (!html && !IS_TOUCH && !GP.active && !pointerLocked && REAL_T % 8 < 5) html = lockFailed ? 'Drag with the mouse to look' : 'Click to control the camera';
+  if (!html && !IS_TOUCH && !GP.active && !pointerLocked && REAL_T % 8 < 5) html = LITE_MODE ? 'Arrow keys look around · WASD to move' : lockFailed ? 'Drag with the mouse to look' : 'Click to control the camera';
   if (html) { if (HU.prompt.innerHTML !== html) HU.prompt.innerHTML = html; HU.prompt.classList.add('on'); }
   else HU.prompt.classList.remove('on');
 }

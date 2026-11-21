@@ -54,7 +54,7 @@ function canvasMean(tex) {
   return new THREE.Vector3(lin(r), lin(gg), lin(b));
 }
 async function loadRealism() {
-  if (location.protocol === 'file:') return;
+  if (location.protocol === 'file:' || LITE_MODE) return;
   REAL.aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   const lite = LOW_POWER || S.settings.quality === 'low';
   const set = async (name, rep, color) => {

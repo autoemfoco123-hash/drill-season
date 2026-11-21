@@ -3,7 +3,8 @@
    RENDERER, SCENE, TEXTURES, BATCHING
    ========================================================= */
 const PR = IS_CONSOLE ? Math.min(window.devicePixelRatio || 1, (PLAT.xboxSeries ? 1920 : 1280) / Math.max(1, innerWidth)) : Math.min(window.devicePixelRatio || 1, IS_TOUCH ? 1.25 : 1.5);
-const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', stencil: false });
+// no WebGL (the PS4 browser): the software renderer in 12_lite.js stands in
+const renderer = LITE_MODE ? makeLiteRenderer() : (() => { try { return new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', stencil: false }); } catch (e) { console.warn('WebGL failed, using the software renderer', e); LITE_MODE = true; return makeLiteRenderer(); } })();
 renderer.setPixelRatio(PR);
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -12,6 +13,7 @@ renderer.shadowMap.enabled = !LOW_POWER;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.domElement.className = 'gl';
 $('app').prepend(renderer.domElement);
+if (LITE_MODE) renderer.domElement.after(LITE.over);
 
 const scene = new THREE.Scene();
 const FOG_COL = new THREE.Color(0x0e1b2b);
@@ -209,7 +211,7 @@ function buildEnv() {
   ENV = pm.fromScene(es, 0.03).texture;
   pm.dispose();
 }
-buildEnv();
+if (!LITE_MODE) buildEnv();
 
 /* ---------- shared materials (PBR) ---------- */
 const MAT = {};
@@ -250,6 +252,7 @@ class Batch {
       if (ua) this.u.push(ua.getX(i), ua.getY(i)); else this.u.push(0, 0);
       this.c.push(_c3.r, _c3.g, _c3.b);
     }
+    if (LITE_MODE) liteRecord(this, geo, m, _c3);
   }
   build() {
     const g = new THREE.BufferGeometry();
@@ -260,7 +263,7 @@ class Batch {
     g.computeBoundingSphere();
     return g;
   }
-  mesh(mat, cast, receive) { const m = new THREE.Mesh(this.build(), mat); m.matrixAutoUpdate = false; m.updateMatrix(); m.castShadow = cast !== false; m.receiveShadow = receive !== false; scene.add(m); return m; }
+  mesh(mat, cast, receive) { const m = new THREE.Mesh(this.build(), mat); if (LITE_MODE) { liteCommit(this, mat); m.userData.liteSkip = true; } m.matrixAutoUpdate = false; m.updateMatrix(); m.castShadow = cast !== false; m.receiveShadow = receive !== false; scene.add(m); return m; }
 }
 
 /* ---------- GPU particles (one draw call per system) ---------- */
@@ -596,6 +599,6 @@ function updateDayNight(dt, focus) {
     envDomeMat.uniforms.hor.value.copy(scene.fog.color).multiplyScalar(lerp(1.1, 1.8, n)).add(_tmpC2.setRGB(0.25, 0.1, 0.02).multiplyScalar(n * 0.6));
     envDomeMat.uniforms.bot.value.setRGB(lerp(0.45, 0.03, n), lerp(0.46, 0.03, n), lerp(0.5, 0.05, n));
     envDomeMat.uniforms.sun.value.copy(DN.sunDir); envDomeMat.uniforms.sunCol.value.copy(SUN.color).multiplyScalar(useMoon ? 0.1 : day * 1.5);
-    bakeEnv();
+    if (!LITE_MODE) bakeEnv();
   }
 }

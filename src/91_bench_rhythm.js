@@ -5,7 +5,8 @@ const BENCH = { gun: 'k9', r: null, scene: null, cam: null, model: null, rotY: 0
 function openBench() {
   $('menu').hidden = true; MODE = 'bench'; $('bench').hidden = false;
   BENCH.gun = S.cur;
-  if (!BENCH.r) {
+  if (!BENCH.r && LITE_MODE) { if (!$('bn-view').querySelector('.bn-lite')) $('bn-view').insertAdjacentHTML('beforeend', '<div class="bn-lite">3D preview is off in this browser. Parts still apply.</div>'); }
+  else if (!BENCH.r) {
     BENCH.r = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     BENCH.r.setPixelRatio(Math.min(devicePixelRatio || 1, 2)); BENCH.r.toneMapping = THREE.ACESFilmicToneMapping; BENCH.r.toneMappingExposure = 1.1;
     $('bn-view').append(BENCH.r.domElement);
@@ -81,7 +82,7 @@ function renderBench() {
     return `<div class="st"><span>${n}</span><div class="bar"><i class="${better ? 'up' : worse ? 'dn' : ''}" style="width:${clamp(v / mx * 100, 3, 100)}%"></i></div><b>${f(v)}</b></div>`;
   }).join('');
   const key = gid + JSON.stringify(G.cfg);
-  if (key !== BENCH.key) {
+  if (key !== BENCH.key && BENCH.scene) {
     if (BENCH.model) BENCH.scene.remove(BENCH.model);
     const gun = buildGun(gid, G.cfg);
     const box = new THREE.Box3().setFromObject(gun), c = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());

@@ -27,8 +27,8 @@ Play it at **https://autoemfoco123-hash.github.io/drill-season/** once GitHub Pa
 ### Consoles
 
 - **Xbox (One and Series X|S):** open the page in Microsoft Edge on the console and play with the controller. The game asks Edge to pass the controller to the page; if it still moves a cursor, open the Edge menu and turn on game controller mode. On Xbox the game draws at a lower resolution, with no shadows and fewer people and cars, so it runs on older hardware.
-- **PlayStation 4:** the PS4 web browser turns off WebGL, the 3D graphics that websites use, so the game cannot run there. The page explains this instead of staying black.
-- Browsers without import maps (older Safari and some TV browsers) get a small compatibility script automatically.
+- **PlayStation 4:** the PS4 web browser turns off WebGL, the 3D graphics most web games use. Drill Season switches to its own software renderer there: the same city, people, cars and day and night, drawn in plain JavaScript at a lower resolution that adjusts itself to keep the game moving. Play with a USB keyboard (WASD to move, arrow keys to look) or with the on-screen buttons and the PS4 cursor; a controller works too if the browser passes it to the page.
+- Older browsers without modern JavaScript or import maps (the PS4 browser, older Safari, some TV browsers) load `drill-season-legacy.js`, the same game compiled to an older standard. Any browser with WebGL turned off uses the software renderer.
 
 ### Multiplayer
 
@@ -148,6 +148,8 @@ The game is split into modules in `src/` and concatenated into one file:
 ```
 
 This writes `index.html` (standalone) and `dist/artifact.html` (Claude artifact format). The module order is in `src/parts.txt`.
+
+Run `npm install` once first to also build `drill-season-legacy.js`, the compatibility build (it uses esbuild and three.js from npm). Add `?lite` to the page address to try the software renderer in any browser.
 
 `assets/` must sit next to the page. Every asset in it is CC0 from [Poly Haven](https://polyhaven.com); `assets/CREDITS.md` lists each one with a link.
 

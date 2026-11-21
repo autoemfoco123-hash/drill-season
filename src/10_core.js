@@ -21,11 +21,13 @@ const angDiff = (a, b) => { let d = (b - a) % TAU; if (d > Math.PI) d -= TAU; if
 function rng(seed) { let a = seed >>> 0; return () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const fmtMoney = n => (n < 0 ? '-$' : '$') + Math.abs(Math.round(n)).toLocaleString('en-US');
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+if (window.__dsLegacy && !window.__dsIsLegacyBundle) throw new Error('Drill Season: using the compatibility build');
 const IS_TOUCH = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || (('ontouchstart' in window) && navigator.maxTouchPoints > 0);
 // consoles (Edge on Xbox) and phones get the lighter settings
 const PLAT = window.DS_PLATFORM || {};
 const IS_CONSOLE = !!PLAT.console;
-const LOW_POWER = IS_TOUCH || IS_CONSOLE;
+const LOW_POWER = IS_TOUCH || IS_CONSOLE || PLAT.webgl === false;
+const SHOW_TOUCH = IS_TOUCH || (!!(PLAT.ps4 || PLAT.ps5) && !!window.PointerEvent);
 const SAVE_KEY = 'drillseason.save.v1';
 // one shared clock for every player: 1 real second = 1 game minute, a full day every 24 minutes
 let TIME_OFFSET = 0;
