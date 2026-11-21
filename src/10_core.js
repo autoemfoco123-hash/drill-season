@@ -5,6 +5,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { Sky } from 'three/addons/objects/Sky.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 /* =========================================================
    DRILL SEASON - core utilities, state, save

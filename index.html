@@ -647,6 +647,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { Sky } from 'three/addons/objects/Sky.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 /* =========================================================
    DRILL SEASON - core utilities, state, save
@@ -2280,6 +2281,15 @@ function facadeTex(style, seed) {
       if (isLit) lit.push({ x, y, ww, hh, k: R() });
     }
   });
+  const mask = canvasTex(W, H, g => {
+    g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#000';
+    for (let f = 0; f < 4; f++) for (let c = 0; c < 4; c++) {
+      if (style === 'ware' && (f % 2 === 1 || c % 2 === 1)) continue;
+      const ware = style === 'ware', x = c * 64 + (ware ? 8 : 18), y = f * 64 + (ware ? 10 : 12), ww = ware ? 48 : 28, hh = ware ? 14 : 38;
+      g.fillRect(x, y, ww, hh);
+    }
+  });
   const emis = canvasTex(W, H, g => {
     g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
     for (const w of lit) {
@@ -2292,7 +2302,7 @@ function facadeTex(style, seed) {
       g.fillStyle = 'rgba(0,0,0,1)'; g.fillRect(w.x + w.ww / 2 - 1, w.y, 2, w.hh);
     }
   });
-  return { map, emis };
+  return { map, emis, mask };
 }
 
 function signTex(text, opts) {
@@ -2635,9 +2645,15 @@ const dirFrom = (elev, az, out) => { const e = THREE.MathUtils.degToRad(elev), a
 const ENV_SCENE = new THREE.Scene();
 const envDomeMat = new THREE.ShaderMaterial({
   side: THREE.BackSide, depthWrite: false,
-  uniforms: { top: { value: new THREE.Color() }, hor: { value: new THREE.Color() }, bot: { value: new THREE.Color() }, sun: { value: new THREE.Vector3(0, 1, 0) }, sunCol: { value: new THREE.Color() } },
+  uniforms: { top: { value: new THREE.Color() }, hor: { value: new THREE.Color() }, bot: { value: new THREE.Color() }, sun: { value: new THREE.Vector3(0, 1, 0) }, sunCol: { value: new THREE.Color() }, hdrDay: { value: null }, hdrNight: { value: null }, hdrMix: { value: 0 }, hdrAmt: { value: 0 }, dayNorm: { value: 1 }, nightNorm: { value: 1 } },
   vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-  fragmentShader: 'uniform vec3 top, hor, bot, sun, sunCol; varying vec3 vD; void main(){ float y = vD.y; vec3 c = y > 0.0 ? mix(hor, top, pow(y, 0.6)) : mix(hor, bot, pow(-y, 0.4)); c += sunCol * pow(max(dot(vD, sun), 0.0), 24.0) * 2.0; gl_FragColor = vec4(c, 1.0); }',
+  fragmentShader: `uniform vec3 top, hor, bot, sun, sunCol; uniform sampler2D hdrDay, hdrNight; uniform float hdrMix, hdrAmt, dayNorm, nightNorm; varying vec3 vD;
+    vec3 rgbe(vec4 t) { return t.a > 0.0 ? t.rgb * exp2(t.a * 255.0 - 128.0) * (255.0 / 256.0) : vec3(0.0); }
+    void main(){ float y = vD.y; vec3 c = y > 0.0 ? mix(hor, top, pow(y, 0.6)) : mix(hor, bot, pow(-y, 0.4)); c += sunCol * pow(max(dot(vD, sun), 0.0), 24.0) * 2.0;
+      if (hdrAmt > 0.0) { vec3 d = normalize(vD); vec2 uv = vec2(atan(d.z, d.x) / 6.2831853 + 0.5, asin(clamp(d.y, -1.0, 1.0)) / 3.1415927 + 0.5);
+        vec3 h = mix(rgbe(texture2D(hdrDay, uv)) / dayNorm, rgbe(texture2D(hdrNight, uv)) / nightNorm, hdrMix);
+        c *= mix(vec3(1.0), min(h, vec3(40.0)), hdrAmt); }
+      gl_FragColor = vec4(c, 1.0); }`,
 });
 ENV_SCENE.add(new THREE.Mesh(new THREE.SphereGeometry(10, 24, 12), envDomeMat));
 const PMREM = new THREE.PMREMGenerator(renderer);
@@ -2698,12 +2714,169 @@ function updateDayNight(dt, focus) {
   DN.envT -= dt;
   if (DN.envT <= 0 || Math.abs(n - DN.lastEnvN) > 0.12) {
     DN.envT = 25; DN.lastEnvN = n;
+    envDomeMat.uniforms.hdrMix.value = smooth(0.25, 0.75, n);
     envDomeMat.uniforms.top.value.setRGB(lerp(0.32, 0.015, n), lerp(0.45, 0.025, n), lerp(0.72, 0.05, n));
     envDomeMat.uniforms.hor.value.copy(scene.fog.color).multiplyScalar(lerp(1.1, 1.8, n)).add(_tmpC2.setRGB(0.25, 0.1, 0.02).multiplyScalar(n * 0.6));
     envDomeMat.uniforms.bot.value.setRGB(lerp(0.45, 0.03, n), lerp(0.46, 0.03, n), lerp(0.5, 0.05, n));
     envDomeMat.uniforms.sun.value.copy(DN.sunDir); envDomeMat.uniforms.sunCol.value.copy(SUN.color).multiplyScalar(useMoon ? 0.1 : day * 1.5);
     bakeEnv();
   }
+}
+
+
+/* =========================================================
+   REAL-WORLD ASSETS - CC0 photo textures and HDR skies from
+   Poly Haven (polyhaven.com), loaded after start-up and swapped
+   into the procedural materials. Opened from disk, the game keeps
+   its procedural look. Credits: assets/CREDITS.md
+   ========================================================= */
+const REAL = { on: false, sets: {}, aniso: 1 };
+const _TL = new THREE.TextureLoader();
+function realTex(path, srgb, rep) {
+  return new Promise(res => _TL.load('assets/' + path, t => {
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = REAL.aniso;
+    if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+    if (rep) t.repeat.set(rep, rep);
+    res(t);
+  }, undefined, () => res(null)));
+}
+function rgbeTex(path) {
+  return new Promise(res => _TL.load('assets/' + path, t => {
+    t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; res(t);
+  }, undefined, () => res(null)));
+}
+// facade materials keep their window layout; photo detail goes on the wall only
+function facadeDetail(mat, set, mask) {
+  mat.normalMap = set.nor; mat.normalScale.set(1.15, 1.15);
+  mat.roughnessMap = set.rough; mat.roughness = 1;
+  mat.envMapIntensity = 0.7;
+  mat.onBeforeCompile = sh => {
+    sh.uniforms.detailMap = { value: set.detail }; sh.uniforms.wallMask = { value: mask }; sh.uniforms.detailRep = { value: set.rep };
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform sampler2D detailMap; uniform sampler2D wallMask; uniform float detailRep;')
+      .replace('#include <map_fragment>', '#include <map_fragment>\nfloat wm = texture2D(wallMask, vMapUv).r;\ndiffuseColor.rgb *= mix(1.0, texture2D(detailMap, vMapUv * detailRep).r * 2.0, wm);')
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(0.12, roughnessFactor * 0.95, wm);')
+      .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nnormal = normalize(mix(nonPerturbedNormal, normal, wm));');
+  };
+  mat.needsUpdate = true;
+}
+// ground surfaces: the photo is the micro detail, the old canvas keeps the macro layout (lanes, tracks, drifts)
+function groundDetail(mat, set, macro, mean) {
+  mat.map = set.diff; mat.normalMap = set.nor; mat.roughnessMap = set.rough; mat.roughness = 1;
+  mat.onBeforeCompile = sh => {
+    sh.uniforms.macroMap = { value: macro }; sh.uniforms.macroMean = { value: mean }; sh.uniforms.macroRep = { value: set.rep };
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform sampler2D macroMap; uniform vec3 macroMean; uniform float macroRep;')
+      .replace('#include <map_fragment>', '#include <map_fragment>\ndiffuseColor.rgb *= clamp(texture2D(macroMap, vMapUv / macroRep).rgb / macroMean, 0.0, 2.2);');
+  };
+  mat.needsUpdate = true;
+}
+function canvasMean(tex) {
+  const c = tex.image, g = c.getContext && c.getContext('2d'); if (!g) return new THREE.Vector3(0.5, 0.5, 0.5);
+  const d = g.getImageData(0, 0, c.width, c.height).data; let r = 0, gg = 0, b = 0, n = 0;
+  for (let i = 0; i < d.length; i += 16) { r += d[i]; gg += d[i + 1]; b += d[i + 2]; n++; }
+  const lin = v => Math.pow(v / n / 255, 2.2);
+  return new THREE.Vector3(lin(r), lin(gg), lin(b));
+}
+async function loadRealism() {
+  if (location.protocol === 'file:') return;
+  REAL.aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  const lite = IS_TOUCH || S.settings.quality === 'low';
+  const set = async (name, rep, color) => {
+    const [diff, nor, rough] = await Promise.all([realTex(`tex/${name}_${color ? 'diff' : 'detail'}.jpg`, color, color ? rep : 0), realTex(`tex/${name}_nor.jpg`, false, rep), realTex(`tex/${name}_rough.jpg`, false, rep)]);
+    if (!(diff && nor && rough)) return null;
+    return color ? { diff, nor, rough, rep } : { detail: diff, nor, rough, rep };
+  };
+  const [brick, blocks, planks, metal, snow, road, walk, day, night] = await Promise.all([
+    set('red_brick_03', 10), set('medieval_blocks_03', 6), set('weathered_brown_planks', 7), set('corrugated_iron', 6),
+    set('snow_02', 4.7, true), set('asphalt_snow', 4, true), set('scuffed_cement', 2, true),
+    rgbeTex('hdri/urban_street_01.png'), rgbeTex('hdri/cobblestone_street_night.png'),
+  ]);
+  const byStyle = { brick, brown: brick, cream: brick, grey: blocks, siding: planks, ware: metal };
+  for (const F of FACADES) { const st = byStyle[F.style]; if (!st) continue; for (const m of F.mats) facadeDetail(m, st, m.userData.mask); }
+  if (snow) groundDetail(MAT.ground, snow, TEX.snow, canvasMean(TEX.snow));
+  if (road) groundDetail(MAT.road, road, TEX.road, canvasMean(TEX.road));
+  if (walk) groundDetail(MAT.walk, walk, TEX.walk, canvasMean(TEX.walk));
+  if (day && night) {
+    const U = envDomeMat.uniforms;
+    U.hdrDay.value = day; U.hdrNight.value = night; U.hdrAmt.value = lite ? 0.7 : 0.85;
+    U.dayNorm.value = 0.486; U.nightNorm.value = 0.778;
+    DN.envT = 0;
+  }
+  REAL.on = true;
+  loadProps().catch(e => console.warn('props', e));
+}
+/* ---- scanned props (CC0, Poly Haven), drawn instanced ---- */
+const _gl = new GLTFLoader();
+const loadGLB = p => new Promise(res => _gl.load('assets/models/' + p, g => res(g), undefined, () => res(null)));
+const _pm = new THREE.Matrix4(), _pq = new THREE.Quaternion(), _pv = new THREE.Vector3(), _ps = new THREE.Vector3(), _pUp = new THREE.Vector3(0, 1, 0);
+// place copies of a model; each placement is { x, y, z, ry, s } and the model's base sits on y
+function instanceModel(g, list, o) {
+  if (!g || !list.length) return [];
+  o = o || {};
+  const root = g.scene; root.updateMatrixWorld(true);
+  let keep = null;
+  if (o.half) { // some scans hold two copies side by side: keep the left one
+    const all = new THREE.Box3().setFromObject(root), mid = all.getCenter(new THREE.Vector3()).x; keep = new Set();
+    root.traverse(m => { if (m.isMesh) { const b = new THREE.Box3().setFromObject(m); if (b.getCenter(new THREE.Vector3()).x < mid) keep.add(m); } });
+  }
+  const box = new THREE.Box3(); root.traverse(m => { if (m.isMesh && (!keep || keep.has(m))) box.expandByObject(m); });
+  const c = box.getCenter(new THREE.Vector3());
+  const fix = new THREE.Matrix4().makeTranslation(-c.x, -box.min.y, -c.z);
+  const out = [];
+  root.traverse(m => {
+    if (!m.isMesh || (keep && !keep.has(m))) return;
+    const local = new THREE.Matrix4().multiplyMatrices(fix, m.matrixWorld);
+    const mats = Array.isArray(m.material) ? m.material : [m.material];
+    for (const mt of mats) { mt.envMapIntensity = o.env || 0.9; if (o.tint) mt.color.multiply(o.tint); }
+    const im = new THREE.InstancedMesh(m.geometry, m.material, list.length);
+    list.forEach((p, i) => { _pq.setFromAxisAngle(_pUp, p.ry || 0); _ps.setScalar(p.s || 1); if (p.sv) _ps.copy(p.sv); _pm.compose(_pv.set(p.x, p.y || 0, p.z), _pq, _ps); im.setMatrixAt(i, _pm.multiply(local)); });
+    im.instanceMatrix.needsUpdate = true; im.castShadow = o.shadow !== false; im.receiveShadow = true;
+    im.computeBoundingSphere(); scene.add(im); out.push(im);
+  });
+  return { meshes: out, size: box.getSize(new THREE.Vector3()) };
+}
+const PROP_SPOTS = { hydrants: [], bins: [], bags: [] };
+function planProps() {
+  const R = rng(2024), free = (x, z, r) => !queryBoxes(x - r, z - r, x + r, z + r, []).some(b => b.x0 < x + r && b.x1 > x - r && b.z0 < z + r && b.z1 > z - r && b.y1 > 0.1);
+  // hydrants on the curb near corners and mid-block
+  for (const xc of XL) for (let z = -(MAP_HALF - 20); z < MAP_HALF - 20; z += 46) {
+    if (ZL.some(l => Math.abs(z - l) < 12) || xc === LX) continue;
+    const side = R() < 0.5 ? -1 : 1, x = xc + side * 7.0;
+    if (free(x, z, 0.6)) PROP_SPOTS.hydrants.push({ x, z, ry: side > 0 ? Math.PI / 2 : -Math.PI / 2 });
+  }
+  for (const zc of ZL) for (let x = -(MAP_HALF - 20); x < SHORE_X - 14; x += 52) {
+    if (XL.some(l => Math.abs(x - l) < 12)) continue;
+    const side = R() < 0.5 ? -1 : 1, z = zc + side * 7.0;
+    if (free(x, z, 0.6)) PROP_SPOTS.hydrants.push({ x, z, ry: side > 0 ? 0 : Math.PI });
+  }
+  // bag piles and bin rows by the dumpsters in the alleys
+  for (const d of DUMPSTERS) {
+    const n = 2 + Math.floor(R() * 3);
+    for (let k = 0; k < n; k++) { const x = d.x + (d.alongX ? (R() - 0.5) * 3 + 1.6 * (k % 2 ? 1 : -1) : (R() - 0.5) * 1.2), z = d.z + (d.alongX ? (R() - 0.5) * 1.2 : (R() - 0.5) * 3); if (free(x, z, 0.25)) PROP_SPOTS.bags.push({ x, z, ry: R() * TAU, s: 0.8 + R() * 0.35 }); }
+    if (R() < 0.45) { const x = d.x + (d.alongX ? 2.8 : 0), z = d.z + (d.alongX ? 0 : 2.8); if (free(x, z, 0.9)) PROP_SPOTS.bins.push({ x, z, ry: d.alongX ? 0 : Math.PI / 2 }); }
+  }
+}
+async function loadProps() {
+  planProps();
+  const [barrel, hydrant, bins, jersey, manhole, bag] = await Promise.all(['Barrel_02', 'fire_hydrant', 'metal_trash_can', 'concrete_road_barrier', 'water_manhole_cover', 'trashbag'].map(n => loadGLB(n + '.glb')));
+  if (barrel) {
+    const r = instanceModel(barrel, BARRELS.map(b => ({ x: b.x, z: b.z, ry: (b.x * 13.7 + b.z) % TAU, s: 1.08 })), { env: 0.8, tint: new THREE.Color(0.75, 0.62, 0.55) });
+    if (r.meshes) {
+      FALLBACK.barrel.visible = false; FALLBACK.barrelFire.visible = false;
+      const fire = new Batch(); for (const b of BARRELS) vcyl(fire, b.x, r.size.y * 1.08 - 0.06, b.z, 0.26, 0.04, 0xff7a2a); fire.mesh(MAT.emis, false, false);
+    }
+  }
+  if (jersey) {
+    const list = [];
+    for (const b of BARRIERS) { const n = Math.max(1, Math.round(b.len / 1.5)), step = b.len / n; for (let k = 0; k < n; k++) { const off = -b.len / 2 + step * (k + 0.5); list.push({ x: b.x + (b.alongX ? off : 0), z: b.z + (b.alongX ? 0 : off), ry: b.alongX ? 0 : Math.PI / 2, s: 1.15 }); } }
+    if (instanceModel(jersey, list, { env: 0.6 }).meshes) FALLBACK.barrier.visible = false;
+  }
+  if (manhole && instanceModel(manhole, VENTS.map(v => ({ x: v.x, y: 0.005, z: v.z, ry: v.t, s: 1.6 })), { shadow: false, env: 0.8 }).meshes) FALLBACK.vent.visible = false;
+  if (hydrant && instanceModel(hydrant, PROP_SPOTS.hydrants, { env: 0.9, half: true }).meshes) for (const h of PROP_SPOTS.hydrants) addCol(h.x - 0.22, 0, h.z - 0.22, h.x + 0.22, 0.85, h.z + 0.22, 'cover');
+  if (bag) instanceModel(bag, PROP_SPOTS.bags, { env: 0.7 });
+  if (bins && instanceModel(bins, PROP_SPOTS.bins, { env: 0.8 }).meshes) for (const b of PROP_SPOTS.bins) { const ax = b.ry === 0; addCol(b.x - (ax ? 0.95 : 0.3), 0, b.z - (ax ? 0.3 : 0.95), b.x + (ax ? 0.95 : 0.3), 0.92, b.z + (ax ? 0.3 : 0.95), 'cover'); }
+  REAL.props = true;
 }
 
 
@@ -2824,10 +2997,13 @@ function moveBody(body, dx, dz, dt) {
 const B_PROPS = new Batch(), B_EMIS = new Batch(), B_SNOW = new Batch(), B_DECAL = new Batch(), B_GLASS = new Batch(), B_SHOP = new Batch(), B_GYM = new Batch();
 const FACADES = ['brick', 'brown', 'grey', 'siding', 'cream', 'ware'].map((s, i) => {
   const a = facadeTex(s, 100 + i * 7), b = facadeTex(s, 300 + i * 13);
-  const mk = t => new THREE.MeshStandardMaterial({ map: t.map, emissiveMap: t.emis, emissive: 0xffffff, emissiveIntensity: 1.15, roughness: 0.9, metalness: 0, envMapIntensity: 0.45 });
+  const mk = t => { const m = new THREE.MeshStandardMaterial({ map: t.map, emissiveMap: t.emis, emissive: 0xffffff, emissiveIntensity: 1.15, roughness: 0.9, metalness: 0, envMapIntensity: 0.45 }); m.userData.mask = t.mask; return m; };
   return { style: s, mats: [mk(a), mk(b)], batches: [new Batch(), new Batch()] };
 });
 const B_ROOF = new Batch();
+// simple shapes that real scanned models replace once they load
+const B_BARREL = new Batch(), B_BARREL_FIRE = new Batch(), B_BARRIER = new Batch(), B_VENT = new Batch();
+const FALLBACK = {}, BARRIERS = [], DUMPSTERS = [];
 const LAMPS = [], BARRELS = [], VENTS = [], HEATERS = [], SIGNS = [], PARK_SPOTS = [], SIGNAL_HEADS = [];
 let SIGNAL_MESH = null;
 const RESERVED = [];
@@ -3028,6 +3204,7 @@ function snowbank(x, z, alongX, len) {
   addCol(x - w / 2, 0, z - d / 2, x + w / 2, 1.08, z + d / 2, 'cover');
 }
 function dumpster(x, z, alongX, col) {
+  DUMPSTERS.push({ x, z, alongX });
   const w = alongX ? 2.0 : 1.3, d = alongX ? 1.3 : 2.0;
   vbox(B_PROPS, x, 0.12, z, w, 1.1, d, col || pick([0x234a35, 0x1f3550, 0x4a3a22]));
   vbox(B_PROPS, x, 1.22, z, w + 0.06, 0.08, d + 0.06, 0x111111);
@@ -3036,9 +3213,10 @@ function dumpster(x, z, alongX, col) {
 }
 function barrier(x, z, alongX, len) {
   len = len || 3; const w = alongX ? len : 0.6, d = alongX ? 0.6 : len;
-  vbox(B_PROPS, x, 0, z, w, 1.08, d, 0x9a9890);
-  vbox(B_PROPS, x, 0.5, z, alongX ? len : 0.62, 0.16, alongX ? 0.62 : len, 0xc9a43a);
-  vbox(B_SNOW, x, 1.08, z, w * 0.95, 0.06, d * 0.95, 0xffffff);
+  BARRIERS.push({ x, z, alongX, len });
+  vbox(B_BARRIER, x, 0, z, w, 1.08, d, 0x9a9890);
+  vbox(B_BARRIER, x, 0.5, z, alongX ? len : 0.62, 0.16, alongX ? 0.62 : len, 0xc9a43a);
+  vbox(B_BARRIER, x, 1.08, z, w * 0.95, 0.06, d * 0.95, 0xeef3f9);
   addCol(x - w / 2, 0, z - d / 2, x + w / 2, 1.08, z + d / 2, 'cover');
 }
 function lamp(x, z, armDX, armDZ) {
@@ -3050,15 +3228,15 @@ function lamp(x, z, armDX, armDZ) {
   LAMPS.push({ x: x + armDX * 1.6, y: 7.1, z: z + armDZ * 1.6 });
 }
 function barrel(x, z) {
-  vcyl(B_PROPS, x, 0, z, 0.42, 0.95, 0x5a2e1a);
-  vcyl(B_PROPS, x, 0.3, z, 0.43, 0.06, 0x3a1e10); vcyl(B_PROPS, x, 0.65, z, 0.43, 0.06, 0x3a1e10);
-  vcyl(B_EMIS, x, 0.9, z, 0.36, 0.04, 0xff7a2a);
+  vcyl(B_BARREL, x, 0, z, 0.42, 0.95, 0x5a2e1a);
+  vcyl(B_BARREL, x, 0.3, z, 0.43, 0.06, 0x3a1e10); vcyl(B_BARREL, x, 0.65, z, 0.43, 0.06, 0x3a1e10);
+  vcyl(B_BARREL_FIRE, x, 0.9, z, 0.36, 0.04, 0xff7a2a);
   addCol(x - 0.42, 0, z - 0.42, x + 0.42, 0.95, z + 0.42, 'barrel');
   BARRELS.push({ x, y: 1.0, z, r: 4.6, t: Math.random() * 10 });
   LAMPS.push({ x, y: 1.7, z, fire: true });
 }
 function vent(x, z) {
-  vcyl(B_PROPS, x, 0.02, z, 0.6, 0.03, 0x2a2a2a);
+  vcyl(B_VENT, x, 0.02, z, 0.6, 0.03, 0x2a2a2a);
   VENTS.push({ x, z, r: 2.6, t: Math.random() * 5 });
 }
 function tree(x, z, s) {
@@ -3477,7 +3655,8 @@ const DECALS = [];
   for (const B of BARRELS) B_DECAL.add(GEO.plane, mtx(B.x, 0.05, B.z, 9, 9, 1, -Math.PI / 2, 0, 0), 0xffffff);
   const dm = new THREE.Mesh(B_DECAL.build(), MAT.glowDecal); dm.renderOrder = 2; scene.add(dm);
   buildSignals();
-  B_PROPS.mesh(MAT.props); B_EMIS.mesh(MAT.emis, false, false); B_SNOW.mesh(MAT.snow); B_ROOF.mesh(MAT.snow, false, true);
+  B_PROPS.mesh(MAT.props); B_EMIS.mesh(MAT.emis, false, false);
+  FALLBACK.barrel = B_BARREL.mesh(MAT.props); FALLBACK.barrelFire = B_BARREL_FIRE.mesh(MAT.emis, false, false); FALLBACK.barrier = B_BARRIER.mesh(MAT.props); FALLBACK.vent = B_VENT.mesh(MAT.props, false); B_SNOW.mesh(MAT.snow); B_ROOF.mesh(MAT.snow, false, true);
   MAT.shop.vertexColors = true; B_SHOP.mesh(MAT.shop, false, false); B_GYM.mesh(MAT.gym, false, false);
   const gm = B_GLASS.mesh(MAT.glass, false, false); gm.renderOrder = 3;
   for (const F of FACADES) F.batches.forEach((b, i) => { if (b.p.length) b.mesh(F.mats[i]); });
@@ -3601,7 +3780,7 @@ const CAR_SPECS = {
 const CAR_MODELS = Object.keys(CAR_SPECS);
 const CIVIL_MODELS = ['hatch', 'sedan', 'sedan', 'suv', 'suv', 'pickup', 'coupe', 'van', 'taxi', 'hatch'];
 const CAR_PAINTS = [0x1d1f24, 0xd8dadf, 0x8a9099, 0x5a6068, 0x6a1a1e, 0x1e2f4a, 0x34503a, 0xa8823c, 0x7a2a12, 0x2a6a8a, 0xb7b9bd, 0x2a2c30, 0x4a1f3a, 0xc9c2b0];
-MAT.carPaint = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.26, metalness: 0.55, envMapIntensity: 1.35 });
+MAT.carPaint = new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.34, metalness: 0.5, clearcoat: 1, clearcoatRoughness: 0.05, envMapIntensity: 1.25 });
 MAT.carTrim = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42, metalness: 0.3, envMapIntensity: 1.0 });
 MAT.carEmis = new THREE.MeshBasicMaterial({ vertexColors: true });
 MAT.carBar = new THREE.MeshBasicMaterial({ vertexColors: true });
@@ -3720,6 +3899,7 @@ function placeVehInstance(v) {
   const M = CARMESH[v.model];
   _vq.setFromAxisAngle(_vy, v.yaw);
   _vm.compose(v.pos, _vq, _vs);
+  if (v.hideBody) _vm.copy(_zeroM);
   M.paint.setMatrixAt(v.slot, _vm); M.trim.setMatrixAt(v.slot, _vm); M.emis.setMatrixAt(v.slot, _vm); if (M.bar) M.bar.setMatrixAt(v.slot, _vm);
   M.dirty = true;
   const c = Math.abs(Math.cos(v.yaw)), s = Math.abs(Math.sin(v.yaw)), W = v.sp.wid / 2, L = v.sp.len / 2;
@@ -4821,7 +5001,7 @@ function windExposure(x, z, y) {
 let FOV_T = 62;
 function updateCarCamera(dt) {
   if (fpOn()) { updateCarFP(dt); return; }
-  if (FP.cockpit) FP.cockpit.visible = false;
+  fpReleaseCar();
   const v = P.car, sp = Math.abs(v.speed);
   if (REAL_T - (P.lastLook || 0) > 1.4) { camYaw += angDiff(camYaw, v.yaw + Math.PI) * (1 - Math.exp(-dt * 2.6)); camPitch += (-0.16 - camPitch) * (1 - Math.exp(-dt * 2)); }
   P.shake = Math.max(0, P.shake - dt * 1.8);
@@ -5063,7 +5243,7 @@ function fpActive() { return fpOn() && !P.dead && (MODE === 'play' || MODE === '
 function toggleFP() {
   S.settings.fp = !S.settings.fp;
   banner(S.settings.fp ? 'First person' : 'Third person', 'V to switch');
-  if (!S.settings.fp) { if (FP.vm) FP.vm.visible = false; if (FP.cockpit) FP.cockpit.visible = false; }
+  if (!S.settings.fp) fpHide();
   sfx.ui();
 }
 const _vmMat = c => new THREE.MeshLambertMaterial({ color: c, emissive: new THREE.Color(c).multiplyScalar(0.06) });
@@ -5151,58 +5331,162 @@ function updateFPCamera(dt) {
   if (Math.abs(nf - camera.fov) > 0.01) { camera.fov = nf; camera.updateProjectionMatrix(); setParticleScale(); }
   camera.updateMatrixWorld();
   P.human.group.visible = false;
-  if (FP.cockpit) FP.cockpit.visible = false;
+  fpReleaseCar();
   updateViewmodel(dt, a);
 }
-/* ---- driver's seat ---- */
-function buildCockpit() {
-  const g = new THREE.Group();
-  const dark = new THREE.MeshLambertMaterial({ color: 0x141619 }), trim = new THREE.MeshLambertMaterial({ color: 0x2a2e34 }), skin = _vmMat(SKIN_TONES[cleanSkin(S.skin).tone]);
-  const box = (w, h, d, x, y, z, m, rx) => { const me = new THREE.Mesh(GEO.box, m); me.scale.set(w, h, d); me.position.set(x, y, z); me.rotation.x = rx || 0; g.add(me); return me; };
-  box(2.0, 0.22, 0.6, 0.35, -0.47, -0.78, dark, -0.1);     // dashboard
-  box(2.0, 0.03, 0.35, 0.35, -0.355, -0.98, trim, -0.2);   // defroster strip
-  box(0.2, 0.06, 0.02, 0.36, 0.3, -0.7, trim);             // rear-view mirror
-  box(0.02, 0.1, 0.02, 0.36, 0.36, -0.7, trim);
-  const wheel = new THREE.Group(); wheel.position.set(0, -0.31, -0.5); wheel.rotation.x = -0.45; g.add(wheel);
-  wheel.add(new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.02, 6, 28), dark));
-  const hub = new THREE.Mesh(GEO.box, trim); hub.scale.set(0.1, 0.075, 0.05); wheel.add(hub);
-  for (const s of [-1, 1]) { const sp = new THREE.Mesh(GEO.box, trim); sp.scale.set(0.16, 0.028, 0.025); sp.position.x = s * 0.085; wheel.add(sp); const h = new THREE.Mesh(HG.hand, skin); h.scale.setScalar(0.85); h.position.set(s * 0.168, 0.0, 0.03); wheel.add(h); }
-  const c = document.createElement('canvas'); c.width = 128; c.height = 64;
-  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
-  const sp = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.08), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
-  sp.position.set(0, -0.345, -0.64); sp.rotation.x = -0.45; g.add(sp);
-  g.traverse(m => { if (m.isMesh) { m.castShadow = false; m.frustumCulled = false; } });
-  camera.add(g);
-  FP.cockpit = g; FP.wheel = wheel; FP.spd = tex; FP.spdCtx = c.getContext('2d');
+/* ---- driver's seat: a real interior built to each car's dimensions ---- */
+const _ck = new THREE.Vector3(), _ck2 = new THREE.Vector3();
+function carGeom(sp) {
+  // windshield base/top, roof back and hood nose, in car-local z (forward from the centre) and height
+  const L2 = sp.len / 2, body = sp.body, cab = sp.cabin;
+  let wb, wt, rb;
+  if (cab) { wb = cab[3]; wt = cab[2]; rb = cab[1]; }
+  else { wt = body[2]; wb = body[3]; rb = body[1]; }
+  const front = body.filter(p => p[0] > wb[0] + 0.05 && p[1] > 0.5);
+  const nose = front.length ? front[front.length - 1] : [sp.len, wb[1] - 0.2];
+  const mid = front.length ? front[0] : nose;
+  return { zWB: wb[0] - L2, yWB: wb[1], zWT: wt[0] - L2, yWT: wt[1], zRB: rb[0] - L2, roofY: Math.max(wt[1], rb[1]), zMid: mid[0] - L2, yMid: mid[1], zNose: nose[0] - L2, yNose: nose[1] };
 }
+function setLimb(m, a, b, r) {
+  _ck.set(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+  const L = _ck.length(); _ck.normalize();
+  m.quaternion.setFromUnitVectors(_limbUp, _ck);
+  m.position.set((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2);
+  m.scale.set(r, L, r);
+}
+function buildCockpit(v) {
+  if (FP.cockpit) { scene.remove(FP.cockpit); FP.cockpit.traverse(m => { if (m.geometry && m.geometry !== GEO.box && m.geometry !== VM_CYL && m.geometry !== HG.hand) m.geometry.dispose(); }); }
+  const sp = v.sp, G = carGeom(sp), W = sp.wid, g = new THREE.Group();
+  const o = skinHumanOpts(S.skin);
+  const M = (c, r, m) => new THREE.MeshStandardMaterial({ color: c, roughness: r === undefined ? 0.8 : r, metalness: m || 0 });
+  const dash = M(0x17181b, 0.75), trim = M(0x2a2c31, 0.6), soft = M(0x3a3a3c, 0.95), liner = M(0x8c8982, 1), chrome = M(0xb8bcc2, 0.25, 0.9);
+  const paint = new THREE.MeshPhysicalMaterial({ color: v.color, roughness: 0.32, metalness: 0.4, clearcoat: 1, clearcoatRoughness: 0.06 });
+  const glass = new THREE.MeshStandardMaterial({ color: 0x9fb4c8, transparent: true, opacity: 0.06, roughness: 0.04, metalness: 0.2, depthWrite: false });
+  const box = (w, h, d, x, y, z, m, rx, ry, rz) => { const me = new THREE.Mesh(GEO.box, m); me.scale.set(w, h, d); me.position.set(x, y, z); me.rotation.set(rx || 0, ry || 0, rz || 0); g.add(me); return me; };
+  const bar = (a, b2, r, m) => { const me = new THREE.Mesh(VM_CYL, m); setLimb(me, a, b2, r); g.add(me); return me; };
+  const xD = W * 0.21, eyeY = Math.max(G.yWB + 0.32, G.roofY - 0.26), eyeZ = G.zWB - 0.95;
+  FP.eye = [xD, eyeY, eyeZ]; FP.geomKey = v.model + ':' + v.color + ':' + skinKey(cleanSkin(S.skin));
+  // the hood you look out over, in the car's own paint
+  const hz0 = G.zWB + 0.02, hz1 = Math.max(G.zMid, G.zWB + 0.6), hood = box(W - 0.1, 0.05, hz1 - hz0, 0, (G.yWB + G.yMid) / 2 - 0.02, (hz0 + hz1) / 2, paint, Math.atan2(G.yWB - G.yMid, hz1 - hz0));
+  const nz1 = Math.max(G.zNose - 0.05, hz1 + 0.1); box(W - 0.14, 0.05, nz1 - hz1, 0, (G.yMid + G.yNose) / 2 - 0.02, (hz1 + nz1) / 2, paint, Math.atan2(G.yMid - G.yNose, nz1 - hz1));
+  for (const s of [-1, 1]) box(0.06, 0.07, hz1 - hz0, s * (W / 2 - 0.05), (G.yWB + G.yMid) / 2 + 0.02, (hz0 + hz1) / 2, paint, Math.atan2(G.yWB - G.yMid, hz1 - hz0));
+  // dashboard, gauge hood, centre stack
+  const dT = G.yWB - 0.06;
+  box(W - 0.12, 0.3, 0.62, 0, dT - 0.15, G.zWB - 0.3, dash);
+  box(W - 0.12, 0.04, 0.3, 0, dT + 0.01, G.zWB - 0.14, dash, -0.18);
+  // instrument pod: you read the gauges over the top of the wheel
+  const gY = eyeY - 0.215, gZ = eyeZ + 0.5, podTop = gY + 0.072, podH = Math.max(0.06, podTop - (dT - 0.05));
+  box(0.39, podH, 0.18, xD, podTop - podH / 2, gZ + 0.095, dash);
+  box(0.41, 0.02, 0.09, xD, podTop + 0.008, gZ - 0.01, dash, 0.18);
+  box(0.36, 0.42, 0.2, 0, dT - 0.36, G.zWB - 0.66, trim);
+  box(0.24, 0.5, 0.55, 0, 0.62, eyeZ + 0.05, trim);
+  for (const s of [-1, 1]) box(0.14, 0.04, 0.02, s * 0.62, dT - 0.05, G.zWB - 0.615, chrome);
+  // gauges (canvas) and the radio screen
+  const gc = document.createElement('canvas'); gc.width = 512; gc.height = 192;
+  const gt = new THREE.CanvasTexture(gc); gt.colorSpace = THREE.SRGBColorSpace; gt.anisotropy = 4;
+  const gp = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.135), new THREE.MeshBasicMaterial({ map: gt, toneMapped: false }));
+  gp.position.set(xD, gY, gZ); gp.rotation.set(0.25, Math.PI, 0); g.add(gp);
+  const rc = document.createElement('canvas'); rc.width = 256; rc.height = 128;
+  const rt = new THREE.CanvasTexture(rc); rt.colorSpace = THREE.SRGBColorSpace;
+  const rp = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.1), new THREE.MeshBasicMaterial({ map: rt, toneMapped: false }));
+  rp.position.set(0, dT - 0.1, G.zWB - 0.62); rp.rotation.set(0.15, Math.PI, 0); g.add(rp);
+  // steering wheel (spins with the steering) and your hands on it
+  const wheel = new THREE.Group(); wheel.position.set(xD, eyeY - 0.42, eyeZ + 0.43); wheel.rotation.set(0.45, Math.PI, 0); g.add(wheel);
+  const spin = new THREE.Group(); wheel.add(spin);
+  spin.add(new THREE.Mesh(new THREE.TorusGeometry(0.185, 0.022, 8, 32), M(0x141416, 0.55)));
+  const hub = new THREE.Mesh(GEO.box, trim); hub.scale.set(0.12, 0.09, 0.05); spin.add(hub);
+  for (const [x, y, w, h] of [[-0.1, 0, 0.17, 0.03], [0.1, 0, 0.17, 0.03], [0, -0.1, 0.03, 0.16]]) { const sp2 = new THREE.Mesh(GEO.box, trim); sp2.scale.set(w, h, 0.025); sp2.position.set(x, y, 0); spin.add(sp2); }
+  const column = bar([xD, eyeY - 0.42 - 0.06, eyeZ + 0.5], [xD, dT - 0.2, G.zWB - 0.55], 0.04, trim);
+  const skin = _vmMat(o.skin), sleeve = _vmMat(o.top === 'varsity' ? o.jacket2 : o.jacket);
+  const hands = [-1, 1].map(s => { const h = new THREE.Mesh(HG.hand, skin); h.scale.set(0.85, 0.85, 1.0); h.position.set(s * 0.185, 0.0, -0.025); spin.add(h); return h; });
+  const arms = [-1, 1].map(() => { const m = new THREE.Mesh(VM_CYL, sleeve); g.add(m); return m; });
+  // pillars, roof, doors, mirrors, seats
+  const ax = W / 2 - 0.09, axT = W / 2 - 0.17;
+  for (const s of [-1, 1]) {
+    bar([s * ax, G.yWB - 0.02, G.zWB + 0.02], [s * axT, G.yWT - 0.03, G.zWT], 0.036, trim);
+    box(0.08, (G.yWB + 0.06) - 0.4, Math.max(0.6, G.zWB - G.zRB + 0.4), s * (W / 2 - 0.05), (0.4 + G.yWB + 0.06) / 2, (G.zWB + G.zRB) / 2 - 0.2, dash);
+    box(0.12, 0.05, Math.max(0.6, G.zWB - G.zRB + 0.4), s * (W / 2 - 0.08), G.yWB + 0.07, (G.zWB + G.zRB) / 2 - 0.2, trim);
+    bar([s * (W / 2 - 0.08), G.yWB + 0.08, eyeZ - 0.42], [s * (W / 2 - 0.15), G.roofY - 0.05, eyeZ - 0.5], 0.06, trim);
+    box(0.09, 0.08, 0.16, s * (W / 2 + 0.07), G.yWB + 0.14, G.zWB - 0.08, paint);
+    box(0.012, 0.07, 0.13, s * (W / 2 + 0.115), G.yWB + 0.14, G.zWB - 0.1, chrome);
+  }
+  box(W - 0.24, 0.07, 0.14, 0, G.yWT - 0.035, G.zWT - 0.06, trim);
+  box(W - 0.18, 0.04, Math.max(0.5, G.zWT - G.zRB), 0, G.roofY - 0.04, (G.zWT + G.zRB) / 2, liner);
+  box(0.25, 0.075, 0.03, 0, G.yWT - 0.15, G.zWT - 0.14, trim); box(0.23, 0.06, 0.005, 0, G.yWT - 0.15, G.zWT - 0.157, chrome);
+  bar([0, G.yWT - 0.11, G.zWT - 0.14], [0, G.yWT - 0.03, G.zWT - 0.07], 0.012, trim);
+  box(0.5, 0.12, 0.55, -xD, 0.62, eyeZ, soft); box(0.5, 0.65, 0.12, -xD, 0.95, eyeZ - 0.3, soft, -0.15);
+  // windshield glass and wipers
+  const wsh = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.2, Math.hypot(G.zWT - G.zWB, G.yWT - G.yWB)), glass);
+  wsh.position.set(0, (G.yWB + G.yWT) / 2, (G.zWB + G.zWT) / 2); wsh.rotation.set(Math.atan2(G.zWT - G.zWB, G.yWT - G.yWB), 0, 0); g.add(wsh);
+  for (const x of [xD - 0.05, -0.15]) box(0.55, 0.015, 0.02, x + 0.1, G.yWB + 0.03, G.zWB + 0.05, dash, 0, 0, 0.12);
+  g.traverse(m => { if (m.isMesh) { m.castShadow = false; m.receiveShadow = false; m.frustumCulled = false; } });
+  scene.add(g);
+  FP.cockpit = g; FP.spinG = spin; FP.hands = hands; FP.arms = arms; FP.gaugeTex = gt; FP.gaugeCtx = gc.getContext('2d'); FP.radioTex = rt; FP.radioCtx = rc.getContext('2d'); FP.gaugeKey = ''; FP.radioKey = '';
+}
+function drawGauges(v) {
+  const sp = Math.abs(v.speed), mph = Math.round(sp * 2.237), rpm = ENG.V ? ENG.V.rpm : 800, red = ENG.V ? ENG.V.spec.red : 6500;
+  const gear = v.speed < -0.3 ? 'R' : ENG.V ? String(ENG.V.gear + 1) : 'D';
+  const key = mph + '|' + Math.round(rpm / 50) + '|' + gear;
+  if (key === FP.gaugeKey) return; FP.gaugeKey = key;
+  const g = FP.gaugeCtx, W = 512, H = 192;
+  g.fillStyle = '#050608'; g.fillRect(0, 0, W, H);
+  const dial = (cx, val, max, label, redFrom) => {
+    const r = 78, a0 = Math.PI * 0.75, a1 = Math.PI * 2.25;
+    g.lineWidth = 3; g.strokeStyle = '#2a3036'; g.beginPath(); g.arc(cx, 100, r, a0, a1); g.stroke();
+    for (let i = 0; i <= 10; i++) { const a = a0 + (a1 - a0) * i / 10, hot = redFrom !== undefined && i / 10 >= redFrom; g.strokeStyle = hot ? '#ff4a3a' : '#c8d0d8'; g.lineWidth = i % 2 ? 2 : 3; g.beginPath(); g.moveTo(cx + Math.cos(a) * (r - 4), 100 + Math.sin(a) * (r - 4)); g.lineTo(cx + Math.cos(a) * (r - (i % 2 ? 11 : 16)), 100 + Math.sin(a) * (r - (i % 2 ? 11 : 16))); g.stroke(); }
+    const a = a0 + (a1 - a0) * clamp(val / max, 0, 1);
+    g.strokeStyle = '#ff7a2a'; g.lineWidth = 4; g.beginPath(); g.moveTo(cx, 100); g.lineTo(cx + Math.cos(a) * (r - 12), 100 + Math.sin(a) * (r - 12)); g.stroke();
+    g.fillStyle = '#1a1e22'; g.beginPath(); g.arc(cx, 100, 9, 0, TAU); g.fill();
+    g.fillStyle = '#8a96a2'; g.font = '600 15px Inter, sans-serif'; g.textAlign = 'center'; g.fillText(label, cx, 152);
+  };
+  dial(110, rpm, 8000, 'RPM ×1000', red / 8000);
+  dial(402, mph, 140, 'MPH');
+  g.fillStyle = '#ffb347'; g.font = '700 46px Inter, sans-serif'; g.textAlign = 'center'; g.fillText(String(mph), 256, 92);
+  g.fillStyle = '#c8d0d8'; g.font = '700 30px Inter, sans-serif'; g.fillText(gear, 256, 140);
+  g.fillStyle = '#7be0a6'; g.font = '600 13px Inter, sans-serif'; g.fillText(clockStr ? clockStr() : '', 256, 176);
+  FP.gaugeTex.needsUpdate = true;
+}
+function drawRadio() {
+  const st = RADIO.on && S.settings.radio ? STATIONS[S.settings.radio] : null, key = (st ? st.name : 'off');
+  if (key === FP.radioKey) return; FP.radioKey = key;
+  const g = FP.radioCtx; g.fillStyle = '#04070a'; g.fillRect(0, 0, 256, 128);
+  g.fillStyle = st ? '#ffb347' : '#56606a'; g.font = '700 26px Inter, sans-serif'; g.textAlign = 'center';
+  g.fillText(st ? st.short : 'RADIO OFF', 128, 58);
+  g.fillStyle = '#8a96a2'; g.font = '500 14px Inter, sans-serif'; g.fillText(st ? st.name.split('·')[1] ? st.name.split('·')[1].trim() : '' : 'R to tune', 128, 90);
+  FP.radioTex.needsUpdate = true;
+}
+function fpReleaseCar() { if (FP.hidCar) { FP.hidCar.hideBody = false; placeVehInstance(FP.hidCar); FP.hidCar = null; } if (FP.cockpit) FP.cockpit.visible = false; }
 function updateCarFP(dt) {
   const v = P.car, sp = Math.abs(v.speed);
-  if (REAL_T - (P.lastLook || 0) > 1.4) { camYaw += angDiff(camYaw, v.yaw + Math.PI) * (1 - Math.exp(-dt * 2.6)); camPitch += (-0.16 - camPitch) * (1 - Math.exp(-dt * 2)); }
+  if (REAL_T - (P.lastLook || 0) > 1.4) { camYaw += angDiff(camYaw, v.yaw + Math.PI) * (1 - Math.exp(-dt * 2.6)); camPitch += (-0.1 - camPitch) * (1 - Math.exp(-dt * 2)); }
   P.shake = Math.max(0, P.shake - dt * 1.8);
-  const fx = Math.sin(v.yaw), fz = Math.cos(v.yaw), lx = Math.cos(v.yaw), lz = -Math.sin(v.yaw);
-  const side = v.sp.wid * 0.2, fwd = -v.sp.len * 0.04, eye = (v.sp.roofY || 1.4) - 0.32;
-  const sh = P.shake * 0.04;
-  camera.position.set(v.pos.x + fx * fwd + lx * side + (Math.random() - 0.5) * sh, eye + Math.sin(REAL_T * 13) * Math.min(sp, 25) * 0.0006, v.pos.z + fz * fwd + lz * side + (Math.random() - 0.5) * sh);
-  const look = clamp(angDiff(v.yaw + Math.PI, camYaw), -1.9, 1.9);
-  camera.rotation.set(clamp(camPitch + 0.16, -0.7, 0.6), v.yaw + Math.PI + look, 0, 'YXZ');
-  const nf = (S.settings.fov || 70) + clamp(sp, 0, 34) * 0.3;
-  camera.fov += (nf - camera.fov) * (1 - Math.exp(-dt * 3)); camera.updateProjectionMatrix(); setParticleScale();
+  const key = v.model + ':' + v.color + ':' + skinKey(cleanSkin(S.skin));
+  if (!FP.cockpit || FP.geomKey !== key) buildCockpit(v);
+  if (FP.hidCar !== v) { fpReleaseCar(); v.hideBody = true; FP.hidCar = v; }
+  const ck = FP.cockpit; ck.visible = true;
+  ck.position.set(v.pos.x, 0, v.pos.z); ck.rotation.set(0, v.yaw, 0); ck.updateMatrixWorld(true);
+  // eye: seat position plus road buzz and a little body roll in corners
+  const lat = (v.steer || 0) * sp;
+  _ck2.set(FP.eye[0] + clamp(lat * 0.002, -0.05, 0.05), FP.eye[1] + Math.sin(REAL_T * 17) * Math.min(sp, 25) * 0.0004 + (Math.random() - 0.5) * P.shake * 0.03, FP.eye[2]);
+  ck.localToWorld(_ck2);
+  camera.position.copy(_ck2);
+  const look = clamp(angDiff(v.yaw + Math.PI, camYaw), -2.0, 2.0);
+  camera.rotation.set(clamp(camPitch + 0.06, -0.6, 0.5), v.yaw + Math.PI + look, -clamp(lat * 0.0015, -0.03, 0.03), 'YXZ');
+  const nf = (S.settings.fov || 70) + clamp(sp, 0, 34) * 0.25;
+  if (Math.abs(nf - camera.fov) > 0.05) { camera.fov += (nf - camera.fov) * (1 - Math.exp(-dt * 3)); camera.updateProjectionMatrix(); setParticleScale(); }
   camera.updateMatrixWorld();
-  if (!FP.cockpit) buildCockpit();
-  FP.cockpit.visible = true; if (FP.vm) FP.vm.visible = false;
-  // undo the head-look so the dash stays put while you look around
-  FP.cockpit.position.set(0, 0, 0); FP.cockpit.rotation.set(-clamp(camPitch + 0.16, -0.7, 0.6), -look, 0, 'XYZ');
-  FP.wheel.rotation.z = -(v.steer || 0) * 1.6;
-  const mph = Math.round(sp * 2.237);
-  if (mph !== FP.spdVal) {
-    FP.spdVal = mph; const g = FP.spdCtx;
-    g.fillStyle = '#05070a'; g.fillRect(0, 0, 128, 64);
-    g.fillStyle = '#ffb347'; g.font = '700 34px Inter, sans-serif'; g.textAlign = 'center'; g.fillText(String(mph), 64, 40);
-    g.fillStyle = '#8a96a6'; g.font = '600 12px Inter, sans-serif'; g.fillText('MPH', 64, 57);
-    FP.spd.needsUpdate = true;
-  }
+  if (FP.vm) FP.vm.visible = false;
+  // wheel turns with the steering; forearms follow the hands
+  FP.spinG.rotation.z = -(v.steer || 0) * 2.4;
+  FP.spinG.updateMatrixWorld(true);
+  const sx = [FP.eye[0] + 0.2, FP.eye[0] - 0.2];
+  FP.hands.forEach((h, i) => {
+    h.getWorldPosition(_ck); ck.worldToLocal(_ck);
+    setLimb(FP.arms[i], [_ck.x, _ck.y - 0.02, _ck.z - 0.04], [sx[i], FP.eye[1] - 0.3, FP.eye[2] - 0.02], 0.04);
+  });
+  drawGauges(v); drawRadio();
 }
-function fpHide() { if (FP.vm) FP.vm.visible = false; if (FP.cockpit) FP.cockpit.visible = false; }
+function fpHide() { if (FP.vm) FP.vm.visible = false; fpReleaseCar(); }
 
 
 /* =========================================================
@@ -8878,6 +9162,7 @@ setParticleScale();
 resizeRender();
 setupTitle();
 requestAnimationFrame(frame);
+loadRealism().catch(e => console.warn('assets', e));
 
 </script>
 </html>

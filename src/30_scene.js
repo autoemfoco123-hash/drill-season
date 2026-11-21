@@ -158,6 +158,15 @@ function facadeTex(style, seed) {
       if (isLit) lit.push({ x, y, ww, hh, k: R() });
     }
   });
+  const mask = canvasTex(W, H, g => {
+    g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#000';
+    for (let f = 0; f < 4; f++) for (let c = 0; c < 4; c++) {
+      if (style === 'ware' && (f % 2 === 1 || c % 2 === 1)) continue;
+      const ware = style === 'ware', x = c * 64 + (ware ? 8 : 18), y = f * 64 + (ware ? 10 : 12), ww = ware ? 48 : 28, hh = ware ? 14 : 38;
+      g.fillRect(x, y, ww, hh);
+    }
+  });
   const emis = canvasTex(W, H, g => {
     g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
     for (const w of lit) {
@@ -170,7 +179,7 @@ function facadeTex(style, seed) {
       g.fillStyle = 'rgba(0,0,0,1)'; g.fillRect(w.x + w.ww / 2 - 1, w.y, 2, w.hh);
     }
   });
-  return { map, emis };
+  return { map, emis, mask };
 }
 
 function signTex(text, opts) {
@@ -513,9 +522,15 @@ const dirFrom = (elev, az, out) => { const e = THREE.MathUtils.degToRad(elev), a
 const ENV_SCENE = new THREE.Scene();
 const envDomeMat = new THREE.ShaderMaterial({
   side: THREE.BackSide, depthWrite: false,
-  uniforms: { top: { value: new THREE.Color() }, hor: { value: new THREE.Color() }, bot: { value: new THREE.Color() }, sun: { value: new THREE.Vector3(0, 1, 0) }, sunCol: { value: new THREE.Color() } },
+  uniforms: { top: { value: new THREE.Color() }, hor: { value: new THREE.Color() }, bot: { value: new THREE.Color() }, sun: { value: new THREE.Vector3(0, 1, 0) }, sunCol: { value: new THREE.Color() }, hdrDay: { value: null }, hdrNight: { value: null }, hdrMix: { value: 0 }, hdrAmt: { value: 0 }, dayNorm: { value: 1 }, nightNorm: { value: 1 } },
   vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-  fragmentShader: 'uniform vec3 top, hor, bot, sun, sunCol; varying vec3 vD; void main(){ float y = vD.y; vec3 c = y > 0.0 ? mix(hor, top, pow(y, 0.6)) : mix(hor, bot, pow(-y, 0.4)); c += sunCol * pow(max(dot(vD, sun), 0.0), 24.0) * 2.0; gl_FragColor = vec4(c, 1.0); }',
+  fragmentShader: `uniform vec3 top, hor, bot, sun, sunCol; uniform sampler2D hdrDay, hdrNight; uniform float hdrMix, hdrAmt, dayNorm, nightNorm; varying vec3 vD;
+    vec3 rgbe(vec4 t) { return t.a > 0.0 ? t.rgb * exp2(t.a * 255.0 - 128.0) * (255.0 / 256.0) : vec3(0.0); }
+    void main(){ float y = vD.y; vec3 c = y > 0.0 ? mix(hor, top, pow(y, 0.6)) : mix(hor, bot, pow(-y, 0.4)); c += sunCol * pow(max(dot(vD, sun), 0.0), 24.0) * 2.0;
+      if (hdrAmt > 0.0) { vec3 d = normalize(vD); vec2 uv = vec2(atan(d.z, d.x) / 6.2831853 + 0.5, asin(clamp(d.y, -1.0, 1.0)) / 3.1415927 + 0.5);
+        vec3 h = mix(rgbe(texture2D(hdrDay, uv)) / dayNorm, rgbe(texture2D(hdrNight, uv)) / nightNorm, hdrMix);
+        c *= mix(vec3(1.0), min(h, vec3(40.0)), hdrAmt); }
+      gl_FragColor = vec4(c, 1.0); }`,
 });
 ENV_SCENE.add(new THREE.Mesh(new THREE.SphereGeometry(10, 24, 12), envDomeMat));
 const PMREM = new THREE.PMREMGenerator(renderer);
@@ -576,6 +591,7 @@ function updateDayNight(dt, focus) {
   DN.envT -= dt;
   if (DN.envT <= 0 || Math.abs(n - DN.lastEnvN) > 0.12) {
     DN.envT = 25; DN.lastEnvN = n;
+    envDomeMat.uniforms.hdrMix.value = smooth(0.25, 0.75, n);
     envDomeMat.uniforms.top.value.setRGB(lerp(0.32, 0.015, n), lerp(0.45, 0.025, n), lerp(0.72, 0.05, n));
     envDomeMat.uniforms.hor.value.copy(scene.fog.color).multiplyScalar(lerp(1.1, 1.8, n)).add(_tmpC2.setRGB(0.25, 0.1, 0.02).multiplyScalar(n * 0.6));
     envDomeMat.uniforms.bot.value.setRGB(lerp(0.45, 0.03, n), lerp(0.46, 0.03, n), lerp(0.5, 0.05, n));

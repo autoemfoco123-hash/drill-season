@@ -116,10 +116,13 @@ function moveBody(body, dx, dz, dt) {
 const B_PROPS = new Batch(), B_EMIS = new Batch(), B_SNOW = new Batch(), B_DECAL = new Batch(), B_GLASS = new Batch(), B_SHOP = new Batch(), B_GYM = new Batch();
 const FACADES = ['brick', 'brown', 'grey', 'siding', 'cream', 'ware'].map((s, i) => {
   const a = facadeTex(s, 100 + i * 7), b = facadeTex(s, 300 + i * 13);
-  const mk = t => new THREE.MeshStandardMaterial({ map: t.map, emissiveMap: t.emis, emissive: 0xffffff, emissiveIntensity: 1.15, roughness: 0.9, metalness: 0, envMapIntensity: 0.45 });
+  const mk = t => { const m = new THREE.MeshStandardMaterial({ map: t.map, emissiveMap: t.emis, emissive: 0xffffff, emissiveIntensity: 1.15, roughness: 0.9, metalness: 0, envMapIntensity: 0.45 }); m.userData.mask = t.mask; return m; };
   return { style: s, mats: [mk(a), mk(b)], batches: [new Batch(), new Batch()] };
 });
 const B_ROOF = new Batch();
+// simple shapes that real scanned models replace once they load
+const B_BARREL = new Batch(), B_BARREL_FIRE = new Batch(), B_BARRIER = new Batch(), B_VENT = new Batch();
+const FALLBACK = {}, BARRIERS = [], DUMPSTERS = [];
 const LAMPS = [], BARRELS = [], VENTS = [], HEATERS = [], SIGNS = [], PARK_SPOTS = [], SIGNAL_HEADS = [];
 let SIGNAL_MESH = null;
 const RESERVED = [];
@@ -320,6 +323,7 @@ function snowbank(x, z, alongX, len) {
   addCol(x - w / 2, 0, z - d / 2, x + w / 2, 1.08, z + d / 2, 'cover');
 }
 function dumpster(x, z, alongX, col) {
+  DUMPSTERS.push({ x, z, alongX });
   const w = alongX ? 2.0 : 1.3, d = alongX ? 1.3 : 2.0;
   vbox(B_PROPS, x, 0.12, z, w, 1.1, d, col || pick([0x234a35, 0x1f3550, 0x4a3a22]));
   vbox(B_PROPS, x, 1.22, z, w + 0.06, 0.08, d + 0.06, 0x111111);
@@ -328,9 +332,10 @@ function dumpster(x, z, alongX, col) {
 }
 function barrier(x, z, alongX, len) {
   len = len || 3; const w = alongX ? len : 0.6, d = alongX ? 0.6 : len;
-  vbox(B_PROPS, x, 0, z, w, 1.08, d, 0x9a9890);
-  vbox(B_PROPS, x, 0.5, z, alongX ? len : 0.62, 0.16, alongX ? 0.62 : len, 0xc9a43a);
-  vbox(B_SNOW, x, 1.08, z, w * 0.95, 0.06, d * 0.95, 0xffffff);
+  BARRIERS.push({ x, z, alongX, len });
+  vbox(B_BARRIER, x, 0, z, w, 1.08, d, 0x9a9890);
+  vbox(B_BARRIER, x, 0.5, z, alongX ? len : 0.62, 0.16, alongX ? 0.62 : len, 0xc9a43a);
+  vbox(B_BARRIER, x, 1.08, z, w * 0.95, 0.06, d * 0.95, 0xeef3f9);
   addCol(x - w / 2, 0, z - d / 2, x + w / 2, 1.08, z + d / 2, 'cover');
 }
 function lamp(x, z, armDX, armDZ) {
@@ -342,15 +347,15 @@ function lamp(x, z, armDX, armDZ) {
   LAMPS.push({ x: x + armDX * 1.6, y: 7.1, z: z + armDZ * 1.6 });
 }
 function barrel(x, z) {
-  vcyl(B_PROPS, x, 0, z, 0.42, 0.95, 0x5a2e1a);
-  vcyl(B_PROPS, x, 0.3, z, 0.43, 0.06, 0x3a1e10); vcyl(B_PROPS, x, 0.65, z, 0.43, 0.06, 0x3a1e10);
-  vcyl(B_EMIS, x, 0.9, z, 0.36, 0.04, 0xff7a2a);
+  vcyl(B_BARREL, x, 0, z, 0.42, 0.95, 0x5a2e1a);
+  vcyl(B_BARREL, x, 0.3, z, 0.43, 0.06, 0x3a1e10); vcyl(B_BARREL, x, 0.65, z, 0.43, 0.06, 0x3a1e10);
+  vcyl(B_BARREL_FIRE, x, 0.9, z, 0.36, 0.04, 0xff7a2a);
   addCol(x - 0.42, 0, z - 0.42, x + 0.42, 0.95, z + 0.42, 'barrel');
   BARRELS.push({ x, y: 1.0, z, r: 4.6, t: Math.random() * 10 });
   LAMPS.push({ x, y: 1.7, z, fire: true });
 }
 function vent(x, z) {
-  vcyl(B_PROPS, x, 0.02, z, 0.6, 0.03, 0x2a2a2a);
+  vcyl(B_VENT, x, 0.02, z, 0.6, 0.03, 0x2a2a2a);
   VENTS.push({ x, z, r: 2.6, t: Math.random() * 5 });
 }
 function tree(x, z, s) {
@@ -769,7 +774,8 @@ const DECALS = [];
   for (const B of BARRELS) B_DECAL.add(GEO.plane, mtx(B.x, 0.05, B.z, 9, 9, 1, -Math.PI / 2, 0, 0), 0xffffff);
   const dm = new THREE.Mesh(B_DECAL.build(), MAT.glowDecal); dm.renderOrder = 2; scene.add(dm);
   buildSignals();
-  B_PROPS.mesh(MAT.props); B_EMIS.mesh(MAT.emis, false, false); B_SNOW.mesh(MAT.snow); B_ROOF.mesh(MAT.snow, false, true);
+  B_PROPS.mesh(MAT.props); B_EMIS.mesh(MAT.emis, false, false);
+  FALLBACK.barrel = B_BARREL.mesh(MAT.props); FALLBACK.barrelFire = B_BARREL_FIRE.mesh(MAT.emis, false, false); FALLBACK.barrier = B_BARRIER.mesh(MAT.props); FALLBACK.vent = B_VENT.mesh(MAT.props, false); B_SNOW.mesh(MAT.snow); B_ROOF.mesh(MAT.snow, false, true);
   MAT.shop.vertexColors = true; B_SHOP.mesh(MAT.shop, false, false); B_GYM.mesh(MAT.gym, false, false);
   const gm = B_GLASS.mesh(MAT.glass, false, false); gm.renderOrder = 3;
   for (const F of FACADES) F.batches.forEach((b, i) => { if (b.p.length) b.mesh(F.mats[i]); });

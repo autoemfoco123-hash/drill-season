@@ -133,7 +133,7 @@ function windExposure(x, z, y) {
 let FOV_T = 62;
 function updateCarCamera(dt) {
   if (fpOn()) { updateCarFP(dt); return; }
-  if (FP.cockpit) FP.cockpit.visible = false;
+  fpReleaseCar();
   const v = P.car, sp = Math.abs(v.speed);
   if (REAL_T - (P.lastLook || 0) > 1.4) { camYaw += angDiff(camYaw, v.yaw + Math.PI) * (1 - Math.exp(-dt * 2.6)); camPitch += (-0.16 - camPitch) * (1 - Math.exp(-dt * 2)); }
   P.shake = Math.max(0, P.shake - dt * 1.8);

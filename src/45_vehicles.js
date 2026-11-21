@@ -23,7 +23,7 @@ const CAR_SPECS = {
 const CAR_MODELS = Object.keys(CAR_SPECS);
 const CIVIL_MODELS = ['hatch', 'sedan', 'sedan', 'suv', 'suv', 'pickup', 'coupe', 'van', 'taxi', 'hatch'];
 const CAR_PAINTS = [0x1d1f24, 0xd8dadf, 0x8a9099, 0x5a6068, 0x6a1a1e, 0x1e2f4a, 0x34503a, 0xa8823c, 0x7a2a12, 0x2a6a8a, 0xb7b9bd, 0x2a2c30, 0x4a1f3a, 0xc9c2b0];
-MAT.carPaint = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.26, metalness: 0.55, envMapIntensity: 1.35 });
+MAT.carPaint = new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.34, metalness: 0.5, clearcoat: 1, clearcoatRoughness: 0.05, envMapIntensity: 1.25 });
 MAT.carTrim = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42, metalness: 0.3, envMapIntensity: 1.0 });
 MAT.carEmis = new THREE.MeshBasicMaterial({ vertexColors: true });
 MAT.carBar = new THREE.MeshBasicMaterial({ vertexColors: true });
@@ -142,6 +142,7 @@ function placeVehInstance(v) {
   const M = CARMESH[v.model];
   _vq.setFromAxisAngle(_vy, v.yaw);
   _vm.compose(v.pos, _vq, _vs);
+  if (v.hideBody) _vm.copy(_zeroM);
   M.paint.setMatrixAt(v.slot, _vm); M.trim.setMatrixAt(v.slot, _vm); M.emis.setMatrixAt(v.slot, _vm); if (M.bar) M.bar.setMatrixAt(v.slot, _vm);
   M.dirty = true;
   const c = Math.abs(Math.cos(v.yaw)), s = Math.abs(Math.sin(v.yaw)), W = v.sp.wid / 2, L = v.sp.len / 2;

@@ -307,3 +307,4 @@ setParticleScale();
 resizeRender();
 setupTitle();
 requestAnimationFrame(frame);
+loadRealism().catch(e => console.warn('assets', e));

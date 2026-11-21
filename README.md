@@ -1,6 +1,6 @@
 # Drill Season
 
-A multiplayer action game, played in third or first person, set in **Calder Park**, a fictional winter district on Chicago's South/West Side. You pick a username, make beats in a basement studio, build Buzz online, keep your Heat down, and decide which way out you take. Everything runs in one HTML file with [Three.js](https://threejs.org/), and every sound is synthesized in the browser.
+A multiplayer action game, played in third or first person, set in **Calder Park**, a fictional winter district on Chicago's South/West Side. You pick a username, make beats in a basement studio, build Buzz online, keep your Heat down, and decide which way out you take. The game is one HTML file built with [Three.js](https://threejs.org/), plus an `assets/` folder of free CC0 photo-scanned textures, skies and props. Every sound is synthesized in the browser.
 
 All people, crews, places, brands and songs in the game are made up.
 
@@ -13,6 +13,9 @@ All people, crews, places, brands and songs in the game are made up.
 | ![Garnet Courts](preview/13_garnet_courts.jpg) | ![Kessler rail yard](preview/15_rail_yard.jpg) |
 | ![Calder Ave at night](preview/1_calder_ave_night.jpg) | ![Police chase](preview/4_police_chase_hud.jpg) |
 | ![Blok feed on the phone](preview/5_phone_blok_feed.jpg) | ![The L platform](preview/3_L_platform_day.jpg) |
+| ![Driver's seat by day](preview/16_cockpit_day.jpg) | ![Driver's seat at night](preview/17_cockpit_night.jpg) |
+| ![Scanned snow, asphalt and brick](preview/18_real_materials.jpg) | ![Clear-coat paint](preview/19_clearcoat_cars.jpg) |
+| ![Scanned fire barrel](preview/20_scanned_props.jpg) | ![Manhole steam](preview/21_manhole_steam.jpg) |
 
 Sound demo: [preview/drill_season_sound_demo.mp3](preview/drill_season_sound_demo.mp3)
 
@@ -64,9 +67,11 @@ Phones and tablets get on-screen controls.
   - chains, watches, shades, bags, beards, skin tones and builds, with colour palettes
 
   Your look is saved, and other players see it live, including changes.
-- **First person:** press V for an eye-level view with your own sleeves and gun, aim-down-sights and recoil, or a driver's-seat view with a turning wheel and speedometer.
+- **First person:** press V for an eye-level view with your own sleeves and gun, aim-down-sights and recoil. In a car you sit in a real cockpit shaped to each model: hood in the car's paint, dashboard, a rev counter and speedometer that work, a radio display, mirrors, pillars and your hands on a wheel that turns.
 - **Main menu:** your character on a lit stage under the L, with Continue, Wardrobe, Settings and How to play.
 
+- **Real-world materials:** photo-scanned snow, slushy asphalt, concrete, brick, stone, siding and corrugated metal, with normal and roughness maps. Windows are glossy, cars have clear-coat paint, and day and night skies come from real HDR photos of city streets.
+- **Scanned props:** fire barrels, fire hydrants, jersey barriers, manhole covers, trash bags and bins. Assets load after the game starts; if they cannot load (for example when the page is opened as a local file), the game uses its own simple shapes.
 - **A shared day and night:** a full day passes in 24 real minutes, and everyone in the room sees the same time. Trains and traffic lights follow the same clock.
 - **The district:** 500 m across on a 5×5 street grid: Calder Ave, Bishop St, Low End Rd, the elevated L with scheduled trains, a park with a frozen pond, a corner store, a rec center, a hospital, a police station and a car dealer. Four outer districts:
   - **Shore Dr lakefront:** a promenade, a pier, and a frozen lake you can walk out on.
@@ -105,5 +110,7 @@ The game is split into modules in `src/` and concatenated into one file:
 ```
 
 This writes `index.html` (standalone) and `dist/artifact.html` (Claude artifact format). The module order is in `src/parts.txt`.
+
+`assets/` must sit next to the page. Every asset in it is CC0 from [Poly Haven](https://polyhaven.com); `assets/CREDITS.md` lists each one with a link.
 
 Real recordings can replace any built-in sound: list the names in `AUDIO_PACK` in `src/20_audio.js` and put `audio/<name>.mp3` next to the page.
