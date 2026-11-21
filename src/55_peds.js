@@ -161,6 +161,8 @@ function updatePeds(dt) {
         if (Math.abs(angDiff(camYaw + Math.PI, toP)) < 0.25) { p.state = 'flee'; p.fleeT = 8; p.from = { x: P.pos.x, z: P.pos.z }; }
       }
     }
+    const answering = p.state === 'walk' && pedFlipBack(p, dt);
+    if (answering) tx = null;
     let vx = 0, vz = 0;
     if (tx !== null) { const dx = tx - p.pos.x, dz = tz - p.pos.z, l = Math.hypot(dx, dz); if (l > 0.05) { vx = dx / l * speed; vz = dz / l * speed; } }
     // keep out of each other's way
@@ -171,8 +173,8 @@ function updatePeds(dt) {
     p.stuckT += dt;
     if (p.stuckT > 2) { if (speed > 0.5 && Math.hypot(p.pos.x - p.lastX, p.pos.z - p.lastZ) < 0.4 && p.state === 'walk') { const n = cornerNext(p.node || { ix: 0, iz: 0, sx: 1, sz: 1 }, null); p.prev = p.node; p.node = n; p.target = cornerPos(n.ix, n.iz, n.sx, n.sz); } p.stuckT = 0; p.lastX = p.pos.x; p.lastZ = p.pos.z; }
     const sp = Math.hypot(p.vel.x, p.vel.z);
-    if (sp > 0.2) p.yaw += angDiff(p.yaw, Math.atan2(p.vel.x, p.vel.z)) * (1 - Math.exp(-dt * 8));
+    if (sp > 0.2 && !answering) p.yaw += angDiff(p.yaw, Math.atan2(p.vel.x, p.vel.z)) * (1 - Math.exp(-dt * 8));
     H.group.position.copy(p.pos); H.group.rotation.y = p.yaw;
-    if (dP < 70) animHuman(H, dt, { speed: sp, crouch: p.state === 'flee' && sp < 0.6, mug: p.state === 'walk' && ((REAL_T + p.phoneT) % 20) < 6 });
+    if (dP < 70) animHuman(H, dt, { speed: sp, crouch: p.state === 'flee' && sp < 0.6, mug: p.state === 'walk' && !answering && ((REAL_T + p.phoneT) % 20) < 6, flip: answering });
   }
 }

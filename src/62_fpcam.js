@@ -66,7 +66,7 @@ function updateViewmodel(dt, a) {
   const hipX = 0.13, hipY = -0.15, hipZ = -0.42, adsX = 0, adsY = -0.092, adsZ = -0.36;
   vm.position.set(lerp(hipX, adsX, a) + bx + FP.lagX - FP.sprintK * 0.04, lerp(hipY, adsY, a) + by + FP.lagY - reload * 0.12 - sw * 0.2 - FP.sprintK * 0.05, lerp(hipZ, adsZ, a) + FP.kick * 0.05);
   vm.rotation.set(FP.kick * 0.22 + reload * 0.6 - FP.sprintK * 0.35, lerp(0.04, 0, a) + FP.sprintK * 0.5, -reload * 0.35 + FP.sprintK * 0.2);
-  FP.left.visible = P.reloadT <= 0;
+  FP.left.visible = P.reloadT <= 0 && !((P.flipK || 0) > 0.3);
 }
 function updateFPCamera(dt) {
   const st = P.stats || gunStats(S.cur);
@@ -236,7 +236,7 @@ function updateCarFP(dt) {
   _ck2.set(FP.eye[0] + clamp(lat * 0.002, -0.05, 0.05), FP.eye[1] + Math.sin(REAL_T * 17) * Math.min(sp, 25) * 0.0004 + (Math.random() - 0.5) * P.shake * 0.03, FP.eye[2]);
   ck.localToWorld(_ck2);
   camera.position.copy(_ck2);
-  const look = clamp(angDiff(v.yaw + Math.PI, camYaw), -2.0, 2.0);
+  const look = clamp(angDiff(v.yaw + Math.PI, camYaw), -2.0, 2.0) + 0.42 * (P.flipK || 0); // glance at the window when the finger goes up
   camera.rotation.set(clamp(camPitch + 0.06, -0.6, 0.5), v.yaw + Math.PI + look, -clamp(lat * 0.0015, -0.03, 0.03), 'YXZ');
   const nf = (S.settings.fov || 70) + clamp(sp, 0, 34) * 0.25;
   if (Math.abs(nf - camera.fov) > 0.05) { camera.fov += (nf - camera.fov) * (1 - Math.exp(-dt * 3)); camera.updateProjectionMatrix(); setParticleScale(); }
@@ -246,10 +246,11 @@ function updateCarFP(dt) {
   FP.spinG.rotation.z = -(v.steer || 0) * 2.4;
   FP.spinG.updateMatrixWorld(true);
   const sx = [FP.eye[0] + 0.2, FP.eye[0] - 0.2];
+  FP.hands[0].visible = FP.arms[0].visible = !((P.flipK || 0) > 0.04); // that hand is out of the window
   FP.hands.forEach((h, i) => {
     h.getWorldPosition(_ck); ck.worldToLocal(_ck);
     setLimb(FP.arms[i], [_ck.x, _ck.y - 0.02, _ck.z - 0.04], [sx[i], FP.eye[1] - 0.3, FP.eye[2] - 0.02], 0.04);
   });
   drawGauges(v); drawRadio();
 }
-function fpHide() { if (FP.vm) FP.vm.visible = false; fpReleaseCar(); }
+function fpHide() { if (FP.vm) FP.vm.visible = false; if (FP.flip) FP.flip.visible = false; fpReleaseCar(); }

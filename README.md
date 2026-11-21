@@ -47,6 +47,7 @@ Notes on the peer-to-peer mode:
 | Jump (handbrake in a car), crouch | Space, C |
 | First / third person | V |
 | Wave | G |
+| Middle finger (hold to keep it up, works in a car too) | T |
 | Reload / next radio station | R |
 | Switch weapon | Q |
 | Enter or leave a car | F |

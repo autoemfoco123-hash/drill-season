@@ -81,6 +81,7 @@ addEventListener('keydown', e => {
     case 'KeyR': if (P.car) cycleRadio(); else startReload(); break;
     case 'KeyV': toggleFP(); break;
     case 'KeyG': if (!P.car) { P.waveT = 2.2; NET.presT = 0; } break;
+    case 'KeyT': startFlip(); break;
     case 'KeyF': carPress(); break;
     case 'KeyH': if (P.car) sfx.honk(P.car.pos.x, P.car.pos.z); break;
     case 'Digit1': switchWeapon('k9'); break;
@@ -128,6 +129,7 @@ function setupTouch() {
   hold('tc-band', () => useBandage());
   hold('tc-phone', () => { if (MODE === 'play') openPhone(); else if (MODE === 'phone') closePhone(); });
   hold('tc-pause', () => openPause());
+  hold('tc-flip', () => { TOUCH.flip = true; startFlip(); }, () => { TOUCH.flip = false; });
   hold('tc-cam', () => toggleFP());
 }
 
@@ -264,6 +266,7 @@ function frame(now) {
     if (MODE === 'wardrobe') { updateVehicles(dt); updatePeds(dt); wardrobeStage(dt); }
     if (MODE === 'cutscene') updateCutscene(dt);
     else if (live) updateCamera(dt);
+    updateGestures();
     saveT -= dt; if (saveT <= 0) { saveT = 20; saveGame(); }
     netSaveT -= dt; if (netSaveT <= 0) { netSaveT = 30; netSaveProfile(); }
   }

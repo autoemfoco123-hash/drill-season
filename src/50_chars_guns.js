@@ -14,6 +14,7 @@ const HG = {
   upper: new THREE.CapsuleGeometry(0.078, 0.22, 3, 8),
   fore: new THREE.CapsuleGeometry(0.066, 0.2, 3, 8),
   hand: new THREE.SphereGeometry(0.055, 8, 6),
+  finger: new THREE.CapsuleGeometry(0.015, 0.072, 3, 8),
   shoe: new THREE.BoxGeometry(0.13, 0.09, 0.27),
   pack: new THREE.BoxGeometry(0.3, 0.36, 0.14),
   chain: new THREE.TorusGeometry(0.13, 0.014, 5, 16),
@@ -131,7 +132,8 @@ function buildHuman(o) {
     if (o.watch && side < 0) add(elbow, HG.watch, mGold, 0, -0.24, 0);
     const hand = new THREE.Group(); hand.position.y = -0.29; elbow.add(hand);
     add(hand, HG.hand, mHand);
-    return { sh, elbow, hand };
+    const finger = add(hand, HG.finger, mHand, 0, -0.09, 0.006); finger.visible = false; // only for the middle-finger gesture
+    return { sh, elbow, hand, finger };
   };
   const L = mkLeg(-1), R = mkLeg(1), AL = mkArm(-1), AR = mkArm(1);
   const shadow = new THREE.Mesh(HG.shadow, SHADOW_MAT); shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.03; g.add(shadow);
@@ -168,6 +170,8 @@ function animHuman(h, dt, pose) {
   h.AL.sh.rotation.z = lerp(-0.08, -0.55, aim);
   h.AL.elbow.rotation.x = lerp(-0.25, -0.35, aim);
   if (pose.wave) { h.AL.sh.rotation.x = -2.6; h.AL.sh.rotation.z = -0.3 + Math.sin(REAL_T * 8) * 0.25; h.AL.elbow.rotation.x = -0.4; }
+  if (pose.flip) { const j = Math.sin(REAL_T * 9) * 0.06; h.AL.sh.rotation.x = -1.5 + j; h.AL.sh.rotation.z = -0.22; h.AL.elbow.rotation.x = -1.3; }
+  if (h.AL.finger) h.AL.finger.visible = !!pose.flip;
   if (pose.mug) { h.AL.sh.rotation.x = -0.9; h.AL.elbow.rotation.x = -1.4; h.AL.sh.rotation.z = -0.1; }
   if (pose.hands) { for (const A of [h.AL, h.AR]) { A.sh.rotation.x = -2.9; A.elbow.rotation.x = -0.35; } h.AL.sh.rotation.z = -0.25; h.AR.sh.rotation.z = 0.25; }
   if (pose.pose) { h.AR.sh.rotation.x = -1.9; h.AR.elbow.rotation.x = -1.2; h.AR.sh.rotation.z = 0.3; h.AL.sh.rotation.x = -0.4; h.spine.rotation.x = -0.08; }

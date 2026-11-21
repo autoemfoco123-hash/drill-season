@@ -36,7 +36,7 @@ async function initNet() {
 }
 function presencePayload() {
   const r1 = v => Math.round(v * 10) / 10;
-  const f = (P.crouch ? 1 : 0) | (P.aimT > 0.5 || GAME_T - P.lastShot < 0.5 ? 2 : 0) | (P.dead || P.downT > 0 ? 4 : 0) | (P.sprinting ? 8 : 0) | (MODE !== 'play' && MODE !== 'phone' ? 16 : 0) | ((P.waveT || 0) > 0 ? 32 : 0);
+  const f = (P.crouch ? 1 : 0) | (P.aimT > 0.5 || GAME_T - P.lastShot < 0.5 ? 2 : 0) | (P.dead || P.downT > 0 ? 4 : 0) | (P.sprinting ? 8 : 0) | (MODE !== 'play' && MODE !== 'phone' ? 16 : 0) | ((P.waveT || 0) > 0 ? 32 : 0) | (flipping() ? 64 : 0);
   return {
     v: 1, n: netName().slice(0, 16), x: r1(P.pos.x), y: r1(P.pos.y), z: r1(P.pos.z), r: Math.round(P.bodyYaw * 100) / 100, p: Math.round(camPitch * 100) / 100,
     s: r1(P.speed), f, g: GUN_IDX.indexOf(S.cur), h: Math.round(S.heat), b: Math.round(S.buzz), sh: NET.shots.slice(-6),
@@ -81,7 +81,7 @@ function remoteHuman(R, skArr) {
   else { const c = new THREE.Color(R.col); opts = { jacket: c.clone().multiplyScalar(0.35).getHex(), jacket2: c.clone().multiplyScalar(0.5).getHex(), pants: 0x1b2230, skin: 0x6b4630, hat: c.getHex(), pom: c.getHex(), shoes: 0xdedede, hood: true }; }
   const old = R.h, h = buildHuman(opts);
   if (old) { h.group.position.copy(old.group.position); h.group.rotation.y = old.group.rotation.y; h.group.visible = old.group.visible; scene.remove(old.group); }
-  scene.add(h.group); R.h = h; R.skKey = sk ? skArr.join('.') : '';
+  scene.add(h.group); R.h = h; R.hOpts = opts; R.skKey = sk ? skArr.join('.') : '';
   if (R.plate) h.group.add(R.plate);
   if (R.gun) h.AR.hand.add(R.gun);
 }
@@ -99,7 +99,7 @@ function setRemotePlate(R) {
   R.plate = makeNameplate('@' + R.name, R.col, heatTier(R.h_ || 0) === 'Cool' ? '' : 'HEAT ' + heatTier(R.h_).toUpperCase());
   R.h.group.add(R.plate);
 }
-function removeRemote(R) { scene.remove(R.h.group); if (R.veh) { removeVehicle(R.veh); R.veh = null; } }
+function removeRemote(R) { scene.remove(R.h.group); dropWinArm(R.winArm); R.winArm = null; if (R.veh) { removeVehicle(R.veh); R.veh = null; } }
 function applyPresence(R, pr) {
   R.seen = performance.now();
   if (Array.isArray(pr.sk) && pr.sk.join('.') !== R.skKey) remoteHuman(R, pr.sk);
@@ -197,7 +197,7 @@ function updateRemotes(dt) {
       const f = { x: Math.sin(R.vt.yaw), z: Math.cos(R.vt.yaw) };
       v.pos.x += (R.vt.x + f.x * R.vt.sp * 0.06 - v.pos.x) * k; v.pos.z += (R.vt.z + f.z * R.vt.sp * 0.06 - v.pos.z) * k;
       v.yaw += angDiff(v.yaw, R.vt.yaw) * k; v.vel.set(f.x * R.vt.sp, f.z * R.vt.sp); v.speed = R.vt.sp;
-      placeVehInstance(v); vehHitPeople(v);
+      placeVehInstance(v); vehHitPeople(v); remoteWinArm(R, v);
       R.pos.set(v.pos.x, 0, v.pos.z); R.tgt.copy(R.pos); R.h.group.position.copy(R.pos);
       continue;
     }
@@ -205,7 +205,8 @@ function updateRemotes(dt) {
     R.yaw += angDiff(R.yaw, R.tyaw) * k;
     R.h.group.position.copy(R.pos); R.h.group.rotation.y = R.yaw;
     const aim = (R.f & 2) ? 1 : 0, down = (R.f & 4) ? 1 : 0;
-    animHuman(R.h, dt, { speed: R.s, crouch: (R.f & 1) && !aim, aim, pitch: R.p, down, twoHand: R.g > 0, wave: !!(R.f & 32) && !aim });
+    if (R.winArm) R.winArm.g.visible = false;
+    animHuman(R.h, dt, { speed: R.s, crouch: (R.f & 1) && !aim, aim, pitch: R.p, down, twoHand: R.g > 0, wave: !!(R.f & 32) && !aim, flip: !!(R.f & 64) && !aim });
     // soft body push so players don't overlap
     const dx = P.pos.x - R.pos.x, dz = P.pos.z - R.pos.z, d = Math.hypot(dx, dz);
     if (d < 0.75 && d > 0.01 && Math.abs(P.pos.y - R.pos.y) < 1.5) { P.pos.x += dx / d * (0.75 - d) * 0.5; P.pos.z += dz / d * (0.75 - d) * 0.5; }

@@ -4,7 +4,7 @@
    ========================================================= */
 const keys = {};
 const mouse = { left: false, right: false };
-const TOUCH = { on: false, joy: { active: false, x: 0, y: 0, id: null }, lookId: null, aim: false, fire: false, sprint: false, useHeld: false };
+const TOUCH = { flip: false, on: false, joy: { active: false, x: 0, y: 0, id: null }, lookId: null, aim: false, fire: false, sprint: false, useHeld: false };
 const P = {
   pos: new THREE.Vector3(-6, 0, -42), vel: new THREE.Vector3(), radius: 0.36, height: 1.75, onGround: true, airY: 0,
   crouch: false, aiming: false, aimT: 0, sprinting: false, stamina: 100, staminaLock: false, staDelay: 0,
@@ -46,6 +46,7 @@ function playerTargets() {
 const _fwd = new THREE.Vector3(), _tmpV = new THREE.Vector3(), _tmpV2 = new THREE.Vector3();
 function updatePlayer(dt) {
   P.handsUp = Math.max(0, (P.handsUp || 0) - dt); P.pose = Math.max(0, (P.pose || 0) - dt);
+  tickFlip(dt);
   if (P.car) {
     const v = P.car;
     P.pos.set(v.pos.x, 0, v.pos.z); P.vel.set(v.vel.x, 0, v.vel.y); P.speed = Math.abs(v.speed); P.bodyYaw = v.yaw;
@@ -107,7 +108,7 @@ function updatePlayer(dt) {
   const H = P.human;
   H.group.position.copy(P.pos);
   H.group.rotation.y = P.bodyYaw;
-  animHuman(H, dt, { speed: P.speed, crouch: P.crouch && !P.aiming ? 1 : (P.crouch ? 0.6 : 0), aim: Math.max(P.aimT, GAME_T - P.lastShot < 0.5 ? 1 : 0), pitch: camPitch, down: down ? clamp(P.downT, 0, 1) : 0, twoHand: S.cur !== 'k9', shiver: S.warmth < 30 ? 1 : 0, hands: P.handsUp > 0, pose: P.pose > 0 || (PHONE.selfie && MODE === 'phone') , wave: (P.waveT || 0) > 0 && !P.aiming, pose: (P.poseT || 0) > 0 });
+  animHuman(H, dt, { speed: P.speed, crouch: P.crouch && !P.aiming ? 1 : (P.crouch ? 0.6 : 0), aim: Math.max(P.aimT, GAME_T - P.lastShot < 0.5 ? 1 : 0), pitch: camPitch, down: down ? clamp(P.downT, 0, 1) : 0, twoHand: S.cur !== 'k9', shiver: S.warmth < 30 ? 1 : 0, hands: P.handsUp > 0, pose: P.pose > 0 || (PHONE.selfie && MODE === 'phone') , wave: (P.waveT || 0) > 0 && !P.aiming, pose: (P.poseT || 0) > 0, flip: flipping() });
   P.waveT = Math.max(0, (P.waveT || 0) - dt); P.poseT = Math.max(0, (P.poseT || 0) - dt);
   if (P.gun) P.gun.visible = !(P.handsUp > 0) && !(PHONE.selfie && MODE === 'phone');
   // timers
