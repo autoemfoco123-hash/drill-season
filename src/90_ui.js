@@ -480,7 +480,8 @@ function renderApp() {
     const st = S.stats;
     add(`<div class="stat-g"><div><b>@${esc(S.name)}</b><span>${buzzTier(S.buzz)} · ${heatTier(S.heat)} heat</span></div><div><b>${socialFollowers().toLocaleString('en-US')}</b><span>Followers</span></div><div><b>${st.tracks}</b><span>Tracks</span></div><div><b>${Object.keys(S.endings).length}/4</b><span>Endings</span></div></div>`);
     add('<div class="sec">On the block now</div>');
-    if (NET.status === 'solo') add('<div class="empty" style="text-align:left;padding:6px 2px">Playing solo. Open this game on claude.ai while signed in to see other artists on the block in real time.</div>');
+    if (NET.status === 'solo') add(`<div class="empty" style="text-align:left;padding:6px 2px">Playing solo. ${location.protocol === 'file:' ? 'Open the game from its web address (not a saved file) to play with others.' : 'This browser could not open a peer-to-peer connection, so other players cannot reach you.'}</div>`);
+    else if (NET.p2p) add(`<div class="empty" style="text-align:left;padding:6px 2px">${NET.status === 'live' ? 'Connected' : 'Looking for players'} · peer-to-peer. Everyone who opens this page joins the same block.</div>`);
     else { add(`<div class="row"><span><span style="color:#ffb347">●</span> @${esc(S.name)} (you)</span><span class="g">${heatTier(S.heat)}</span></div>`); for (const R of NET.remotes.values()) add(`<div class="row"><span><span style="color:${R.col}">●</span> @${esc(R.name)}${R.veh ? ' · driving' : ''}${R.wl ? ' · wanted ' + R.wl : ''}</span><span class="g">${Math.round(R.pos.distanceTo(P.pos))} m</span></div>`); }
     add('<div class="sec">Charts · top Buzz</div>');
     const chart = NET.players.length ? [...NET.players].sort((a, b) => (b.buzz || 0) - (a.buzz || 0)).slice(0, 15) : [{ id: NET.uid, name: S.name, buzz: Math.round(S.buzz), best: S.stats.best }];

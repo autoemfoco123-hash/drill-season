@@ -15,9 +15,22 @@ Sound demo: [preview/drill_season_sound_demo.mp3](preview/drill_season_sound_dem
 
 ## Play
 
-Open `index.html` in a browser, or serve the folder from any static host (GitHub Pages works as-is). Tap or click once to turn sound on; browsers do not allow sound before that.
+Play it at **https://autoemfoco123-hash.github.io/drill-season/** once GitHub Pages is on, or serve this folder from any static host. Tap or click once to turn sound on; browsers do not allow sound before that.
 
-**Multiplayer** uses the live rooms and shared database of Claude artifacts. Publish `dist/artifact.html` as a Claude artifact and share it, and everyone who opens it is on the same block. Opened anywhere else, the game runs solo.
+### Multiplayer
+
+Everyone who opens the page lands on the same block, with no account and no server:
+
+- **On GitHub Pages or any web host:** players connect peer-to-peer over WebRTC. Public [Nostr](https://nostr.com/) relays are only used to introduce players to each other, through [Trystero](https://github.com/dmotz/trystero), which is embedded in `index.html`. Positions, shots, cars and radio stations stream directly between browsers. Profiles, charts and Blok posts are shared with whoever is online and remembered on each device.
+- **As a Claude artifact:** `dist/artifact.html` uses the artifact's live room and shared database instead.
+
+Notes on the peer-to-peer mode:
+
+- Opening `index.html` as a local file runs solo. Serve it over `https://` or `http://localhost`.
+- It suits small groups, up to about a dozen players, because every player connects to every other player.
+- Some strict networks, such as certain mobile carriers and corporate firewalls, block direct connections. Players on those networks play solo.
+- Shots and damage are checked by each player's own browser, so it is built for playing with friends, not for strangers who might cheat.
+- To use your own Nostr relays, set `window.DS_RELAYS = ['wss://your.relay']` before the game script runs.
 
 ### Controls
 

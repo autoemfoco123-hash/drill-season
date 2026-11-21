@@ -9,8 +9,12 @@ const GUN_IDX = ['k9', 'draft', 'plow'];
 const netName = () => S.name || 'artist';
 function hashColor(str) { let h = 0; for (const c of String(str)) h = (h * 31 + c.charCodeAt(0)) | 0; return `hsl(${Math.abs(h) % 360},70%,62%)`; }
 async function initNet() {
-  const C = window.claude;
-  if (!C || typeof C.use !== 'function') { NET.status = 'solo'; return; }
+  let C = window.claude;
+  if (!C || typeof C.use !== 'function') {
+    // not on claude.ai: go peer-to-peer if this build ships the P2P transport
+    if (!p2pAvailable()) { NET.status = 'solo'; return; }
+    try { C = makeP2PClient(); NET.p2p = true; } catch (e) { console.error('p2p', e); NET.status = 'solo'; return; }
+  }
   try { NET.user = await C.use('user'); } catch (e) { NET.user = null; }
   try { NET.uid = NET.user ? await NET.user.id() : null; } catch (e) { NET.uid = null; }
   try { NET.room = await C.use('room'); } catch (e) { NET.room = null; }
