@@ -56,7 +56,7 @@ function canvasMean(tex) {
 async function loadRealism() {
   if (location.protocol === 'file:') return;
   REAL.aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-  const lite = IS_TOUCH || S.settings.quality === 'low';
+  const lite = LOW_POWER || S.settings.quality === 'low';
   const set = async (name, rep, color) => {
     const [diff, nor, rough] = await Promise.all([realTex(`tex/${name}_${color ? 'diff' : 'detail'}.jpg`, color, color ? rep : 0), realTex(`tex/${name}_nor.jpg`, false, rep), realTex(`tex/${name}_rough.jpg`, false, rep)]);
     if (!(diff && nor && rough)) return null;

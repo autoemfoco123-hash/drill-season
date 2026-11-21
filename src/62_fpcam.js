@@ -98,7 +98,8 @@ function updateFPCamera(dt) {
   camera.updateMatrixWorld();
   P.human.group.visible = false;
   fpReleaseCar();
-  updateViewmodel(dt, a);
+  if (S.fists) { if (FP.vm) FP.vm.visible = false; updateFistVM(dt, a); }
+  else { if (FP.fv) FP.fv.visible = false; updateViewmodel(dt, a); }
 }
 /* ---- driver's seat: a real interior built to each car's dimensions ---- */
 const _ck = new THREE.Vector3(), _ck2 = new THREE.Vector3();
@@ -241,7 +242,7 @@ function updateCarFP(dt) {
   const nf = (S.settings.fov || 70) + clamp(sp, 0, 34) * 0.25;
   if (Math.abs(nf - camera.fov) > 0.05) { camera.fov += (nf - camera.fov) * (1 - Math.exp(-dt * 3)); camera.updateProjectionMatrix(); setParticleScale(); }
   camera.updateMatrixWorld();
-  if (FP.vm) FP.vm.visible = false;
+  if (FP.vm) FP.vm.visible = false; if (FP.fv) FP.fv.visible = false;
   // wheel turns with the steering; forearms follow the hands
   FP.spinG.rotation.z = -(v.steer || 0) * 2.4;
   FP.spinG.updateMatrixWorld(true);
@@ -253,4 +254,4 @@ function updateCarFP(dt) {
   });
   drawGauges(v); drawRadio();
 }
-function fpHide() { if (FP.vm) FP.vm.visible = false; if (FP.flip) FP.flip.visible = false; fpReleaseCar(); }
+function fpHide() { if (FP.vm) FP.vm.visible = false; if (FP.fv) FP.fv.visible = false; if (FP.flip) FP.flip.visible = false; fpReleaseCar(); }

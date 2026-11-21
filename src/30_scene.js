@@ -2,13 +2,13 @@
 /* =========================================================
    RENDERER, SCENE, TEXTURES, BATCHING
    ========================================================= */
-const PR = Math.min(window.devicePixelRatio || 1, IS_TOUCH ? 1.25 : 1.5);
+const PR = IS_CONSOLE ? Math.min(window.devicePixelRatio || 1, (PLAT.xboxSeries ? 1920 : 1280) / Math.max(1, innerWidth)) : Math.min(window.devicePixelRatio || 1, IS_TOUCH ? 1.25 : 1.5);
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', stencil: false });
 renderer.setPixelRatio(PR);
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
-renderer.shadowMap.enabled = !IS_TOUCH;
+renderer.shadowMap.enabled = !LOW_POWER;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.domElement.className = 'gl';
 $('app').prepend(renderer.domElement);
@@ -25,13 +25,13 @@ const hemi = new THREE.HemisphereLight(0x7290c4, 0x2a2228, 1.0);
 scene.add(hemi);
 // one celestial light: the sun by day, the moon by night (always the shadow caster)
 const SUN = new THREE.DirectionalLight(0xffffff, 1.0);
-SUN.castShadow = !IS_TOUCH;
+SUN.castShadow = !LOW_POWER;
 SUN.shadow.mapSize.set(2048, 2048);
 { const c = SUN.shadow.camera; c.left = -48; c.right = 48; c.top = 48; c.bottom = -48; c.near = 1; c.far = 460; }
 SUN.shadow.bias = -0.0004; SUN.shadow.normalBias = 0.045;
 scene.add(SUN, SUN.target);
 const LIGHT_POOL = [];
-for (let i = 0; i < (IS_TOUCH ? 4 : 8); i++) {
+for (let i = 0; i < (LOW_POWER ? 4 : 8); i++) {
   const L = new THREE.PointLight(0xff9a3c, 0, 26, 1.6);
   scene.add(L); LIGHT_POOL.push(L);
 }
@@ -414,7 +414,7 @@ const SKYLINE = {};
 })();
 
 /* ---------- falling snow ---------- */
-const SNOW_N = IS_TOUCH ? 2200 : 4200, SNOW_BOX = [70, 34, 70];
+const SNOW_N = LOW_POWER ? 2200 : 4200, SNOW_BOX = [70, 34, 70];
 const snowLocal = new Float32Array(SNOW_N * 3), snowWorld = new Float32Array(SNOW_N * 3), snowSpeed = new Float32Array(SNOW_N);
 for (let i = 0; i < SNOW_N; i++) { snowLocal[i * 3] = Math.random() * SNOW_BOX[0]; snowLocal[i * 3 + 1] = Math.random() * SNOW_BOX[1]; snowLocal[i * 3 + 2] = Math.random() * SNOW_BOX[2]; snowSpeed[i] = 0.7 + Math.random() * 0.9; }
 const snowGeo = new THREE.BufferGeometry();
@@ -484,7 +484,7 @@ const GRADE = {
     gl_FragColor = vec4(max(c, 0.0), 1.0);
   }`,
 };
-const composerRT = new THREE.WebGLRenderTarget(Math.floor(innerWidth * PR), Math.floor(innerHeight * PR), { type: THREE.HalfFloatType, samples: IS_TOUCH ? 0 : 4 });
+const composerRT = new THREE.WebGLRenderTarget(Math.floor(innerWidth * PR), Math.floor(innerHeight * PR), { type: THREE.HalfFloatType, samples: LOW_POWER ? 0 : 4 });
 const composer = new EffectComposer(renderer, composerRT);
 composer.setPixelRatio(PR); composer.setSize(innerWidth, innerHeight);
 const renderPass = new RenderPass(scene, camera);

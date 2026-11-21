@@ -213,7 +213,7 @@ function vehCollide(v) {
   }
   if (impact > 4) {
     v.hp -= impact * 1.6;
-    if (v.driver === 'player') { P.shake = Math.min(1, impact / 18); sfx.crash(v.pos.x, v.pos.z, impact); if (impact > 12) hurtPlayer(impact * 0.6, null, true); }
+    if (v.driver === 'player') { rumble(clamp(impact / 14, 0.2, 1), 0.8, 120 + impact * 12); P.shake = Math.min(1, impact / 18); sfx.crash(v.pos.x, v.pos.z, impact); if (impact > 12) hurtPlayer(impact * 0.6, null, true); }
     else if (Math.hypot(v.pos.x - camera.position.x, v.pos.z - camera.position.z) < 60) sfx.crash(v.pos.x, v.pos.z, impact);
     if (v.hp <= 0 && !v.smoking) { v.smoking = true; }
   }
@@ -296,7 +296,7 @@ function aiDrive(v, dt) {
   return { thr, steer, hand: false };
 }
 const TRAFFIC = [];
-const N_TRAFFIC = IS_TOUCH ? 6 : 11;
+const N_TRAFFIC = LOW_POWER ? 6 : 11;
 function spawnTrafficCar(nearX, nearZ, minD, maxD) {
   for (let k = 0; k < 30; k++) {
     const axis = Math.random() < 0.5 ? 'x' : 'z';
@@ -432,6 +432,7 @@ function playerDriveInput() {
   if (keys.KeyA || keys.ArrowLeft) steer += 1;
   if (keys.KeyD || keys.ArrowRight) steer -= 1;
   if (TOUCH.joy.active) { thr += TOUCH.joy.y; steer -= TOUCH.joy.x; }
+  if (GP.active) { thr += GP.rt - GP.lt; steer -= GP.lx; }
   if (MODE !== 'play') thr = steer = 0;
   return { thr: clamp(thr, -1, 1), steer: clamp(steer, -1, 1), hand: !!(keys.Space || TOUCH.jumpHeld) && MODE === 'play' };
 }

@@ -27,7 +27,7 @@ function applyPlayerSkin() {
 function refreshPlayerGun() {
   const cfg = S.guns[S.cur].cfg;
   const key = S.cur + JSON.stringify(cfg);
-  P.stats = gunStats(S.cur);
+  P.stats = S.fists ? FIST_STATS : gunStats(S.cur);
   if (key === P.gunKey && P.gun) return;
   if (P.gun && P.gun.parent) P.gun.parent.remove(P.gun);
   P.gun = buildGun(S.cur, cfg);
@@ -46,7 +46,7 @@ function playerTargets() {
 const _fwd = new THREE.Vector3(), _tmpV = new THREE.Vector3(), _tmpV2 = new THREE.Vector3();
 function updatePlayer(dt) {
   P.handsUp = Math.max(0, (P.handsUp || 0) - dt); P.pose = Math.max(0, (P.pose || 0) - dt);
-  tickFlip(dt);
+  tickFlip(dt); tickFists(dt);
   if (P.car) {
     const v = P.car;
     P.pos.set(v.pos.x, 0, v.pos.z); P.vel.set(v.vel.x, 0, v.vel.y); P.speed = Math.abs(v.speed); P.bodyYaw = v.yaw;
@@ -60,16 +60,17 @@ function updatePlayer(dt) {
   if (keys.KeyW || keys.ArrowUp) iz += 1; if (keys.KeyS || keys.ArrowDown) iz -= 1;
   if (keys.KeyA || keys.ArrowLeft) ix -= 1; if (keys.KeyD || keys.ArrowRight) ix += 1;
   if (TOUCH.joy.active) { ix += TOUCH.joy.x; iz += TOUCH.joy.y; }
+  if (GP.lx || GP.ly) { ix += GP.lx; iz -= GP.ly; }
   const il = Math.hypot(ix, iz); if (il > 1) { ix /= il; iz /= il; }
   const down = P.downT > 0;
   if (down) { ix = iz = 0; P.downT -= dt; }
   const busy = MODE !== 'play';
   if (busy) { ix = iz = 0; }
-  const wantAim = !busy && !down && (mouse.right || TOUCH.aim);
+  const wantAim = !busy && !down && (mouse.right || TOUCH.aim || GP.aim);
   P.aiming = wantAim;
   P.aimT = clamp(P.aimT + (wantAim ? 1 : -1) * dt * 7 * (P.stats ? P.stats.aimSpeed : 1), 0, 1);
   const moving = Math.hypot(ix, iz) > 0.1;
-  const wantSprint = !busy && (keys.ShiftLeft || keys.ShiftRight || TOUCH.sprint || (TOUCH.joy.active && Math.hypot(TOUCH.joy.x, TOUCH.joy.y) > 0.96)) && iz > 0.3 && !P.aiming && moving;
+  const wantSprint = !busy && (keys.ShiftLeft || keys.ShiftRight || TOUCH.sprint || GP.sprint || (TOUCH.joy.active && Math.hypot(TOUCH.joy.x, TOUCH.joy.y) > 0.96)) && iz > 0.3 && !P.aiming && moving;
   if (wantSprint && P.crouch) P.crouch = false;
   // stamina (cold slows regen)
   const coldK = S.warmth < 35 ? 0.4 : 1;
@@ -100,7 +101,7 @@ function updatePlayer(dt) {
     S.stats.dist += P.speed * dt;
   }
   // face direction
-  const faceAim = P.aimT > 0.2 || GAME_T - P.lastShot < 0.6 || fpOn();
+  const faceAim = P.aimT > 0.2 || GAME_T - P.lastShot < 0.6 || GAME_T - (P.lastPunch || -9) < 0.8 || fpOn();
   let targetYaw = P.bodyYaw;
   if (faceAim) targetYaw = camYaw + Math.PI;
   else if (P.speed > 0.4) targetYaw = Math.atan2(P.vel.x, P.vel.z);
@@ -108,15 +109,15 @@ function updatePlayer(dt) {
   const H = P.human;
   H.group.position.copy(P.pos);
   H.group.rotation.y = P.bodyYaw;
-  animHuman(H, dt, { speed: P.speed, crouch: P.crouch && !P.aiming ? 1 : (P.crouch ? 0.6 : 0), aim: Math.max(P.aimT, GAME_T - P.lastShot < 0.5 ? 1 : 0), pitch: camPitch, down: down ? clamp(P.downT, 0, 1) : 0, twoHand: S.cur !== 'k9', shiver: S.warmth < 30 ? 1 : 0, hands: P.handsUp > 0, pose: P.pose > 0 || (PHONE.selfie && MODE === 'phone') , wave: (P.waveT || 0) > 0 && !P.aiming, pose: (P.poseT || 0) > 0, flip: flipping() });
+  animHuman(H, dt, { speed: P.speed, crouch: P.crouch && !P.aiming ? 1 : (P.crouch ? 0.6 : 0), aim: S.fists ? 0 : Math.max(P.aimT, GAME_T - P.lastShot < 0.5 ? 1 : 0), pitch: camPitch, fists: S.fists && !(P.handsUp > 0), guard: S.fists && P.aiming, punch: P.punchT > 0 ? P.punchT / (P.punchDur || 0.3) : 0, punchSide: P.punchSide, hook: P.punchHook, down: down ? clamp(P.downT, 0, 1) : 0, twoHand: S.cur !== 'k9', shiver: S.warmth < 30 ? 1 : 0, hands: P.handsUp > 0, pose: P.pose > 0 || (PHONE.selfie && MODE === 'phone') , wave: (P.waveT || 0) > 0 && !P.aiming, pose: (P.poseT || 0) > 0, flip: flipping() });
   P.waveT = Math.max(0, (P.waveT || 0) - dt); P.poseT = Math.max(0, (P.poseT || 0) - dt);
-  if (P.gun) P.gun.visible = !(P.handsUp > 0) && !(PHONE.selfie && MODE === 'phone');
+  if (P.gun) P.gun.visible = !S.fists && !(P.handsUp > 0) && !(PHONE.selfie && MODE === 'phone');
   // timers
   P.fireCd -= dt; P.switchT -= dt; P.bloom = Math.max(0, P.bloom - dt * 2.2);
   if (P.reloadT > 0) { P.reloadT -= dt; if (P.reloadT <= 0) finishReload(); }
   if (P.healT > 0) { P.healT -= dt; S.health = Math.min(100, S.health + dt * 26); }
   // firing
-  const trig = !busy && !down && (mouse.left || TOUCH.fire);
+  const trig = !busy && !down && (mouse.left || TOUCH.fire || GP.fire);
   if (trig) {
     if (P.stats.auto || !P.triggerLatch) tryFire();
     P.triggerLatch = true;
@@ -213,15 +214,18 @@ function updateCamera(dt) {
 
 /* ---- weapons ---- */
 function switchWeapon(id) {
-  if (!S.guns[id] || !S.guns[id].owned || S.cur === id || P.downT > 0) return;
-  S.cur = id; P.reloadT = 0; P.switchT = 0.4; refreshPlayerGun(); sfx.reload(); hudDirty = true;
+  if (!S.guns[id] || !S.guns[id].owned || (S.cur === id && !S.fists) || P.downT > 0) return;
+  S.cur = id; S.fists = false; P.reloadT = 0; P.switchT = 0.4; refreshPlayerGun(); sfx.reload(); hudDirty = true; NET.presT = 0;
 }
+// the cycle runs through your guns, then your fists
 function cycleWeapon(dir) {
-  const ids = ['k9', 'draft', 'plow'].filter(i => S.guns[i].owned);
-  const i = ids.indexOf(S.cur);
-  switchWeapon(ids[(i + dir + ids.length) % ids.length]);
+  const ids = ['k9', 'draft', 'plow'].filter(i => S.guns[i].owned).concat('fists');
+  const i = ids.indexOf(S.fists ? 'fists' : S.cur);
+  const next = ids[(i + dir + ids.length) % ids.length];
+  if (next === 'fists') setFists(true); else switchWeapon(next);
 }
 function startReload() {
+  if (S.fists) return;
   const g = S.guns[S.cur], st = P.stats;
   if (P.reloadT > 0 || g.mag >= st.mag || g.res <= 0) return;
   P.reloadT = st.reload; P.reloadFor = S.cur;
@@ -242,6 +246,7 @@ function coneDir(base, deg, out) {
   return out;
 }
 function tryFire() {
+  if (S.fists) { punch(); return; }
   const g = S.guns[S.cur], st = P.stats;
   if (P.reloadT > 0 || P.switchT > 0 || P.fireCd > 0) return;
   if (g.mag <= 0) { sfx.click(); P.fireCd = 0.3; if (g.res > 0) startReload(); return; }
@@ -270,7 +275,7 @@ function tryFire() {
       if (res.enemy) damageEnemy(res.enemy, dmg, res.head, dir);
       else if (res.ped) pedHit(res.ped, dmg, dir, true);
       else if (res.cop) copHit(res.cop, dmg, dir, true);
-      else bloodBurst(_hp.x, _hp.y, _hp.z, dir.x, dir.z, 8);
+      else if (!sameGang(res.remote)) bloodBurst(_hp.x, _hp.y, _hp.z, dir.x, dir.z, 8);
       hitAny = true; headAny = headAny || res.head;
     } else if (res.t !== Infinity) {
       if (i < 2) sfxImpact(hitMaterial(_hp.x, _hp.y, _hp.z), _hp.x, _hp.y, _hp.z, 0.5);
@@ -289,6 +294,7 @@ function tryFire() {
   P.recoil += rec * 0.018; camPitch = clamp(camPitch + rec * 0.0035, -1.3, 1.1); camYaw += (Math.random() - 0.5) * rec * 0.006;
   P.bloom = Math.min(1.6, P.bloom + 0.22 * st.recoil);
   sfxShot(S.cur, _mz.x, _mz.y, _mz.z, supp, 0.9);
+  rumble(S.cur === 'plow' ? 0.9 : S.cur === 'draft' ? 0.25 : 0.35, S.cur === 'plow' ? 1 : 0.55, S.cur === 'plow' ? 190 : S.cur === 'draft' ? 55 : 90);
   // noise is Heat
   addHeat(st.heatPerShot, true);
   P.lastLoud = GAME_T;
@@ -335,6 +341,7 @@ function hurtPlayer(dmg, from, silent) {
   GRADE.uniforms.uHurt.value = Math.min(1, GRADE.uniforms.uHurt.value + 0.25 + dmg * 0.03);
   if (!silent && !P.car) bloodBurst(P.pos.x, P.pos.y + 1.2, P.pos.z, from ? P.pos.x - from.x : 0, from ? P.pos.z - from.z : 0, 6);
   if (!silent) sfx.hurt();
+  rumble(Math.min(1, 0.25 + dmg / 30), 0.4, 160);
   if (S.health <= 0) { S.health = 0; playerDowned(); }
   hudDirty = true;
 }

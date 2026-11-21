@@ -16,12 +16,19 @@ All people, crews, places, brands and songs in the game are made up.
 | ![Driver's seat by day](preview/16_cockpit_day.jpg) | ![Driver's seat at night](preview/17_cockpit_night.jpg) |
 | ![Scanned snow, asphalt and brick](preview/18_real_materials.jpg) | ![Clear-coat paint](preview/19_clearcoat_cars.jpg) |
 | ![Scanned fire barrel](preview/20_scanned_props.jpg) | ![Manhole steam](preview/21_manhole_steam.jpg) |
+| ![Gang app with recruits](preview/22_gang_app.jpg) | ![Controller app](preview/23_controller_app.jpg) |
 
 Sound demo: [preview/drill_season_sound_demo.mp3](preview/drill_season_sound_demo.mp3)
 
 ## Play
 
 Play it at **https://autoemfoco123-hash.github.io/drill-season/** once GitHub Pages is on, or serve this folder from any static host. Tap or click once to turn sound on; browsers do not allow sound before that.
+
+### Consoles
+
+- **Xbox (One and Series X|S):** open the page in Microsoft Edge on the console and play with the controller. The game asks Edge to pass the controller to the page; if it still moves a cursor, open the Edge menu and turn on game controller mode. On Xbox the game draws at a lower resolution, with no shadows and fewer people and cars, so it runs on older hardware.
+- **PlayStation 4:** the PS4 web browser turns off WebGL, the 3D graphics that websites use, so the game cannot run there. The page explains this instead of staying black.
+- Browsers without import maps (older Safari and some TV browsers) get a small compatibility script automatically.
 
 ### Multiplayer
 
@@ -48,6 +55,7 @@ Notes on the peer-to-peer mode:
 | First / third person | V |
 | Wave | G |
 | Middle finger (hold to keep it up, works in a car too) | T |
+| Fists (hold aim to block) | 4, or Q past your guns |
 | Reload / next radio station | R |
 | Switch weapon | Q |
 | Enter or leave a car | F |
@@ -59,6 +67,23 @@ Notes on the peer-to-peer mode:
 | Studio rhythm lanes | D F J K |
 
 Phones and tablets get on-screen controls.
+
+**Controllers** (Xbox, PlayStation and most others) work as soon as you press a button:
+
+| Action | Controller |
+|---|---|
+| Move, look | Left stick, right stick |
+| Shoot or punch, aim or block | RT, LT |
+| Jump, crouch, reload | A, B, X |
+| Enter or leave a car | Y |
+| Next weapon or fists | LB |
+| Use, hold to walk away, recruit | RB |
+| Sprint, first / third person | L3, R3 |
+| Phone, bandage, wave, middle finger | D-pad up, down, left, right |
+| Pause, map | Menu, View |
+| Drive: gas, brake, handbrake, horn | RT, LT, A, B |
+
+In menus, on the phone and on the title screen, the D-pad moves a highlight, A selects and B goes back. The **Controller** app on the phone tests every button and sets look speed, invert Y, vibration, aim assist and Xbox or PlayStation button names.
 
 ## What is in it
 
@@ -85,6 +110,18 @@ Phones and tablets get on-screen controls.
 - **Social media:** Blok, a feed on your in-game phone. Post photos and selfies and gain followers; posts and charts are shared with the other players.
 - **The studio:** a rhythm game over generated Chicago, UK or NY drill beats. Tracks get titles and chart on Blok.
 - **Combat:** cover-based fights, fictional guns, and a workbench for parts and finishes.
+- **Fists:** put the gun away and fight hand to hand: jab, cross and a heavy hook, with a guard that blocks most of a punch. People can be knocked out and get back up; some swing back. Punches work on other players too.
+- **Gangs:** start your own from the **Gang** app with a name, a tag and a colour. Recruit people off the street (they wear a RECRUIT tag; walk up and press E) or from the app:
+  - **Brawler:** fights hand to hand.
+  - **Shooter:** backs you up in gunfights.
+  - **Medic:** patches you up.
+  - **Lookout:** calls out police; Wanted cools off faster.
+  - **Hustler:** earns cash every in-game hour.
+  - **Producer:** your tracks earn more Buzz.
+
+  Up to three roll with you, and they get in your car with you. Rivals shoot at them too, and if they go down they spend a few minutes at Calder General.
+
+  Online, other players see your tag and your crew on the street. You can invite them to your gang, and there is no friendly fire inside a gang. A board ranks every gang on the block. Gang names that match real gangs or contain slurs are refused.
 - **The Hawk:** wind chill and a warmth meter. Fire barrels, steam vents and going indoors keep you alive.
 - **Endings:** several endings based on how you play, and you can keep playing after one.
 

@@ -36,7 +36,7 @@ function updateBlood(dt) {
    PEDESTRIANS - walk the sidewalks, flee gunfire
    ========================================================= */
 const PEDS = [];
-const N_PEDS = IS_TOUCH ? 8 : 16;
+const N_PEDS = LOW_POWER ? 8 : 16;
 const PED_JACKETS = [0x1d1f24, 0x2a3a4e, 0x4a2a22, 0x5a5e66, 0x6a5040, 0x233a2a, 0x7a1e22, 0x3a2e4a, 0x8a7a5a, 0x15181c, 0xb0a890];
 const PED_SKIN = [0x5a3a26, 0x7a4a30, 0x4a2e1e, 0x8a5a3a, 0xa87a58, 0xc89a78, 0x6b4630];
 function pedLook() { return skinHumanOpts(randomSkin()); }
@@ -54,9 +54,11 @@ function cornerNext(c, prev) {
   return (walks.length && Math.random() < 0.75) ? pick(walks) : pick(non.length ? non : opts);
 }
 function makePed(x, z, look) {
-  const h = buildHuman(look || pedLook());
+  const tmp = {}, rq = tagPed(tmp, look);
+  const h = buildHuman(look || rq || pedLook());
   scene.add(h.group);
   const p = { h, pos: new THREE.Vector3(x, 0, z), vel: new THREE.Vector3(), radius: 0.3, height: 1.7, onGround: true, airY: 0, yaw: rand(0, TAU), state: 'walk', node: null, prev: null, target: null, speed: rand(1.15, 1.6), fleeT: 0, from: null, downT: 0, hp: 40, stuckT: 0, lastX: x, lastZ: z, knockT: 0, idleT: 0, phoneT: rand(0, 20) };
+  if (rq) Object.assign(p, tmp);
   h.group.position.copy(p.pos);
   PEDS.push(p);
   return p;
@@ -119,6 +121,7 @@ function updatePeds(dt) {
       p.downT += dt;
       if (p.vel.lengthSq() > 0.01) { p.vel.x *= Math.exp(-dt * 3); p.vel.z *= Math.exp(-dt * 3); moveBody(p, p.vel.x * dt, p.vel.z * dt, dt); H.group.position.copy(p.pos); }
       animHuman(H, dt, { down: Math.min(1, p.downT / 0.5) });
+      if (p.ko && p.downT > 11 && MODE === 'play') { p.ko = false; p.state = 'flee'; p.fleeT = 8; p.hp = 25; p.from = { x: P.pos.x, z: P.pos.z }; continue; }
       if (p.downT > 40) {
         const f = Math.max(0, 1 - (p.downT - 40) / 3);
         for (const m of H.mats) { m.transparent = true; m.opacity = f; }
@@ -129,9 +132,11 @@ function updatePeds(dt) {
     }
     if (dP > 100) { if (p.temp) { scene.remove(H.group); PEDS.splice(i, 1); } else placePedOnGraph(p, P.pos.x, P.pos.z, 45, 90); continue; }
     let tx = null, tz = null, speed = 0;
-    if (p.state === 'flee') {
+    let brawl = null;
+    if (p.state === 'brawl') { brawl = pedBrawl(p, dt, dP); if (brawl) { tx = brawl.x; tz = brawl.z; speed = brawl.speed; } }
+    else if (p.state === 'flee') {
       p.fleeT -= dt;
-      const ax = p.pos.x - p.from.x, az = p.pos.z - p.from.z, al = Math.hypot(ax, az) || 1;
+      const fr = p.from || P.pos, ax = p.pos.x - fr.x, az = p.pos.z - fr.z, al = Math.hypot(ax, az) || 1;
       tx = p.pos.x + ax / al * 6; tz = p.pos.z + az / al * 6; speed = 5.4;
       if (p.fleeT <= 0) {
         p.state = 'walk';
@@ -173,8 +178,8 @@ function updatePeds(dt) {
     p.stuckT += dt;
     if (p.stuckT > 2) { if (speed > 0.5 && Math.hypot(p.pos.x - p.lastX, p.pos.z - p.lastZ) < 0.4 && p.state === 'walk') { const n = cornerNext(p.node || { ix: 0, iz: 0, sx: 1, sz: 1 }, null); p.prev = p.node; p.node = n; p.target = cornerPos(n.ix, n.iz, n.sx, n.sz); } p.stuckT = 0; p.lastX = p.pos.x; p.lastZ = p.pos.z; }
     const sp = Math.hypot(p.vel.x, p.vel.z);
-    if (sp > 0.2 && !answering) p.yaw += angDiff(p.yaw, Math.atan2(p.vel.x, p.vel.z)) * (1 - Math.exp(-dt * 8));
+    if (sp > 0.2 && !answering && !brawl) p.yaw += angDiff(p.yaw, Math.atan2(p.vel.x, p.vel.z)) * (1 - Math.exp(-dt * 8));
     H.group.position.copy(p.pos); H.group.rotation.y = p.yaw;
-    if (dP < 70) animHuman(H, dt, { speed: sp, crouch: p.state === 'flee' && sp < 0.6, mug: p.state === 'walk' && !answering && ((REAL_T + p.phoneT) % 20) < 6, flip: answering });
+    if (dP < 70) animHuman(H, dt, { speed: sp, crouch: p.state === 'flee' && sp < 0.6, mug: p.state === 'walk' && !answering && ((REAL_T + p.phoneT) % 20) < 6, flip: answering, fists: !!brawl, guard: !!brawl, punch: brawl && p.punchT > 0 ? p.punchT / 0.3 : 0, punchSide: p.punchSide });
   }
 }

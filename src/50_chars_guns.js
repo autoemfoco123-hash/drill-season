@@ -172,6 +172,13 @@ function animHuman(h, dt, pose) {
   if (pose.wave) { h.AL.sh.rotation.x = -2.6; h.AL.sh.rotation.z = -0.3 + Math.sin(REAL_T * 8) * 0.25; h.AL.elbow.rotation.x = -0.4; }
   if (pose.flip) { const j = Math.sin(REAL_T * 9) * 0.06; h.AL.sh.rotation.x = -1.5 + j; h.AL.sh.rotation.z = -0.22; h.AL.elbow.rotation.x = -1.3; }
   if (h.AL.finger) h.AL.finger.visible = !!pose.flip;
+  h.spine.rotation.y = 0;
+  if (pose.fists && !pose.down) {
+    const g = pose.guard ? 1 : 0.6;
+    for (const A of [h.AL, h.AR]) { const s = A === h.AL ? -1 : 1; A.sh.rotation.x = lerp(A.sh.rotation.x, -1.0, g); A.sh.rotation.z = lerp(A.sh.rotation.z, -s * 0.32, g); A.elbow.rotation.x = lerp(A.elbow.rotation.x, -1.95, g); }
+    const pt = pose.punch || 0;
+    if (pt > 0) { const s = pose.punchSide < 0 ? -1 : 1, A = s < 0 ? h.AL : h.AR, e = Math.sin(clamp(pt, 0, 1) * Math.PI); A.sh.rotation.x = lerp(-1.0, pose.hook ? -1.4 : -1.62, e); A.elbow.rotation.x = lerp(-1.95, pose.hook ? -1.15 : -0.08, e); A.sh.rotation.z = -s * lerp(0.32, pose.hook ? 0.95 : 0.1, e); h.spine.rotation.y = -s * 0.42 * e; }
+  }
   if (pose.mug) { h.AL.sh.rotation.x = -0.9; h.AL.elbow.rotation.x = -1.4; h.AL.sh.rotation.z = -0.1; }
   if (pose.hands) { for (const A of [h.AL, h.AR]) { A.sh.rotation.x = -2.9; A.elbow.rotation.x = -0.35; } h.AL.sh.rotation.z = -0.25; h.AR.sh.rotation.z = 0.25; }
   if (pose.pose) { h.AR.sh.rotation.x = -1.9; h.AR.elbow.rotation.x = -1.2; h.AR.sh.rotation.z = 0.3; h.AL.sh.rotation.x = -0.4; h.spine.rotation.x = -0.08; }

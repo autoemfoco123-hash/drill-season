@@ -22,6 +22,10 @@ function rng(seed) { let a = seed >>> 0; return () => { a = a + 0x6D2B79F5 | 0; 
 const fmtMoney = n => (n < 0 ? '-$' : '$') + Math.abs(Math.round(n)).toLocaleString('en-US');
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const IS_TOUCH = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || (('ontouchstart' in window) && navigator.maxTouchPoints > 0);
+// consoles (Edge on Xbox) and phones get the lighter settings
+const PLAT = window.DS_PLATFORM || {};
+const IS_CONSOLE = !!PLAT.console;
+const LOW_POWER = IS_TOUCH || IS_CONSOLE;
 const SAVE_KEY = 'drillseason.save.v1';
 // one shared clock for every player: 1 real second = 1 game minute, a full day every 24 minutes
 let TIME_OFFSET = 0;
@@ -54,10 +58,10 @@ function newState(name) {
     cos: ['finish:gunmetal', 'charm:none'],
     threads: { benny: [], kiara: [], coach: [], vance: [], saint: [], reyes: [] },
     unread: { benny: 0, kiara: 0, coach: 0, vance: 0, saint: 0, reyes: 0 },
-    feed: [], tracks: [], flags: {}, cd: {}, endings: {}, tracked: null, buffs: { coffee: 0, warmers: 0 }, job: null,
+    feed: [], tracks: [], flags: {}, gang: null, recruits: [], fists: false, cd: {}, endings: {}, tracked: null, buffs: { coffee: 0, warmers: 0 }, job: null,
     stats: { tracks: 0, best: null, buzzPeak: 4, heatPeak: 0, walkAways: 0, fights: 0, downs: 0, cashEarned: 0, rides: 0, shots: 0, coldTime: 0, dist: 0, disses: 0, timesDowned: 0, merch: 0, videos: 0, layLows: 0, pvpDowns: 0, busted: 0, carsTaken: 0, drive: 0, photos: 0 },
     skin: defaultSkin(),
-    settings: { sens: 1, vol: 0.8, music: 0.85, invertY: false, quality: IS_TOUCH ? 'low' : 'high', radio: 1, score: true, voices: true, fp: false, fov: 70 },
+    settings: { sens: 1, vol: 0.8, music: 0.85, invertY: false, quality: LOW_POWER ? 'low' : 'high', radio: 1, score: true, voices: true, fp: false, fov: 70 },
     garage: [{ model: 'hatch', color: 0x2a6a8a }],
     social: { followers: 214, following: 96, bio: 'drill · Calder Park · Chicago', posts: [] },
     day: 1,

@@ -36,13 +36,13 @@ async function initNet() {
 }
 function presencePayload() {
   const r1 = v => Math.round(v * 10) / 10;
-  const f = (P.crouch ? 1 : 0) | (P.aimT > 0.5 || GAME_T - P.lastShot < 0.5 ? 2 : 0) | (P.dead || P.downT > 0 ? 4 : 0) | (P.sprinting ? 8 : 0) | (MODE !== 'play' && MODE !== 'phone' ? 16 : 0) | ((P.waveT || 0) > 0 ? 32 : 0) | (flipping() ? 64 : 0);
+  const f = (P.crouch ? 1 : 0) | (P.aimT > 0.5 || GAME_T - P.lastShot < 0.5 ? 2 : 0) | (P.dead || P.downT > 0 ? 4 : 0) | (P.sprinting ? 8 : 0) | (MODE !== 'play' && MODE !== 'phone' ? 16 : 0) | ((P.waveT || 0) > 0 ? 32 : 0) | (flipping() ? 64 : 0) | (S.fists ? 128 : 0);
   return {
     v: 1, n: netName().slice(0, 16), x: r1(P.pos.x), y: r1(P.pos.y), z: r1(P.pos.z), r: Math.round(P.bodyYaw * 100) / 100, p: Math.round(camPitch * 100) / 100,
     s: r1(P.speed), f, g: GUN_IDX.indexOf(S.cur), h: Math.round(S.heat), b: Math.round(S.buzz), sh: NET.shots.slice(-6),
     dn: NET.down || null, wa: NET.wa || null,
     car: P.car ? [CAR_MODELS.indexOf(P.car.model), P.car.color, r1(P.car.pos.x), r1(P.car.pos.z), Math.round(P.car.yaw * 100) / 100, r1(P.car.speed), RADIO.on ? S.settings.radio : 0] : null,
-    wl: WANTED.level, sk: NET.skEnc || null,
+    wl: WANTED.level, sk: NET.skEnc || null, ...gangPresenceFields(),
   };
 }
 function updateNetPresence(dt) {
@@ -96,10 +96,11 @@ function makeRemote(peer, pr) {
 }
 function setRemotePlate(R) {
   if (R.plate) R.h.group.remove(R.plate);
-  R.plate = makeNameplate('@' + R.name, R.col, heatTier(R.h_ || 0) === 'Cool' ? '' : 'HEAT ' + heatTier(R.h_).toUpperCase());
+  const gp = gangPlateFor(R);
+  R.plate = makeNameplate(gp.text, gp.col, heatTier(R.h_ || 0) === 'Cool' ? '' : 'HEAT ' + heatTier(R.h_).toUpperCase());
   R.h.group.add(R.plate);
 }
-function removeRemote(R) { scene.remove(R.h.group); dropWinArm(R.winArm); R.winArm = null; if (R.veh) { removeVehicle(R.veh); R.veh = null; } }
+function removeRemote(R) { scene.remove(R.h.group); dropRemoteFollowers(R); dropWinArm(R.winArm); R.winArm = null; if (R.veh) { removeVehicle(R.veh); R.veh = null; } }
 function applyPresence(R, pr) {
   R.seen = performance.now();
   if (Array.isArray(pr.sk) && pr.sk.join('.') !== R.skKey) remoteHuman(R, pr.sk);
@@ -126,6 +127,7 @@ function applyPresence(R, pr) {
     R.h.root.visible = false; R.h.shadow.visible = false; if (R.plate) R.plate.position.y = 2.6;
   } else { R.rd = 0; if (R.veh) { removeVehicle(R.veh); R.veh = null; } R.h.root.visible = true; R.h.shadow.visible = true; if (R.plate) R.plate.position.y = 2.15; }
   R.wl = +pr.wl || 0;
+  gangApplyPresence(R, pr);
   // their shots
   if (Array.isArray(pr.sh)) for (const s of pr.sh) {
     if (!Array.isArray(s) || s.length < 8) continue;
@@ -151,6 +153,7 @@ function applyPresence(R, pr) {
 }
 const _ro = new THREE.Vector3(), _rd = new THREE.Vector3(), _rh = new THREE.Vector3();
 function remoteShot(R, s) {
+  if (+s[7] === FIST_IDX) { remotePunch(R, s); return; }
   const gid = GUN_IDX[s[7]] || 'k9', W = WEAPONS[gid];
   _ro.set(+s[1], +s[2], +s[3]); _rd.set(+s[4], +s[5], +s[6]);
   if (!(_rd.lengthSq() > 0.5) || !isFinite(_ro.x + _ro.y + _ro.z)) return;
@@ -179,6 +182,7 @@ function remoteShot(R, s) {
   if (P.car) dmg *= 0.35;
   if (GAME_T - (R.dmgT || -9) > 1) { R.dmgT = GAME_T; R.dmgAcc = 0; }
   dmg = Math.min(dmg, Math.max(0, 45 - R.dmgAcc)); R.dmgAcc += dmg;
+  if (sameGang(R)) dmg = 0; // no friendly fire inside a gang
   if (dmg > 0) {
     P.lastAttacker = R;
     const before = S.health;
@@ -206,12 +210,15 @@ function updateRemotes(dt) {
     R.h.group.position.copy(R.pos); R.h.group.rotation.y = R.yaw;
     const aim = (R.f & 2) ? 1 : 0, down = (R.f & 4) ? 1 : 0;
     if (R.winArm) R.winArm.g.visible = false;
-    animHuman(R.h, dt, { speed: R.s, crouch: (R.f & 1) && !aim, aim, pitch: R.p, down, twoHand: R.g > 0, wave: !!(R.f & 32) && !aim, flip: !!(R.f & 64) && !aim });
+    const fists = !!(R.f & 128);
+    if (R.punchT > 0) { R.punchT += dt; if (R.punchT > 0.3) R.punchT = 0; }
+    if (R.gun) R.gun.visible = !fists;
+    animHuman(R.h, dt, { speed: R.s, crouch: (R.f & 1) && !aim, aim: fists ? 0 : aim, pitch: R.p, down, twoHand: R.g > 0, wave: !!(R.f & 32) && !aim, flip: !!(R.f & 64) && !aim, fists, guard: fists && aim, punch: R.punchT > 0 ? R.punchT / 0.3 : 0, punchSide: R.punchSide, hook: R.punchHook });
     // soft body push so players don't overlap
     const dx = P.pos.x - R.pos.x, dz = P.pos.z - R.pos.z, d = Math.hypot(dx, dz);
     if (d < 0.75 && d > 0.01 && Math.abs(P.pos.y - R.pos.y) < 1.5) { P.pos.x += dx / d * (0.75 - d) * 0.5; P.pos.z += dz / d * (0.75 - d) * 0.5; }
     // are they drawing on us?
-    if (aim && !down && d < 16 && d > 1.5) {
+    if (aim && !fists && !down && d < 16 && d > 1.5) {
       const toMe = Math.atan2(dx, dz);
       if (Math.abs(angDiff(R.yaw, toMe)) < 0.35 && d < dd) { dd = d; draw = R; }
     }
@@ -232,6 +239,7 @@ function myProfile() {
     name: netName(), color: hashColor(netName()), buzz: Math.round(S.buzz), heat: Math.round(S.heat), day: S.day,
     tracks: S.stats.tracks, best: S.stats.best ? { title: String(S.stats.best.title).slice(0, 40), grade: S.stats.best.grade } : null,
     endings: Object.keys(S.endings), posts: (S.netPosts || []).slice(0, 8), updated: Date.now(),
+    gang: S.gang ? { id: S.gang.id, name: S.gang.name, tag: S.gang.tag, color: S.gang.color | 0, role: S.gang.role, rep: S.gang.rep | 0 } : null, recruits: (S.recruits || []).length,
     followers: socialFollowers(), photos: S.social.posts.filter(p => p.thumb).slice(0, 3).map(p => ({ at: p.at, cap: String(p.caption || '').slice(0, 80), img: p.thumb, likes: p.likes | 0 })),
   };
 }
@@ -259,6 +267,7 @@ function netPostText(name, p) {
     case 'video': return `${at} shot a video on the Calder platform${p.train ? ' with the L in frame 🚆' : ''}`;
     case 'merch': return `${at} sold out a hoodie drop`;
     case 'walk': return p.vs ? `${at} walked away from @${cleanName(p.vs)}` : `${at} walked away from @halo crew`;
+    case 'gang': return `${at} started a gang: ${p.g}`;
     case 'pvp': return `${at} and @${cleanName(p.vs)} got into it on the block`;
     case 'photo': return `${at} posted a photo`;
     case 'ending': return `${at} reached the ${({ wayout: 'Way Out', witness: 'Witness', crown: 'Crown', locked: 'Locked Up' })[p.e] || ''} ending`;

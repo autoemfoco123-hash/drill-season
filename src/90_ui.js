@@ -91,7 +91,8 @@ function drawMinimap(dt) {
   for (const j of JOBS) { if (!jobAvailable(j.id)) continue; const w = j.where(); if (w) dot(w.x, w.z, CAST[j.giver].color, S.tracked === j.id ? 11 : 7, 'diamond'); }
   if (S.waypoint) dot(S.waypoint.x, S.waypoint.z, '#c79bff', 9, 'diamond');
   if (OWN_CAR && !OWN_CAR.dead && P.car !== OWN_CAR) dot(OWN_CAR.pos.x, OWN_CAR.pos.z, '#7be0a6', 7, 'sq');
-  for (const R2 of NET.remotes.values()) dot(R2.pos.x, R2.pos.z, R2.col, 7);
+  for (const R2 of NET.remotes.values()) { dot(R2.pos.x, R2.pos.z, R2.gg ? GANG_COLORS[R2.gg[2]] : R2.col, 7); if (R2.fol) for (const o of R2.fol.values()) dot(o.pos.x, o.pos.z, R2.gg ? GANG_COLORS[R2.gg[2]] : R2.col, 4); }
+  for (const f of FOL) if (!f.riding && f.state !== 'down') dot(f.pos.x, f.pos.z, gangColor(S.gang), 4.5);
   for (const e of ENEMIES) if (e.state !== 'down' && e.crew.state !== 'leave') dot(e.pos.x, e.pos.z, '#ff4b3a', 6);
   const flash = Math.floor(REAL_T * 4) % 2;
   for (const cp of COPS) if (cp.state !== 'down') dot(cp.pos.x, cp.pos.z, flash ? '#ff3b3b' : '#3b7bff', 6);
@@ -151,10 +152,16 @@ function updateHUD(dt) {
   if (S.bandages) buffs.push(S.bandages + ' bandage' + (S.bandages > 1 ? 's' : '') + ' [B]');
   HU.buffs.textContent = buffs.join(' · ');
   const g = S.guns[S.cur];
-  if (HU.weapIc.dataset.k !== S.cur) { HU.weapIc.innerHTML = WEAP_SVG[S.cur]; HU.weapIc.dataset.k = S.cur; }
-  HU.ammo.innerHTML = `<b>${g.mag}</b><span>${g.res}</span>`;
-  HU.ammo.classList.toggle('low', g.mag <= Math.ceil(P.stats.mag * 0.25));
-  HU.note.textContent = P.reloadT > 0 ? 'RELOADING' : (g.mag === 0 && g.res === 0 ? 'NO AMMO · MINI MART' : '');
+  if (S.fists) {
+    if (HU.weapIc.dataset.k !== 'fists') { HU.weapIc.innerHTML = FIST_SVG; HU.weapIc.dataset.k = 'fists'; }
+    HU.ammo.innerHTML = '<b style="font-size:22px">FISTS</b>'; HU.ammo.classList.remove('low');
+    HU.note.textContent = P.aiming ? 'GUARD UP' : '';
+  } else {
+    if (HU.weapIc.dataset.k !== S.cur) { HU.weapIc.innerHTML = WEAP_SVG[S.cur]; HU.weapIc.dataset.k = S.cur; }
+    HU.ammo.innerHTML = `<b>${g.mag}</b><span>${g.res}</span>`;
+    HU.ammo.classList.toggle('low', g.mag <= Math.ceil(P.stats.mag * 0.25));
+    HU.note.textContent = P.reloadT > 0 ? 'RELOADING' : (g.mag === 0 && g.res === 0 ? 'NO AMMO · MINI MART' : '');
+  }
   streetT -= 0.15;
   if (streetT <= 0) { streetT = 1; HU.street.innerHTML = `${esc(streetName(P.pos.x, P.pos.z))}<small>${esc(P.car ? P.car.sp.name : 'Calder Park district')}</small>`; }
   let obj = '';
@@ -184,7 +191,7 @@ function updatePrompts() {
     HU.so.hidden = false;
     HU.soProg.style.strokeDashoffset = 106.8 * (1 - clamp(walkHoldUI / 1.4, 0, 1));
     HU.soTime.style.width = c ? (100 * clamp(1 - c.so / 20, 0, 1)) + '%' : '100%';
-    HU.soText.innerHTML = c ? 'Hold <kbd>E</kbd> to walk away · aim to engage' : `@${esc(R.name)} is drawing on you · hold <kbd>E</kbd> to walk away`;
+    HU.soText.innerHTML = c ? `Hold ${keyCap('E')} to walk away · aim to engage` : `@${esc(R.name)} is drawing on you · hold ${keyCap('E')} to walk away`;
     HU.prompt.classList.remove('on');
     return;
   }
@@ -192,10 +199,12 @@ function updatePrompts() {
   let html = '';
   if (!P.car) {
     const it = nearestInteract();
-    if (it) html = `<kbd>E</kbd>${esc(it.l)}`;
-    else { const v = nearestCar(); if (v) html = `<kbd>F</kbd>${v.owned ? 'Get in your ' : v.driver === 'ai' ? 'Carjack the ' : v.locked ? 'Locked · ' : 'Break into the '}${esc(v.sp.name)}`; }
+    const rp = !it && nearestRecruitPed();
+    if (it) html = `${keyCap('E')}${esc(it.l)}`;
+    else if (rp) html = `${keyCap('E')}Talk to ${esc(rp.rqName)} · ${RTYPES[rp.rq].name}`;
+    else { const v = nearestCar(); if (v) html = `${keyCap('F')}${v.owned ? 'Get in your ' : v.driver === 'ai' ? 'Carjack the ' : v.locked ? 'Locked · ' : 'Break into the '}${esc(v.sp.name)}`; }
   }
-  if (!html && !IS_TOUCH && !pointerLocked && REAL_T % 8 < 5) html = lockFailed ? 'Drag with the mouse to look' : 'Click to control the camera';
+  if (!html && !IS_TOUCH && !GP.active && !pointerLocked && REAL_T % 8 < 5) html = lockFailed ? 'Drag with the mouse to look' : 'Click to control the camera';
   if (html) { if (HU.prompt.innerHTML !== html) HU.prompt.innerHTML = html; HU.prompt.classList.add('on'); }
   else HU.prompt.classList.remove('on');
 }
@@ -387,6 +396,8 @@ const ICON = {
   garage: '<svg viewBox="0 0 24 24"><path d="M5 11l1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11a2 2 0 0 1 2 2v4h-2v2h-3v-2H8v2H5v-2H3v-4a2 2 0 0 1 2-2zm2.2 0h9.6l-1-3H8.2l-1 3zM6.5 15.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zm11 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/></svg>',
   music: '<svg viewBox="0 0 24 24"><path d="M19 3v12.5a3.5 3.5 0 1 1-2-3.2V7.3L9 9v8.5A3.5 3.5 0 1 1 7 14.3V5l12-2z"/></svg>',
   live: '<svg viewBox="0 0 24 24"><path d="M4 20V10h3v10H4zm6.5 0V4h3v16h-3zM17 20v-7h3v7h-3z"/></svg>',
+  pad: '<svg viewBox="0 0 24 24"><path d="M7 6h10a5 5 0 0 1 4.9 6l-1 5a3 3 0 0 1-5.2 1.4L14 16h-4l-1.7 2.4A3 3 0 0 1 3.1 17l-1-5A5 5 0 0 1 7 6zm0 3v2H5v2h2v2h2v-2h2v-2H9V9H7zm9.5 1a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4zm2 2.6a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4z"/></svg>',
+  gang: '<svg viewBox="0 0 24 24"><path d="M12 4a3 3 0 1 1 0 6 3 3 0 0 1 0-6zM5.5 6.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zm13 0a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zM12 12c3.3 0 6 1.8 6 4v3H6v-3c0-2.2 2.7-4 6-4zm-6.5.5c.5 0 1 .1 1.4.2A5 5 0 0 0 4.6 16v3H1v-2.5c0-2.2 2-4 4.5-4zm13 0c2.5 0 4.5 1.8 4.5 4V19h-3.6v-3a5 5 0 0 0-2.3-3.3c.4-.1.9-.2 1.4-.2z"/></svg>',
   settings: '<svg viewBox="0 0 24 24"><path d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.3 7.3 0 0 0-1.7-1L15 3h-4l-.3 2.9a7.3 7.3 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1L11 21h4l.3-2.9c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5-2.1-1.6zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>',
 };
 const APPS = {
@@ -399,15 +410,18 @@ const APPS = {
   music: { name: 'Music', bg: 'linear-gradient(#ff4a6e,#c5103a)' },
   live: { name: 'Live', bg: 'linear-gradient(#c36bff,#5e2ab8)' },
   settings: { name: 'Settings', bg: 'linear-gradient(#9a9aa0,#48484a)' },
+  pad: { name: 'Controller', bg: 'linear-gradient(#3a4250,#15181d)' },
+  gang: { name: 'Gang', bg: 'linear-gradient(#ff6a3a,#a8162a)' },
 };
 function appBadge(id) {
   if (id === 'msgs') return Object.values(S.unread).reduce((a, b) => a + b, 0);
+  if (id === 'gang') return GANG.invites.length;
   if (id === 'gigs') return JOBS.filter(j => jobAvailable(j.id) && ['showcase', 'reyes', 'saint', 'diss'].includes(j.id)).length;
   return 0;
 }
 function renderHome() {
   const mk = id => { const A = APPS[id]; const n = appBadge(id); return `<button class="app" data-app="${id}"><i style="background:${A.bg}">${ICON[id]}</i><span>${A.name}</span>${n ? `<em>${n}</em>` : ''}</button>`; };
-  $('ph-grid').innerHTML = ['gigs', 'garage', 'music', 'live', 'settings'].map(mk).join('');
+  $('ph-grid').innerHTML = ['gigs', 'gang', 'garage', 'music', 'settings', 'live', 'pad'].map(mk).join('');
   $('ph-dock').innerHTML = ['msgs', 'blok', 'maps', 'camera'].map(mk).join('');
   document.querySelectorAll('#phone .app').forEach(b => b.onclick = () => openApp(b.dataset.app));
   $('ph-wt').textContent = clockStr().replace(/ (AM|PM)/, '');
@@ -491,6 +505,10 @@ function renderApp() {
     add('<div class="sec">Charts · top Buzz</div>');
     const chart = NET.players.length ? [...NET.players].sort((a, b) => (b.buzz || 0) - (a.buzz || 0)).slice(0, 15) : [{ id: NET.uid, name: S.name, buzz: Math.round(S.buzz), best: S.stats.best }];
     chart.forEach((p, i) => add(`<div class="row"><span>${i + 1}. @${esc(cleanName(p.name))}${p.id === NET.uid ? ' (you)' : ''}${p.best ? ` <span style="color:#6e7a86">· ${esc(String(p.best.title).slice(0, 20))}</span>` : ''}</span><span class="g">${Math.round(p.buzz || 0)}</span></div>`));
+  } else if (id === 'pad') {
+    renderPadApp(body, add);
+  } else if (id === 'gang') {
+    renderGangApp(body, add);
   } else if (id === 'settings') {
     const st = S.settings;
     add(`<div class="set-row"><span>Look speed</span><input type="range" id="ps-sens" min="0.3" max="2.5" step="0.05" value="${st.sens}"><output>${(+st.sens).toFixed(1)}</output></div>
@@ -503,7 +521,7 @@ function renderApp() {
       <div class="sec">Car radio</div><div class="seg seg-wrap">${STATIONS.map((n, i) => `<button data-r="${i}" class="${st.radio === i ? 'on' : ''}">${n.short}</button>`).join('')}</div>
       <div class="sec">Audio</div><div class="seg"><button data-sc="1" class="${st.score !== false ? 'on' : ''}">Score<small>music on foot</small></button><button data-sc="0" class="${st.score === false ? 'on' : ''}">No score<small>city only</small></button></div>
       <div class="seg"><button data-vo="1" class="${st.voices !== false ? 'on' : ''}">Voices<small>PA · megaphone</small></button><button data-vo="0" class="${st.voices === false ? 'on' : ''}">Mute voices<small>subtitles only</small></button></div>
-      <div class="sec">Game</div><button class="btn" id="ps-exit" style="width:100%">Save &amp; exit to title</button>`);
+      <div class="sec">Game</div>${document.fullscreenEnabled ? `<button class="btn" id="ps-fs" style="width:100%;margin-bottom:8px">${document.fullscreenElement ? 'Leave full screen' : 'Full screen'}</button>` : ''}<button class="btn" id="ps-exit" style="width:100%">Save &amp; exit to title</button>`);
     const bind = (id2, key, f) => { const el = $(id2); el.oninput = () => { st[key] = +el.value; el.nextElementSibling.textContent = f(+el.value); applyVolumes(); }; };
     bind('ps-sens', 'sens', v => v.toFixed(1)); bind('ps-fov', 'fov', v => Math.round(v));
     body.querySelectorAll('[data-fp]').forEach(b => b.onclick = () => { st.fp = b.dataset.fp === '1'; if (!st.fp) fpHide(); renderApp(); }); bind('ps-vol', 'vol', v => Math.round(v * 100)); bind('ps-music', 'music', v => Math.round(v * 100));
@@ -512,6 +530,7 @@ function renderApp() {
     body.querySelectorAll('[data-sc]').forEach(b => b.onclick = () => { st.score = b.dataset.sc === '1'; renderApp(); });
     body.querySelectorAll('[data-vo]').forEach(b => b.onclick = () => { st.voices = b.dataset.vo === '1'; if (!st.voices && window.speechSynthesis) speechSynthesis.cancel(); renderApp(); });
     $('ps-exit').onclick = () => { closePhone(); exitToTitle(); };
+    if ($('ps-fs')) $('ps-fs').onclick = () => { const p = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); if (p && p.then) p.then(() => setTimeout(renderApp, 200), () => { }); };
     $('ps-test').onclick = () => { soundTest(); setTimeout(() => { const el = $('ps-audio'); if (el) el.textContent = audioInfo(); }, 400); };
   }
 }

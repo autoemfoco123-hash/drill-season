@@ -100,6 +100,7 @@ function crewWalkAway(c, distance) {
 function crewDefeated(c) {
   if (!c.fought) return;
   addHeat(4);
+  if (S.gang && FOL.length) gangRep(3);
   if (!c.saint || !S.flags.saintDown) banner('Fight over', 'Heat +4');
   const where = streetName(P.pos.x, P.pos.z);
   setTimeout(() => postFeed(pick(FEED_HANDLES), pick([`shots on ${where} again. everybody ok?`, `${where} was loud tonight. stay inside`, `heard @halo crew got sent home on ${where}`])), 4000);
@@ -160,6 +161,7 @@ function findCover(e) {
 const _emz = new THREE.Vector3(), _ehp = new THREE.Vector3();
 function enemyShoot(e) {
   const tp = e.canSee; if (!tp) return;
+  if (gangDivertShot(e)) return;
   e.gun.userData.muzzle.getWorldPosition(_emz);
   const d = Math.hypot(P.pos.x - e.pos.x, P.pos.z - e.pos.z);
   let p = e.T.acc * clamp(1.25 - d / 38, 0.25, 1.05);
@@ -186,10 +188,10 @@ function enemyShoot(e) {
     if (near) sfx.whiz(near.x, near.y, near.z);
   }
 }
-function damageEnemy(e, dmg, head, dir) {
+function damageEnemy(e, dmg, head, dir, melee) {
   if (e.state === 'down') return;
   e.hp -= dmg; e.flash = 0.1;
-  bloodBurst(e.pos.x, e.pos.y + (head ? 1.6 : 1.15), e.pos.z, dir ? dir.x : 0, dir ? dir.z : 0, head ? 12 : 8);
+  if (!melee) bloodBurst(e.pos.x, e.pos.y + (head ? 1.6 : 1.15), e.pos.z, dir ? dir.x : 0, dir ? dir.z : 0, head ? 12 : 8);
   for (const m of e.h.mats) m.emissive.setRGB(0.6, 0.6, 0.6);
   const c = e.crew;
   if (c.state !== 'combat') crewEngage(c, 'shot');

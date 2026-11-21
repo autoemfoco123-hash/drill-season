@@ -122,10 +122,10 @@ function spawnCop(x, z, car) {
   return c;
 }
 function removeCop(c) { scene.remove(c.h.group); const i = COPS.indexOf(c); if (i >= 0) COPS.splice(i, 1); }
-function copHit(c, dmg, dir, byPlayer) {
+function copHit(c, dmg, dir, byPlayer, melee) {
   if (c.state === 'down') return;
   c.hp -= dmg;
-  bloodBurst(c.pos.x, c.pos.y + 1.2, c.pos.z, dir ? dir.x : 0, dir ? dir.z : 0, 10);
+  if (!melee) bloodBurst(c.pos.x, c.pos.y + 1.2, c.pos.z, dir ? dir.x : 0, dir ? dir.z : 0, 10);
   if (byPlayer) { WANTED.hostile = true; addWanted(c.hp <= 0 ? 35 : 16, c.pos, true); addHeat(c.hp <= 0 ? 8 : 3); }
   if (c.hp <= 0) {
     c.state = 'down'; c.downT = 0; c.gun.visible = false;
@@ -172,7 +172,7 @@ function updatePolice(dt) {
   W.seenT += dt;
   // lose them: after 12s unseen the level steps down every 8s
   if (W.level > 0 && W.seenT > 12) {
-    W.decayT += dt;
+    W.decayT += dt * gangLookoutBoost();
     if (W.decayT > 8) { W.decayT = 0; W.level--; W.pts = W.level ? WANT_STEPS[W.level - 1] : 0; hudDirty = true; if (W.level === 0) { clearWanted(); toast(null, 'You lost the police', '#86e3b0'); } }
   } else W.decayT = 0;
   // cruiser director

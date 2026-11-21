@@ -45,6 +45,7 @@ function ePress() {
   if (activeStandoff() || NET.standoffPeer) return;
   const it = nearestInteract();
   if (it) it.it.act();
+  else { const rp = nearestRecruitPed(); if (rp) talkRecruit(rp); }
 }
 function carPress() {
   if (MODE !== 'play') return;
@@ -87,6 +88,7 @@ addEventListener('keydown', e => {
     case 'Digit1': switchWeapon('k9'); break;
     case 'Digit2': switchWeapon('draft'); break;
     case 'Digit3': switchWeapon('plow'); break;
+    case 'Digit4': setFists(true); break;
     case 'KeyC': case 'ControlLeft': if (!P.car) P.crouch = !P.crouch; break;
     case 'KeyB': useBandage(); break;
     case 'KeyE': ePress(); break;
@@ -182,6 +184,8 @@ function startGame(state) {
   if (!(S.settings.radio >= 0 && S.settings.radio < STATIONS.length)) S.settings.radio = 1;
   if (!Array.isArray(S.garage) || !S.garage.length) S.garage = [{ model: 'hatch', color: 0x2a6a8a }];
   if (!S.social || !Array.isArray(S.social.posts)) S.social = newState(S.name).social;
+  gangState(); S.fists = !!S.fists; padSet();
+  for (const f of [...FOL]) removeFollower(f);
   applyVolumes(); applyQuality();
   $('title').hidden = true; $('hud').hidden = false;
   MODE = 'play';
@@ -191,6 +195,7 @@ function startGame(state) {
   camPitch = -0.08;
   P.gunKey = ''; refreshPlayerGun(); hudDirty = true;
   spawnOwnedCar(0, false);
+  syncFollowers();
   if (IS_TOUCH) { $('touch').hidden = false; setupTouch(); }
   if (!NET.started) { NET.started = true; initNet(); }
   if (!S.flags.introSeen) { S.flags.introSeen = true; playCutscene(cutIntro(), () => banner('@' + S.name, 'Calder Park · Day ' + S.day)); }
@@ -202,6 +207,7 @@ function exitToTitle() {
   if (P.car) { P.car.driver = null; P.car = null; stopEngine(); radioOff(); }
   $('pause').hidden = true; $('hud').hidden = true; $('touch').hidden = true; $('phone').hidden = true;
   MODE = 'title'; clearCrews(); clearWanted();
+  for (const f of [...FOL]) removeFollower(f);
   for (const c of [...COPS]) removeCop(c);
   for (const v of [...VEH]) if (v.copAI) removeVehicle(v);
   if (NET.room) NET.room.presence({ f: 16, car: null }).catch(() => { });
@@ -236,6 +242,7 @@ function frame(now) {
   let dt = (now - lastFrame) / 1000; lastFrame = now;
   if (!(dt > 0)) return; if (dt > 0.05) dt = 0.05;
   REAL_T += dt;
+  pollGamepad(dt);
   updateWind(dt);
   const live = MODE === 'play' || MODE === 'phone' || MODE === 'cut' || MODE === 'cutscene';
   const indoor = MODE === 'menu' || MODE === 'bench' || MODE === 'rhythm';
@@ -250,10 +257,12 @@ function frame(now) {
       updatePlayer(dt);
       updateVehicles(dt);
       updatePeds(dt);
+      updateGang(dt);
       if (MODE !== 'cutscene') { updateEnemies(dt); updatePolice(dt); ambushDirector(dt); }
       updateJobs(dt);
       socialTick(dt);
       P.inFight = CREWS.some(c => c.state === 'combat');
+      padAppTick();
       const sc = activeStandoff(), sp = NET.standoffPeer;
       if ((sc || sp) && !P.car && (keys.KeyE || TOUCH.useHeld) && MODE === 'play') { walkHoldUI += dt; if (walkHoldUI >= 1.4) { walkHoldUI = 0; if (sc) crewWalkAway(sc); else netWalkAway(sp); } }
       else walkHoldUI = Math.max(0, walkHoldUI - dt * 2);
@@ -310,4 +319,5 @@ setParticleScale();
 resizeRender();
 setupTitle();
 requestAnimationFrame(frame);
+window.__dsBooted = true; { const ng = document.getElementById('ds-nogo'); if (ng && PLAT.webgl !== false) ng.remove(); }
 loadRealism().catch(e => console.warn('assets', e));

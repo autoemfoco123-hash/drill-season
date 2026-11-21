@@ -42,7 +42,7 @@ function buildAudioGraph(ctx) {
   AU.ambLP = ctx.createBiquadFilter(); AU.ambLP.type = 'lowpass'; AU.ambLP.frequency.value = 18000;
   AU.amb = gainN(1); AU.amb.connect(AU.ambLP).connect(AU.duck);
   // reverbs: street (outdoor brick canyon), room (indoors), plate (music)
-  const lite = IS_TOUCH || S.settings.quality === 'low';
+  const lite = LOW_POWER || S.settings.quality === 'low';
   AU.street = ctx.createConvolver(); AU.street.buffer = lite ? makeIR(1.5, 1.4, 'street') : makeIR(2.6, 2.1, 'street');
   AU.room = ctx.createConvolver(); AU.room.buffer = makeIR(lite ? 0.5 : 0.8, 0.45, 'room');
   AU.plate = ctx.createConvolver(); AU.plate.buffer = lite ? makeIR(1.8, 1.6, 'plate') : makeIR(3.2, 2.6, 'plate');
@@ -701,6 +701,8 @@ const REC = {
     for (let k = 0; k < 14; k++) DSP.modes(out, 0.2 + Math.random() * 0.45, [[3000 + Math.random() * 5000, 0.04, 0.25]], 1);
     return DSP.norm(out, 0.7);
   },
+  punch() { const out = DSP.z(0.28); const a = DSP.tone(0.2, 120 + Math.random() * 35, 48, 0.05); DSP.env(a, 0.0008, 0.045); DSP.add(out, a, 0, 1); const b = DSP.noise(0.05); DSP.filt(b, 'bp', 1700 + Math.random() * 700, 1.1); DSP.env(b, 0.0004, 0.007); DSP.add(out, b, 0, 0.9); const c = DSP.noise(0.14); DSP.filt(c, 'lp', 850); DSP.env(c, 0.001, 0.03); DSP.add(out, c, 0.002, 0.7); return DSP.norm(out, 0.9); },
+  swing() { const out = DSP.noise(0.24); DSP.sweep(out, 'bp', 500, 2300, 1.5, 0.12); DSP.env(out, 0.05, 0.05); return DSP.norm(out, 0.5); },
   whoosh() { const out = DSP.noise(0.7); DSP.sweep(out, 'bp', 380, 2600, 1.3, 0.3); DSP.env(out, 0.22, 0.12); return DSP.norm(out, 0.6); },
   boom() {
     const out = DSP.z(2.5);
@@ -769,6 +771,7 @@ function buildBank() {
   J(() => { B.squeal = M(REC.squealLoop()); B.fire = M(REC.fireLoop()); B.steam = M(REC.steamLoop()); B.buzz = M(REC.buzzLoop()); });
   J(() => { B.roll = M(REC.rollLoop()); B.slush = M(REC.slushLoop()); B.skid = M(REC.skidLoop()); });
   J(() => { B.chatter = many(4, REC.chatter); B.dog = many(2, REC.dog); B.flap = M(REC.flap()); B.carpass = many(2, REC.carPass); B.heli = M(REC.heliLoop()); B.rattle = many(2, REC.rattle); B.plane = M(REC.plane()); });
+  J(() => { B.punch = many(3, REC.punch); B.swing = many(2, REC.swing); });
   J(() => { B.whoosh = M(REC.whoosh()); B.boom = M(REC.boom()); B.stab = M(REC.stab()); B.static = M(REC.static()); });
   // UI, steps and guns first; the rest is rendered in small slices so startup never hitches
   let i = 0;
@@ -851,6 +854,8 @@ const sfx = {
   cash() { play('cash', { vol: 0.5 }); },
   down(x, z) { play('bodyfall', { x, y: 0.3, z, vol: 0.8, ref: 2.5, wet: 0.15 }); },
   whoosh() { play('whoosh', { vol: 0.35 }); },
+  swing(x, z) { play('swing', x === undefined ? { vol: 0.32, rate: 0.9 + Math.random() * 0.2 } : { x, y: 1.4, z, vol: 0.4, ref: 1.5, rate: 0.9 + Math.random() * 0.2 }); },
+  punch(x, y, z, big, blocked) { play('punch', { x, y, z, vol: blocked ? 0.4 : big ? 1 : 0.75, ref: 2, wet: 0.12, rate: blocked ? 1.4 : big ? 0.82 : 0.95 + Math.random() * 0.15 }); },
   chime(x, z) { play('chime', { x, y: PLAT_Y + 3, z, vol: 0.5, ref: 8, wet: 0.35 }); },
   horn(x, z) { play('train_horn', { x, y: DECK_Y + 2, z, vol: 1.1, ref: 10, wet: 0.5, slap: 0.6 }); },
   screech(x, z) { /* the continuous squeal is handled by the train voice */ },

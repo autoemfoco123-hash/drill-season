@@ -213,7 +213,7 @@ function rhFinish() {
   if (showcase && acc >= 0.6) sfx.cheer();
   $('rh-release').onclick = () => {
     killBus(RH.B); RH.B = null;
-    addBuzz(buzz); addHeat(heat); addCash(cash);
+    addBuzz(buzz * gangProducerBoost()); addHeat(heat); addCash(cash);
     const tr = { title: RH.title, type: showcase ? 'wayout' : type, acc, grade, at: Date.now(), seed: RH.seed, style: RH.style };
     S.tracks.push(tr); if (S.tracks.length > 60) S.tracks.shift();
     S.stats.tracks++;
