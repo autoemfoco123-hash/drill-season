@@ -24,46 +24,113 @@ const HG = {
   brim: new THREE.BoxGeometry(0.22, 0.02, 0.12),
   badge: new THREE.BoxGeometry(0.06, 0.07, 0.02),
   mask: new THREE.SphereGeometry(0.138, 14, 10, 0, TAU, Math.PI * 0.42, Math.PI * 0.4),
+  eye: new THREE.SphereGeometry(0.019, 6, 4),
+  brow: new THREE.BoxGeometry(0.052, 0.013, 0.014),
+  hairCap: new THREE.SphereGeometry(0.137, 14, 8, 0, TAU, 0, Math.PI * 0.5),
+  afro: new THREE.SphereGeometry(0.19, 12, 10),
+  loc: new THREE.CylinderGeometry(0.019, 0.014, 0.27, 5),
+  braid: new THREE.CylinderGeometry(0.024, 0.015, 0.32, 5),
+  ball: new THREE.SphereGeometry(0.05, 7, 5),
+  durag: new THREE.SphereGeometry(0.142, 14, 8, 0, TAU, 0, Math.PI * 0.56),
+  tail: new THREE.BoxGeometry(0.06, 0.24, 0.012),
+  bucketTop: new THREE.CylinderGeometry(0.125, 0.148, 0.11, 12),
+  bucketBrim: new THREE.CylinderGeometry(0.225, 0.225, 0.016, 16),
+  band: new THREE.TorusGeometry(0.152, 0.014, 5, 16, Math.PI),
+  cup: new THREE.CylinderGeometry(0.058, 0.058, 0.045, 10),
+  shades: new THREE.BoxGeometry(0.21, 0.048, 0.02),
+  beard: new THREE.BoxGeometry(0.17, 0.075, 0.07),
+  hoodUp: new THREE.SphereGeometry(0.172, 12, 10, 0, TAU, 0, Math.PI * 0.64),
+  hoodDown: new THREE.TorusGeometry(0.13, 0.055, 6, 12),
+  pocket: new THREE.BoxGeometry(0.075, 0.1, 0.03),
+  stripe: new THREE.BoxGeometry(0.022, 0.24, 0.022),
+  collar: new THREE.TorusGeometry(0.145, 0.032, 5, 12),
+  boot: new THREE.BoxGeometry(0.145, 0.19, 0.29),
+  ankle: new THREE.CylinderGeometry(0.078, 0.084, 0.13, 8),
+  sole: new THREE.BoxGeometry(0.138, 0.03, 0.28),
+  bag: new THREE.BoxGeometry(0.21, 0.15, 0.075),
+  strap: new THREE.BoxGeometry(0.03, 0.66, 0.012),
+  watch: new THREE.BoxGeometry(0.065, 0.032, 0.065),
+  zip: new THREE.BoxGeometry(0.012, 0.42, 0.012),
 };
 const SHADOW_MAT = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.32, depthWrite: false });
+// Options (all optional): skin, hair/hairCol, beard, head (none|beanie|cap|capback|durag|bucket|hood|skimask|headphones),
+// hat (headwear colour), pom, top (puffer|hoodie|parka|track|varsity|leather), jacket/jacket2, pantsStyle (jeans|cargo|joggers|ski),
+// pants/pants2, shoe (sneaker|high|boot), shoes, chain, watch, glasses, bag (back|cross), pack/bagCol, build (0 slim|1|2 heavy),
+// plus the older flags: cap, hood, coat, mask, badge, scale.
 function buildHuman(o) {
   const g = new THREE.Group();
   const mats = [];
   const M = (c, emi) => { const m = new THREE.MeshLambertMaterial({ color: c }); if (emi) m.emissive = new THREE.Color(emi); mats.push(m); return m; };
-  const mJ = M(o.jacket), mJ2 = M(o.jacket2 || o.jacket), mP = M(o.pants), mS = M(o.skin), mH = M(o.hat), mShoe = M(o.shoes || 0x15171a);
+  const add = (parent, geo, mat, x, y, z, rx, ry, rz, sx, sy, sz) => { const m = new THREE.Mesh(geo, mat); m.position.set(x || 0, y || 0, z || 0); if (rx || ry || rz) m.rotation.set(rx || 0, ry || 0, rz || 0); if (sx) m.scale.set(sx, sy === undefined ? sx : sy, sz === undefined ? sx : sz); parent.add(m); return m; };
+  const top = o.top || (o.coat ? 'parka' : 'puffer');
+  const head = o.head || (o.cap ? 'cap' : o.hat === null || o.hat === undefined ? 'none' : 'beanie');
+  const bw = o.build === 0 ? 0.92 : o.build === 2 ? 1.15 : 1;
+  const mJ = M(o.jacket), mJ2 = M(o.jacket2 || o.jacket), mP = M(o.pants), mS = M(o.skin), mH = M(o.hat !== undefined && o.hat !== null ? o.hat : 0x15171a), mShoe = M(o.shoes || 0x15171a);
+  const mHair = M(o.hairCol !== undefined ? o.hairCol : 0x0f0d0c), mDark = M(0x0b0b0d), mGold = M(0xd4a640, 0x3a2a08);
+  const mSleeve = top === 'varsity' ? mJ2 : mJ, mHand = o.gloves !== undefined ? M(o.gloves) : mS;
   const root = new THREE.Group(); g.add(root);
   const hips = new THREE.Group(); hips.position.y = 0.92; root.add(hips);
   const spine = new THREE.Group(); hips.add(spine);
-  const torso = new THREE.Mesh(HG.torso, mJ); torso.position.y = 0.36; torso.scale.set(1.12, 1, 0.8); spine.add(torso);
-  for (const y of [0.2, 0.42]) { const r = new THREE.Mesh(HG.puff, mJ2); r.rotation.x = Math.PI / 2; r.position.y = y; r.scale.set(1.13, 0.82, 1); spine.add(r); }
-  if (o.coat) { const c = new THREE.Mesh(HG.coat, mJ); c.position.y = 0.05; c.scale.set(1, 1, 0.82); spine.add(c); }
-  if (o.chain) { const ch = new THREE.Mesh(HG.chain, M(0xd4a640, 0x3a2a08)); ch.rotation.x = 1.25; ch.position.set(0, 0.5, 0.12); spine.add(ch); }
-  if (o.pack) { const p = new THREE.Mesh(HG.pack, M(o.pack)); p.position.set(0, 0.36, -0.24); spine.add(p); }
-  if (o.badge) { const b = new THREE.Mesh(HG.badge, M(0xd4a640, 0x2a1a04)); b.position.set(0.12, 0.52, 0.2); spine.add(b); }
+  add(spine, HG.torso, mJ, 0, 0.36, 0, 0, 0, 0, 1.12 * bw, 1, 0.8 * bw);
+  if (top === 'puffer') for (const y of [0.2, 0.42]) add(spine, HG.puff, mJ2, 0, y, 0, Math.PI / 2, 0, 0, 1.13 * bw, 0.82, 1);
+  if (top === 'parka') { add(spine, HG.coat, mJ, 0, 0.05, 0, 0, 0, 0, bw, 1, 0.82 * bw); add(spine, HG.puff, mJ2, 0, 0.42, 0, Math.PI / 2, 0, 0, 1.13 * bw, 0.82, 1); }
+  if (top === 'hoodie') add(spine, HG.pocket, mJ2, 0, 0.2, 0.2 * bw, 0, 0, 0, 2.2, 1, 1);
+  if (top === 'track' || top === 'leather' || top === 'varsity') add(spine, HG.zip, top === 'track' ? mJ2 : mDark, 0, 0.36, 0.205 * bw);
+  if (top === 'leather' || top === 'varsity') add(spine, HG.collar, mJ2, 0, 0.6, 0, Math.PI / 2, 0, 0, 1, 1, 0.7);
+  if (o.chain) add(spine, HG.chain, mGold, 0, 0.5, 0.12, 1.25);
+  if (o.pack || o.bag === 'back') add(spine, HG.pack, M(o.pack || o.bagCol || 0x15171a), 0, 0.36, -0.24 * bw);
+  if (o.bag === 'cross') { const mb = M(o.bagCol || 0x15171a); add(spine, HG.strap, mb, 0, 0.36, 0.205 * bw, 0, 0, 0.75); add(spine, HG.bag, mb, -0.17, 0.12, 0.17 * bw); }
+  if (o.badge) add(spine, HG.badge, mGold, 0.12, 0.52, 0.2);
   const headG = new THREE.Group(); headG.position.y = 0.78; spine.add(headG);
-  const head = new THREE.Mesh(HG.head, mS); head.position.y = 0.06; head.scale.set(0.95, 1.05, 1); headG.add(head);
-  if (o.mask) { const mk = new THREE.Mesh(HG.mask, M(o.mask)); mk.position.y = 0.06; mk.scale.set(0.97, 1.06, 1.03); headG.add(mk); }
-  if (o.hood) { const hd = new THREE.Mesh(HG.hood, mJ2); hd.position.set(0, -0.02, -0.02); hd.rotation.x = Math.PI / 2; headG.add(hd); }
-  if (o.cap) { const cp = new THREE.Mesh(HG.capTop, mH); cp.position.y = 0.15; headG.add(cp); const br = new THREE.Mesh(HG.brim, mH); br.position.set(0, 0.11, 0.12); headG.add(br); }
-  else if (o.hat !== null) {
-    const hat = new THREE.Mesh(HG.beanie, mH); hat.position.y = 0.085; headG.add(hat);
-    if (o.pom) { const pm = new THREE.Mesh(HG.pom, M(o.pom)); pm.position.y = 0.23; headG.add(pm); }
+  add(headG, HG.head, mS, 0, 0.06, 0, 0, 0, 0, 0.95, 1.05, 1);
+  // face
+  const skimask = head === 'skimask';
+  if (skimask) add(headG, HG.head, mH, 0, 0.062, 0, 0, 0, 0, 1.0, 1.1, 1.05);
+  for (const s of [-1, 1]) { add(headG, HG.eye, mDark, s * 0.045, 0.085, skimask ? 0.128 : 0.118); if (!skimask) add(headG, HG.brow, mHair, s * 0.047, 0.118, 0.115, 0, 0, s * 0.08); }
+  if (o.beard && !skimask && !o.mask) add(headG, HG.beard, mHair, 0, -0.005, 0.07);
+  if (o.mask) add(headG, HG.mask, M(o.mask), 0, 0.06, 0, 0, 0, 0, 0.97, 1.06, 1.03);
+  if (o.glasses) add(headG, HG.shades, mDark, 0, 0.087, skimask ? 0.135 : 0.124);
+  // hair (what shows depends on the headwear)
+  const hair = o.hair || 'none', coversTop = head === 'beanie' || head === 'durag' || head === 'skimask' || head === 'hood' || head === 'bucket';
+  if (hair !== 'none' && !skimask) {
+    if (hair === 'afro') { if (coversTop || head === 'cap' || head === 'capback') add(headG, HG.afro, mHair, 0, 0.06, -0.02, 0, 0, 0, 0.9, 0.62, 0.9); else add(headG, HG.afro, mHair, 0, 0.13, -0.01); }
+    else if (!coversTop) add(headG, HG.hairCap, mHair, 0, 0.07, -0.003, 0, 0, 0, hair === 'buzz' ? 0.99 : 1.04, hair === 'buzz' ? 0.96 : 1.08, hair === 'buzz' ? 0.99 : 1.06);
+    if (hair === 'twists' && !coversTop) for (let k = 0; k < 9; k++) { const a = k / 9 * TAU; add(headG, HG.ball, mHair, Math.cos(a) * 0.08, 0.17 + (k % 2) * 0.02, Math.sin(a) * 0.08 - 0.01); }
+    if (hair === 'locs') for (let k = 0; k < 11; k++) { const a = Math.PI * 0.15 + k / 10 * Math.PI * 1.7; const x = Math.sin(a) * 0.12, z = -Math.cos(a) * 0.12; if (z > 0.06) continue; add(headG, HG.loc, mHair, x, -0.02, z, -z * 1.2, 0, x * 1.4); }
+    if (hair === 'braids') for (const s of [-1, 1]) add(headG, HG.braid, mHair, s * 0.06, -0.06, -0.11, 0.35, 0, s * 0.1);
   }
+  // headwear
+  if (head === 'beanie') { add(headG, HG.beanie, mH, 0, 0.085, 0); if (o.pom) add(headG, HG.pom, M(typeof o.pom === 'number' && o.pom > 1 ? o.pom : (o.hat || 0xffffff)), 0, 0.23, 0); }
+  else if (head === 'cap' || head === 'capback') { add(headG, HG.capTop, mH, 0, 0.15, 0); add(headG, HG.brim, mH, 0, 0.11, head === 'cap' ? 0.12 : -0.12); }
+  else if (head === 'durag') { add(headG, HG.durag, mH, 0, 0.075, 0); add(headG, HG.tail, mH, 0, -0.06, -0.135, 0.15); }
+  else if (head === 'bucket') { add(headG, HG.bucketTop, mH, 0, 0.165, 0); add(headG, HG.bucketBrim, mH, 0, 0.115, 0, -0.05); }
+  else if (head === 'hood') add(headG, HG.hoodUp, mJ2, 0, 0.06, -0.035, -0.5, 0, 0, 1, 1.05, 1.05);
+  else if (head === 'headphones') { add(headG, HG.band, mH, 0, 0.07, 0, 0, Math.PI / 2, 0); for (const s of [-1, 1]) add(headG, HG.cup, mH, s * 0.14, 0.06, 0, 0, 0, Math.PI / 2); }
+  if (o.hood || ((top === 'hoodie' || top === 'parka') && head !== 'hood')) add(headG, HG.hoodDown, mJ2, 0, -0.03, -0.04, Math.PI / 2 - 0.3);
+  const legScale = o.pantsStyle === 'ski' ? 1.16 : 1;
   const mkLeg = side => {
-    const thigh = new THREE.Group(); thigh.position.set(0.115 * side, 0.02, 0); hips.add(thigh);
-    const tm = new THREE.Mesh(HG.thigh, mP); tm.position.y = -0.22; thigh.add(tm);
+    const thigh = new THREE.Group(); thigh.position.set(0.115 * side * bw, 0.02, 0); hips.add(thigh);
+    add(thigh, HG.thigh, mP, 0, -0.22, 0, 0, 0, 0, legScale * bw, 1, legScale * bw);
+    if (o.pantsStyle === 'cargo') add(thigh, HG.pocket, mP, side * 0.09 * bw, -0.26, 0, 0, side * 0.2, 0, 1.2, 1.1, 1.4);
+    if (o.pantsStyle === 'joggers' || o.pantsStyle === 'track') add(thigh, HG.stripe, M(o.pants2 || 0xe8e8ea), side * 0.088 * bw, -0.22, 0, 0, 0, 0, 1, 1.5, 1);
     const knee = new THREE.Group(); knee.position.y = -0.45; thigh.add(knee);
-    const sm = new THREE.Mesh(HG.shin, mP); sm.position.y = -0.2; knee.add(sm);
-    const shoe = new THREE.Mesh(HG.shoe, mShoe); shoe.position.set(0, -0.42, 0.045); knee.add(shoe);
+    add(knee, HG.shin, mP, 0, -0.2, 0, 0, 0, 0, legScale, 1, legScale);
+    if (o.pantsStyle === 'joggers' || o.pantsStyle === 'track') add(knee, HG.stripe, M(o.pants2 || 0xe8e8ea), side * 0.078, -0.18, 0, 0, 0, 0, 1, 1.3, 1);
+    const shoe = o.shoe || 'sneaker';
+    if (shoe === 'boot') add(knee, HG.boot, mShoe, 0, -0.39, 0.04);
+    else { add(knee, HG.shoe, mShoe, 0, -0.42, 0.045); add(knee, HG.sole, M(shoe === 'high' ? 0xe8e8ea : 0xf2f2f2), 0, -0.468, 0.045); if (shoe === 'high') add(knee, HG.ankle, mShoe, 0, -0.33, 0.01); }
     return { thigh, knee };
   };
   const mkArm = side => {
-    const sh = new THREE.Group(); sh.position.set(0.31 * side, 0.6, 0); spine.add(sh);
-    const um = new THREE.Mesh(HG.upper, mJ); um.position.y = -0.15; sh.add(um);
+    const sh = new THREE.Group(); sh.position.set(0.31 * side * bw, 0.6, 0); spine.add(sh);
+    add(sh, HG.upper, mSleeve, 0, -0.15, 0, 0, 0, 0, bw, 1, bw);
+    if (top === 'track') add(sh, HG.stripe, mJ2, side * 0.07, -0.15, 0);
     const elbow = new THREE.Group(); elbow.position.y = -0.3; sh.add(elbow);
-    const fm = new THREE.Mesh(HG.fore, mJ); fm.position.y = -0.13; elbow.add(fm);
+    add(elbow, HG.fore, mSleeve, 0, -0.13, 0, 0, 0, 0, bw, 1, bw);
+    if (top === 'track') add(elbow, HG.stripe, mJ2, side * 0.06, -0.12, 0, 0, 0, 0, 1, 0.9, 1);
+    if (o.watch && side < 0) add(elbow, HG.watch, mGold, 0, -0.24, 0);
     const hand = new THREE.Group(); hand.position.y = -0.29; elbow.add(hand);
-    const hm = new THREE.Mesh(HG.hand, mS); hand.add(hm);
+    add(hand, HG.hand, mHand);
     return { sh, elbow, hand };
   };
   const L = mkLeg(-1), R = mkLeg(1), AL = mkArm(-1), AR = mkArm(1);

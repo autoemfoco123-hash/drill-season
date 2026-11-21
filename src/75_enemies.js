@@ -94,7 +94,7 @@ function crewWalkAway(c, distance) {
   S.stats.walkAways++;
   sfx.whoosh();
   banner('Walked away', `Heat ${dh}`);
-  for (const e of c.members) { const a = Math.atan2(e.pos.x - P.pos.x, e.pos.z - P.pos.z); e.leaveTo = { x: clamp(e.pos.x + Math.sin(a) * 60, -140, 140), z: clamp(e.pos.z + Math.cos(a) * 60, -140, 140) }; e.path = null; }
+  for (const e of c.members) { const a = Math.atan2(e.pos.x - P.pos.x, e.pos.z - P.pos.z); e.leaveTo = { x: clamp(e.pos.x + Math.sin(a) * 60, -(MAP_HALF - 10), MAP_HALF - 10), z: clamp(e.pos.z + Math.cos(a) * 60, -(MAP_HALF - 10), MAP_HALF - 10) }; e.path = null; }
   onWalkAway(c);
 }
 function crewDefeated(c) {
@@ -353,7 +353,7 @@ function findSpawnPoint(minD, maxD) {
     let x, z;
     if (Math.random() < 0.5) { x = pick(XL) + rand(-3, 3); z = P.pos.z + rand(-maxD, maxD); }
     else { z = pick(ZL) + rand(-3, 3); x = P.pos.x + rand(-maxD, maxD); }
-    if (Math.abs(x) > 140 || Math.abs(z) > 140) continue;
+    if (Math.abs(x) > MAP_HALF - 10 || Math.abs(z) > MAP_HALF - 10 || x > SHORE_X + 8) continue;
     const d = Math.hypot(x - P.pos.x, z - P.pos.z); if (d < minD || d > maxD) continue;
     if (isBlocked(x, z)) continue;
     if (i < 35 && segClear(P.pos.x, P.pos.y + 1.5, P.pos.z, x, 1.5, z)) continue;

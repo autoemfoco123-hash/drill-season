@@ -153,21 +153,74 @@ body.cine #cut-skip{opacity:1}
 .seg button small{display:block;font-weight:500;font-size:11px;color:var(--ink-3);margin-top:2px}
 
 /* title */
-#title{background:linear-gradient(90deg,rgba(3,5,8,.9) 0%,rgba(3,5,8,.6) 40%,rgba(3,5,8,0) 72%);justify-content:flex-start}
-.t-wrap{width:min(540px,100%);padding-left:clamp(0px,4vw,64px);max-height:100%;overflow:auto}
-.t-logo{font-family:var(--f-display);font-weight:900;text-transform:uppercase;white-space:nowrap;font-size:clamp(64px,10vw,132px);line-height:.8;letter-spacing:-.005em;margin:14px 0 16px}
-.t-logo span{display:block;color:var(--amber)}
-.t-tag{font-size:17px;color:var(--ink-2);margin:0 0 24px;max-width:34ch;line-height:1.45}
-#t-form label{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2);margin-bottom:6px}
-#t-name{width:100%;box-sizing:border-box;font-family:var(--f-ui);font-weight:700;font-size:22px;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:rgba(5,8,12,.7);color:var(--ink);-webkit-user-select:text;user-select:text}
+#title{background:linear-gradient(90deg,rgba(3,5,8,.94) 0%,rgba(3,5,8,.78) 26%,rgba(3,5,8,.2) 50%,rgba(3,5,8,0) 66%);justify-content:flex-start;align-items:stretch;padding:0}
+.t-wrap{width:min(470px,100%);display:flex;flex-direction:column;justify-content:center;gap:18px;padding:clamp(18px,5vh,56px) 22px clamp(18px,5vh,56px) clamp(20px,4vw,64px);box-sizing:border-box;overflow:auto;max-height:100%}
+.t-logo{font-family:var(--f-display);font-weight:900;text-transform:uppercase;white-space:nowrap;font-size:clamp(56px,min(7vw,13vh),108px);line-height:.8;letter-spacing:-.005em;margin:10px 0 0}
+.t-logo span{display:block;color:var(--amber);text-shadow:0 0 40px rgba(255,140,40,.35)}
+.t-panel{display:flex;flex-direction:column;gap:12px;animation:tin .28s ease-out}
+@keyframes tin{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}
+.t-tag{font-size:16px;color:var(--ink-2);margin:0;max-width:36ch;line-height:1.45}
+.t-big{display:grid;grid-template-columns:1fr auto;grid-template-rows:auto auto;text-align:left;gap:2px 10px;padding:14px 16px;border-radius:14px;border:1px solid rgba(255,179,71,.45);background:linear-gradient(90deg,rgba(255,179,71,.18),rgba(255,179,71,.04));cursor:pointer}
+.t-big:hover{background:linear-gradient(90deg,rgba(255,179,71,.28),rgba(255,179,71,.08))}
+.t-big .k{font-family:var(--f-display);font-weight:800;font-size:26px;text-transform:uppercase;color:var(--amber);line-height:1}
+.t-big .d{grid-column:1;font-size:13px;color:var(--ink-2)}
+.t-big .arr{grid-row:1/3;grid-column:2;align-self:center;font-size:30px;color:var(--amber)}
+#t-form label{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-bottom:6px}
+.t-row{display:flex;gap:8px;align-items:stretch}
+#t-name{flex:1;min-width:0;box-sizing:border-box;font-family:var(--f-ui);font-weight:700;font-size:19px;padding:11px 13px;border-radius:10px;border:1px solid var(--line);background:rgba(5,8,12,.7);color:var(--ink);outline:none}
+#t-name:focus{border-color:var(--amber)}
 #t-name::placeholder{color:var(--ink-3);font-weight:500}
+#t-start{font-size:16px;padding:0 22px}
 .t-btns{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
-#t-msg{min-height:18px;font-size:13.5px;color:#ffb3aa;margin-top:8px}
-#t-confirm{margin-top:12px;padding:12px;border:1px solid rgba(255,90,78,.4);border-radius:10px;background:rgba(255,90,78,.07)}
+#t-msg{min-height:0;font-size:13.5px;color:#ffb3aa;margin-top:6px}
+#t-msg:empty{display:none}
+#t-confirm{margin-top:10px;padding:12px;border:1px solid rgba(255,90,78,.4);border-radius:10px;background:rgba(255,90,78,.07)}
 #t-confirm p{margin:0 0 10px;font-size:14px}
-.t-controls{margin-top:24px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 18px;font-size:12.5px;color:var(--ink-2)}
+.t-nav{display:grid;gap:8px;margin-top:4px}
+.t-nav button{display:flex;justify-content:space-between;align-items:baseline;gap:12px;text-align:left;padding:13px 15px;border-radius:12px;border:1px solid var(--line);background:rgba(238,243,248,.04);cursor:pointer;transition:background .15s,border-color .15s}
+.t-nav button:hover{background:rgba(238,243,248,.09);border-color:rgba(238,243,248,.24)}
+.t-nav b{font-weight:800;font-size:16px}
+.t-nav span{font-size:12.5px;color:var(--ink-3)}
+.t-head{display:flex;align-items:center;gap:12px}
+.t-head h2{margin:0;font-family:var(--f-display);font-weight:800;font-size:34px;text-transform:uppercase;line-height:1}
+.t-back{width:38px;height:38px;flex:none;border-radius:50%;border:1px solid var(--line);background:rgba(238,243,248,.05);font-size:24px;line-height:1;cursor:pointer;color:var(--ink)}
+.t-back:hover{border-color:var(--amber);color:var(--amber)}
+.t-set{display:grid;gap:12px}
+.t-set .seg{margin:0}
+.t-set .srow{display:grid;grid-template-columns:110px 1fr 40px;align-items:center;gap:10px;font-size:14px}
+.t-set .srow output{font-family:var(--f-mono);font-size:12px;color:var(--ink-2);text-align:right}
+.t-set input[type=range]{width:100%;accent-color:var(--amber)}
+.t-set .lbl{font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.t-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 18px;font-size:13px;color:var(--ink-2)}
 .t-controls div{display:flex;gap:8px;align-items:center;min-width:0}
-.t-fine{margin-top:20px;font-size:11.5px;color:var(--ink-3)}
+.t-tips{margin:6px 0 0;padding-left:18px;color:var(--ink-2);font-size:13.5px;line-height:1.5;display:grid;gap:6px}
+.t-stage{position:absolute;right:clamp(18px,6vw,110px);bottom:clamp(64px,13vh,140px);text-align:right;pointer-events:none;max-width:40vw}
+.t-who{font-family:var(--f-display);font-weight:800;font-size:clamp(28px,3.6vw,48px);text-transform:uppercase;line-height:1;text-shadow:0 4px 30px rgba(0,0,0,.6)}
+.t-fit{font-family:var(--f-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--amber);margin-top:6px}
+.t-hint{font-family:var(--f-mono);font-size:11px;color:var(--ink-3);margin-top:6px}
+.t-foot{position:absolute;right:16px;bottom:12px;font-size:11.5px;color:var(--ink-3);pointer-events:none}
+#ward{position:fixed;left:0;top:0;bottom:0;width:min(440px,100%);z-index:9;box-sizing:border-box;padding:clamp(18px,4vh,40px) 22px 18px clamp(20px,3vw,48px);display:flex;flex-direction:column;gap:14px;background:linear-gradient(90deg,rgba(3,5,8,.95) 0%,rgba(3,5,8,.86) 75%,rgba(3,5,8,0) 100%);animation:tin .25s ease-out}
+#ward h2{margin:2px 0 0;font-family:var(--f-display);font-weight:800;font-size:34px;text-transform:uppercase;line-height:1}
+.w-tabs{display:flex;flex-wrap:wrap;gap:6px}
+.w-tabs button{padding:7px 12px;border-radius:999px;border:1px solid var(--line);background:rgba(238,243,248,.04);font-weight:700;font-size:13px;cursor:pointer;color:var(--ink)}
+.w-tabs button.on{border-color:var(--amber);color:var(--amber);background:rgba(255,179,71,.1)}
+.w-body{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:12px;padding-right:4px}
+.w-sec{font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.w-opts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.w-opts button{padding:11px 6px;border-radius:10px;border:1px solid var(--line);background:rgba(238,243,248,.04);font-weight:700;font-size:13px;cursor:pointer;color:var(--ink);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.w-opts button:hover{border-color:rgba(238,243,248,.3)}
+.w-opts button.on{border-color:var(--amber);color:var(--amber);background:rgba(255,179,71,.1)}
+.w-pre{grid-template-columns:repeat(2,minmax(0,1fr))}
+.w-pre button{display:flex;flex-direction:column;align-items:flex-start;gap:7px;padding:11px 12px;text-align:left;white-space:normal}
+.w-dots{display:flex;gap:4px}
+.w-dots i{width:14px;height:14px;border-radius:50%;border:1px solid rgba(255,255,255,.2)}
+.w-sw{display:flex;flex-wrap:wrap;gap:8px}
+.w-sw button{width:30px;height:30px;border-radius:50%;border:2px solid rgba(255,255,255,.14);cursor:pointer;padding:0}
+.w-sw button.on{outline:2px solid var(--amber);outline-offset:2px}
+.w-tog{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.w-foot{padding-top:4px}
+.w-foot .btn{flex:1;padding:12px}
+body.ward #hud,body.ward #notifs,body.ward #touch{display:none!important}
 
 /* ---------- the phone ---------- */
 #phone{position:absolute;right:max(26px,env(safe-area-inset-right,0px));bottom:max(18px,env(safe-area-inset-bottom,0px));height:min(760px,calc(100% - 36px));aspect-ratio:9/19.3;max-width:calc(100vw - 32px);z-index:7;animation:phin .32s cubic-bezier(.2,.8,.2,1)}
@@ -343,6 +396,7 @@ body.cine #cut-skip{opacity:1}
 #tc-band{left:calc(374px + env(safe-area-inset-left,0px));bottom:calc(102px + env(safe-area-inset-bottom,0px))}
 #tc-phone{top:calc(64px + env(safe-area-inset-top,0px));left:calc(22px + env(safe-area-inset-left,0px));border-radius:12px;width:60px;height:38px}
 #tc-pause{top:calc(64px + env(safe-area-inset-top,0px));left:calc(90px + env(safe-area-inset-left,0px));border-radius:12px;width:42px;height:38px}
+#tc-cam{top:calc(64px + env(safe-area-inset-top,0px));left:calc(140px + env(safe-area-inset-left,0px));border-radius:12px;width:52px;height:38px}
 
 @media (max-width:820px),(max-height:520px){
   #mm-wrap,#minimap{width:138px;height:138px}
@@ -355,7 +409,6 @@ body.cine #cut-skip{opacity:1}
   #bn-stats{grid-template-columns:1fr 1fr;gap:3px 10px}
   .bn-right{border-left:none;border-top:1px solid var(--line)}
   #en-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .t-controls{display:none}
   .t-logo{font-size:clamp(46px,11vh,70px);margin:6px 0 8px}
   .t-tag{font-size:14.5px;margin-bottom:12px}
   #t-name{font-size:18px;padding:9px 12px}
@@ -366,6 +419,23 @@ body.touch #objective{bottom:calc(170px + env(safe-area-inset-bottom,0px))}
 body.touch #prompt{bottom:calc(200px + env(safe-area-inset-bottom,0px))}
 body.touch #subtitle{bottom:calc(240px + env(safe-area-inset-bottom,0px))}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+@media (max-width:720px){
+  #title{background:linear-gradient(0deg,rgba(3,5,8,.96) 0%,rgba(3,5,8,.86) 44%,rgba(3,5,8,.2) 62%,rgba(3,5,8,0) 74%);align-items:flex-end}
+  .t-wrap{width:100%;max-height:64%;justify-content:flex-end;padding:14px 16px calc(14px + env(safe-area-inset-bottom,0px));gap:12px}
+  .t-logo{font-size:54px;margin:4px 0 0}
+  .t-logo span{display:inline;margin-left:.18em}
+  .t-tag{display:none}
+  .t-stage{top:calc(14px + env(safe-area-inset-top,0px));bottom:auto;right:16px;max-width:60vw}
+  .t-who{font-size:26px}
+  .t-foot{display:none}
+  .t-nav{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .t-nav button{flex-direction:column;align-items:flex-start;gap:2px;padding:10px 11px}
+  .t-nav b{font-size:14px}
+  .t-nav span{display:none}
+  #ward{top:auto;height:60%;width:100%;padding:14px 16px calc(12px + env(safe-area-inset-bottom,0px));border-radius:18px 18px 0 0;background:rgba(5,8,12,.94)}
+  #ward h2{font-size:26px}
+  .w-sw button{width:34px;height:34px}
+}
 </style>
 
 <div id="app">
@@ -417,35 +487,65 @@ body.touch #subtitle{bottom:calc(240px + env(safe-area-inset-bottom,0px))}
     <button class="tcb" id="tc-band">Heal</button>
     <button class="tcb" id="tc-phone">Phone</button>
     <button class="tcb" id="tc-pause">II</button>
+    <button class="tcb" id="tc-cam">1P/3P</button>
   </div>
 
   <button id="snd" type="button" aria-label="Turn on sound"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M16.5 9.5l5 5m0-5l-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg><span>Tap for sound</span></button>
   <div id="title" class="overlay">
     <div class="t-wrap">
-      <div class="eyebrow">Calder Park · Chicago · Live multiplayer</div>
-      <h1 class="t-logo">Drill<span>Season</span></h1>
-      <p class="t-tag">Make your name in the snow. Every artist on the block is a real player.</p>
-      <form id="t-form" autocomplete="off">
-        <label for="t-name">Your username</label>
-        <input id="t-name" maxlength="16" spellcheck="false" placeholder="@yourname">
-        <div class="t-btns">
-          <button type="submit" class="btn primary" id="t-start">Start</button>
-          <button type="button" class="btn" id="t-continue" hidden>Continue</button>
-        </div>
-        <div id="t-msg"></div>
-        <div id="t-confirm" hidden>
-          <p id="t-confirm-text"></p>
-          <div class="t-btns"><button type="button" class="btn danger" id="t-erase">Erase and start</button><button type="button" class="btn" id="t-cancel">Keep my save</button></div>
-        </div>
-      </form>
-      <div class="t-controls">
-        <div><kbd>WASD</kbd> Move · drive</div><div><kbd>Mouse</kbd> Look</div>
-        <div><kbd>F</kbd> Enter / exit car</div><div><kbd>Shift</kbd> Sprint</div>
-        <div><kbd>RMB</kbd> Aim · <kbd>LMB</kbd> Shoot</div><div><kbd>Tab</kbd> Phone</div>
-        <div><kbd>E</kbd> Use · hold to walk away</div><div><kbd>C</kbd> Crouch · <kbd>R</kbd> Reload</div>
+      <div class="t-top">
+        <div class="eyebrow">Calder Park · Chicago · Live multiplayer</div>
+        <h1 class="t-logo">Drill<span>Season</span></h1>
       </div>
-      <div class="t-fine">Every character, crew, brand, street and event here is fictional.</div>
+      <section id="t-main" class="t-panel">
+        <p class="t-tag">Make your name in the snow. Every artist on the block is a real player.</p>
+        <button type="button" class="t-big" id="t-continue" hidden><span class="k">Continue</span><span class="d" id="t-cont-d"></span><span class="arr">›</span></button>
+        <form id="t-form" autocomplete="off">
+          <label for="t-name" id="t-name-l">New artist</label>
+          <div class="t-row"><input id="t-name" maxlength="16" spellcheck="false" placeholder="@yourname"><button type="submit" class="btn primary" id="t-start">Play</button></div>
+          <div id="t-msg"></div>
+          <div id="t-confirm" hidden>
+            <p id="t-confirm-text"></p>
+            <div class="t-btns"><button type="button" class="btn danger" id="t-erase">Erase and start</button><button type="button" class="btn" id="t-cancel">Keep my save</button></div>
+          </div>
+        </form>
+        <nav class="t-nav">
+          <button type="button" data-t="ward"><b>Wardrobe</b><span>Skins · fits · colours</span></button>
+          <button type="button" data-t="set"><b>Settings</b><span>Camera · sound · graphics</span></button>
+          <button type="button" data-t="help"><b>How to play</b><span>Controls · tips</span></button>
+        </nav>
+      </section>
+      <section id="t-set" class="t-panel" hidden>
+        <div class="t-head"><button type="button" class="t-back" data-t="main">‹</button><h2>Settings</h2></div>
+        <div id="t-set-body" class="t-set"></div>
+      </section>
+      <section id="t-help" class="t-panel" hidden>
+        <div class="t-head"><button type="button" class="t-back" data-t="main">‹</button><h2>How to play</h2></div>
+        <div class="t-controls">
+          <div><kbd>WASD</kbd> Move · drive</div><div><kbd>Mouse</kbd> Look</div>
+          <div><kbd>Shift</kbd> Sprint</div><div><kbd>Space</kbd> Jump · handbrake</div>
+          <div><kbd>RMB</kbd> Aim · <kbd>LMB</kbd> Shoot</div><div><kbd>R</kbd> Reload · radio</div>
+          <div><kbd>V</kbd> First / third person</div><div><kbd>F</kbd> Enter / exit car</div>
+          <div><kbd>E</kbd> Use · hold to walk away</div><div><kbd>C</kbd> Crouch · <kbd>B</kbd> Bandage</div>
+          <div><kbd>Tab</kbd> Phone</div><div><kbd>G</kbd> Wave</div>
+        </div>
+        <ul class="t-tips">
+          <li>The Hawk is real: stand by fire barrels, steam vents or go inside to warm up.</li>
+          <li>Record at Basement 808 on Calder Ave. Tracks build Buzz; gunfire builds Heat.</li>
+          <li>Change your fit any time at home on Bishop St, or here in the Wardrobe.</li>
+          <li>New this season: the Shore Dr lakefront, Garnet Courts, Ironside Fuel and the Kessler rail yard.</li>
+        </ul>
+      </section>
     </div>
+    <div class="t-stage"><div class="t-who" id="t-who"></div><div class="t-fit" id="t-fit"></div><div class="t-hint">Drag to turn</div></div>
+    <div class="t-foot">Every character, crew, brand, street and event here is fictional.</div>
+  </div>
+
+  <div id="ward" hidden>
+    <div class="t-head"><button type="button" class="t-back" id="w-back">‹</button><div><div class="eyebrow">Your look</div><h2>Wardrobe</h2></div></div>
+    <div class="w-tabs" id="w-tabs"></div>
+    <div class="w-body" id="w-body"></div>
+    <div class="t-row w-foot"><button type="button" class="btn" id="w-rand">Randomize</button><button type="button" class="btn primary" id="w-done">Done</button></div>
   </div>
 
   <div id="menu" class="overlay dim" hidden>

@@ -14,6 +14,7 @@ function playCutscene(shots, end) {
   $('phone').hidden = true;
   document.body.classList.add('cine');
   sfx.stinger('cut');
+  fpHide(); if (P.human) P.human.group.visible = !P.car;
   nextCutShot();
 }
 function nextCutShot() {

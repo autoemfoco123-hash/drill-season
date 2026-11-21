@@ -15,29 +15,33 @@ const WEAP_SVG = {
   draft: '<polygon points="6,12 72,12 72,10 88,10 88,16 72,16 72,20 48,20 45,35 36,35 38,20 31,20 31,32 24,32 24,20 6,20"/><rect x="0" y="13" width="8" height="5"/>',
   plow: '<polygon points="4,12 97,12 97,16 62,16 62,20 42,20 36,32 26,32 31,20 4,20"/><rect x="62" y="17" width="20" height="5" rx="1"/>',
 };
-const MAP = { c: null, s: 4 };
+const MAP = { c: null, s: 3 };
 function buildStaticMap() {
-  const s = MAP.s, W = 300 * s;
+  const s = MAP.s, W = 2 * MAP_HALF * s;
   const c = document.createElement('canvas'); c.width = c.height = W;
   const g = c.getContext('2d');
-  const X = x => (x + 150) * s;
+  const X = x => (x + MAP_HALF) * s;
   g.fillStyle = '#121a24'; g.fillRect(0, 0, W, W);
+  g.fillStyle = '#9fc3dc'; g.fillRect(X(LAKE_X), 0, W - X(LAKE_X), W);
+  g.fillStyle = '#1b2531'; g.fillRect(X(ROAD_X_END), 0, (LAKE_X - ROAD_X_END) * s, W);
+  g.fillStyle = '#2a2622'; g.fillRect(X(-MAP_HALF), 0, (XL[0] - WALK_EDGE + MAP_HALF) * s, W);
+  g.fillStyle = '#3a4048'; g.fillRect(X(LOC.court.x - 15), X(LOC.court.z - 10), 30 * s, 20 * s);
   g.fillStyle = '#163024'; g.fillRect(X(-85), X(10), 75 * s, 70 * s);
   g.fillStyle = '#4b7ea6'; g.beginPath(); g.arc(X(POND.x), X(POND.z), POND.r * s, 0, TAU); g.fill();
   g.fillStyle = '#26313e';
-  for (const z of ZL) g.fillRect(0, X(z - 10), W, 20 * s);
+  for (const z of ZL) g.fillRect(0, X(z - 10), X(ROAD_X_END), 20 * s);
   for (const x of XL) g.fillRect(X(x - 10), 0, 20 * s, W);
   g.fillStyle = '#566476';
-  for (const z of ZL) g.fillRect(0, X(z - 6), W, 12 * s);
+  for (const z of ZL) g.fillRect(0, X(z - 6), X(ROAD_X_END - 4), 12 * s);
   for (const x of XL) g.fillRect(X(x - 6), 0, 12 * s, W);
   g.fillStyle = '#2c3644';
-  for (const [x0, x1, z] of [[-85, -10, -45], [10, 60, -45], [80, 147, -45], [10, 60, 45], [80, 147, 45]]) g.fillRect(X(x0), X(z - 3), (x1 - x0) * s, 6 * s);
+  for (const [x0, x1, z] of ALLEYS) g.fillRect(X(x0), X(z - 3), (x1 - x0) * s, 6 * s);
   g.fillStyle = '#0b1017';
   for (const b of BOXES) if (b.tag === 'building') g.fillRect(X(b.x0), X(b.z0), (b.x1 - b.x0) * s, (b.z1 - b.z0) * s);
   g.strokeStyle = 'rgba(255,179,71,.85)'; g.lineWidth = 3 * s / 2; g.setLineDash([6 * s, 4 * s]); g.beginPath(); g.moveTo(X(LX), 0); g.lineTo(X(LX), W); g.stroke(); g.setLineDash([]);
   g.fillStyle = 'rgba(238,243,248,.7)'; g.font = `700 ${7 * s}px Inter, sans-serif`;
-  ZN.forEach((n, i) => g.fillText(n.toUpperCase(), X(-140), X(ZL[i]) + 2.5 * s));
-  XN.forEach((n, i) => { g.save(); g.translate(X(XL[i]) + 2.5 * s, X(140)); g.rotate(-Math.PI / 2); g.fillText(n.toUpperCase(), 0, 0); g.restore(); });
+  ZN.forEach((n, i) => g.fillText(n.toUpperCase(), X(-(MAP_HALF - 12)), X(ZL[i]) + 2.5 * s));
+  XN.forEach((n, i) => { g.save(); g.translate(X(XL[i]) + 2.5 * s, X(MAP_HALF - 12)); g.rotate(-Math.PI / 2); g.fillText(n.toUpperCase(), 0, 0); g.restore(); });
   MAP.c = c;
 }
 const MM = { c: $('minimap'), g: $('minimap').getContext('2d'), route: null, routeT: 0 };
@@ -55,7 +59,7 @@ function drawMinimap(dt) {
   g.save();
   g.beginPath(); g.arc(R, R, R - 3, 0, TAU); g.clip();
   g.translate(R, R); g.rotate(yaw);
-  g.save(); g.scale(s / MAP.s, s / MAP.s); g.drawImage(MAP.c, -(px + 150) * MAP.s, -(pz + 150) * MAP.s); g.restore();
+  g.save(); g.scale(s / MAP.s, s / MAP.s); g.drawImage(MAP.c, -(px + MAP_HALF) * MAP.s, -(pz + MAP_HALF) * MAP.s); g.restore();
   MM.routeT -= dt;
   const tgt = routeTarget();
   if (tgt && MM.routeT <= 0) { MM.routeT = 1; MM.route = navPath(px, pz, tgt.x, tgt.z); }
@@ -225,7 +229,7 @@ let MENU = null;
 function openMenu(m) {
   MENU = m; MODE = 'menu'; unlockPointer(); P.aiming = false; mouse.left = mouse.right = false;
   $('menu').hidden = false; renderMenu(); sfx.ui();
-  if (m.title === 'Calder Mini Mart') play('shopbell', { vol: 0.45 }); else if (m.indoor) sfx.door(P.pos.x, P.pos.z);
+  if (m.title === 'Calder Mini Mart' || m.title === 'Ironside Fuel') play('shopbell', { vol: 0.45 }); else if (m.indoor) sfx.door(P.pos.x, P.pos.z);
 }
 function renderMenu() {
   const m = MENU; if (!m) return;
@@ -269,11 +273,11 @@ function openStudioMenu() {
     },
   });
 }
-function openStoreMenu() {
+function openStoreMenu(kind) {
   if (blockedInside()) return;
   const buy = (price, fn, msg) => () => { if (S.cash < price) { $('mn-sub').textContent = 'Not enough cash.'; return; } addCash(-price); fn(); $('mn-sub').textContent = msg; renderMenu(); hudDirty = true; };
   openMenu({
-    eyebrow: LOC.store.addr, title: 'Calder Mini Mart', indoor: true, sub: 'Hot coffee, hand warmers, first aid. Ammo behind the counter.',
+    eyebrow: kind === 'gas' ? 'Ironside Rd · open 24 hours' : LOC.store.addr, title: kind === 'gas' ? 'Ironside Fuel' : 'Calder Mini Mart', indoor: true, sub: 'Hot coffee, hand warmers, first aid. Ammo behind the counter.',
     items: () => {
       const it = [
         { label: 'Hot coffee', desc: 'Warmth +35 now, slower chill for 60s.', hint: '$8', act: buy(8, () => { S.warmth = Math.min(100, S.warmth + 35); S.buffs.coffee = 60; }, 'Coffee. Black, still hot.') },
@@ -306,6 +310,7 @@ function openHomeMenu() {
       const cd = cdLeft('laylow');
       return [
         { label: 'Lay low', desc: 'Stay in a while. Heat −20, health and warmth back up, Buzz −2.', hint: cd > 0 ? `${Math.ceil(cd)}s` : 'Heat −20', disabled: cd > 0, act: () => layLow() },
+        { label: 'Wardrobe', desc: 'Change your fit. Other players see it right away.', hint: 'Skins', act: () => { closeMenu(true); openWardrobe('game'); } },
         { label: 'Save progress', desc: 'Saved in this browser.', hint: '', act: () => { saveGame(); $('mn-sub').textContent = 'Saved.'; } },
         leaveItem(),
       ];
@@ -453,7 +458,7 @@ function renderApp() {
   else if (id === 'maps') {
     add('<canvas id="ph-map" width="600" height="600"></canvas><div class="legend"></div><div class="job-s" style="margin-top:8px">Tap the map to drop a waypoint.</div>');
     const cv = $('ph-map'); drawBigMap(cv);
-    cv.onclick = e => { const r = cv.getBoundingClientRect(); const x = (e.clientX - r.left) / r.width * 300 - 150, z = (e.clientY - r.top) / r.height * 300 - 150; S.waypoint = { x, z }; MM.routeT = 0; drawBigMap(cv); act.textContent = 'Clear'; sfx.ui(); };
+    cv.onclick = e => { const r = cv.getBoundingClientRect(); const x = (e.clientX - r.left) / r.width * 2 * MAP_HALF - MAP_HALF, z = (e.clientY - r.top) / r.height * 2 * MAP_HALF - MAP_HALF; S.waypoint = { x, z }; MM.routeT = 0; drawBigMap(cv); act.textContent = 'Clear'; sfx.ui(); };
     act.textContent = S.waypoint ? 'Clear' : ''; act.onclick = () => { S.waypoint = null; renderApp(); };
     body.querySelector('.legend').innerHTML = [['#fff', 'You'], ['#7be0a6', 'Your car'], ['#ff7a2a', 'Fire barrels'], ['#4aa3ff', 'Players'], ['#ff4b3a', 'Halo crew']].map(([c, t]) => `<span><i style="--c:${c}"></i>${t}</span>`).join('') + `<span>Next L at Calder: ${Math.ceil(nextTrainIn())}s</span>`;
   } else if (id === 'camera') renderCamera(body, add);
@@ -492,13 +497,16 @@ function renderApp() {
       <div class="set-row"><span>Volume</span><input type="range" id="ps-vol" min="0" max="1" step="0.05" value="${st.vol}"><output>${Math.round(st.vol * 100)}</output></div>
       <div class="set-row"><span>Music</span><input type="range" id="ps-music" min="0" max="1" step="0.05" value="${st.music}"><output>${Math.round(st.music * 100)}</output></div>
       <div class="sec">Sound check</div><div class="set-row" style="display:block"><div id="ps-audio" style="font:500 12px/1.4 var(--f-mono);color:var(--ink-2);margin-bottom:8px">${esc(audioInfo())}</div><button class="btn" id="ps-test" style="width:100%">Play test sound</button></div>
+      <div class="sec">Camera</div><div class="seg"><button data-fp="0" class="${!st.fp ? 'on' : ''}">Third person<small>over the shoulder</small></button><button data-fp="1" class="${st.fp ? 'on' : ''}">First person<small>V to switch</small></button></div>
+      <div class="set-row"><span>Field of view</span><input type="range" id="ps-fov" min="60" max="95" step="1" value="${st.fov || 70}"><output>${Math.round(st.fov || 70)}</output></div>
       <div class="sec">Graphics</div><div class="seg"><button data-q="high" class="${st.quality !== 'low' ? 'on' : ''}">High<small>shadows · AA</small></button><button data-q="low" class="${st.quality === 'low' ? 'on' : ''}">Fast<small>no shadows</small></button></div>
       <div class="sec">Car radio</div><div class="seg seg-wrap">${STATIONS.map((n, i) => `<button data-r="${i}" class="${st.radio === i ? 'on' : ''}">${n.short}</button>`).join('')}</div>
       <div class="sec">Audio</div><div class="seg"><button data-sc="1" class="${st.score !== false ? 'on' : ''}">Score<small>music on foot</small></button><button data-sc="0" class="${st.score === false ? 'on' : ''}">No score<small>city only</small></button></div>
       <div class="seg"><button data-vo="1" class="${st.voices !== false ? 'on' : ''}">Voices<small>PA · megaphone</small></button><button data-vo="0" class="${st.voices === false ? 'on' : ''}">Mute voices<small>subtitles only</small></button></div>
       <div class="sec">Game</div><button class="btn" id="ps-exit" style="width:100%">Save &amp; exit to title</button>`);
     const bind = (id2, key, f) => { const el = $(id2); el.oninput = () => { st[key] = +el.value; el.nextElementSibling.textContent = f(+el.value); applyVolumes(); }; };
-    bind('ps-sens', 'sens', v => v.toFixed(1)); bind('ps-vol', 'vol', v => Math.round(v * 100)); bind('ps-music', 'music', v => Math.round(v * 100));
+    bind('ps-sens', 'sens', v => v.toFixed(1)); bind('ps-fov', 'fov', v => Math.round(v));
+    body.querySelectorAll('[data-fp]').forEach(b => b.onclick = () => { st.fp = b.dataset.fp === '1'; if (!st.fp) fpHide(); renderApp(); }); bind('ps-vol', 'vol', v => Math.round(v * 100)); bind('ps-music', 'music', v => Math.round(v * 100));
     body.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { st.quality = b.dataset.q; applyQuality(); renderApp(); });
     body.querySelectorAll('[data-r]').forEach(b => b.onclick = () => { st.radio = +b.dataset.r; radioRefresh(true); renderApp(); });
     body.querySelectorAll('[data-sc]').forEach(b => b.onclick = () => { st.score = b.dataset.sc === '1'; renderApp(); });
@@ -576,9 +584,9 @@ function playPreview(idx) {
 function stopPreview() { if (PHONE.preview) { killBus(PHONE.preview.B); clearTimeout(PHONE.preview.end); PHONE.preview = null; } }
 function drawBigMap(cv) {
   if (!MAP.c) buildStaticMap();
-  const g = cv.getContext('2d'), W = cv.width, s = W / 300, X = x => (x + 150) * s;
+  const g = cv.getContext('2d'), W = cv.width, s = W / (2 * MAP_HALF), X = x => (x + MAP_HALF) * s;
   g.drawImage(MAP.c, 0, 0, W, W);
-  const lm = [[LOC.studio, 'Basement 808'], [LOC.store, 'Mini Mart'], [LOC.rec, 'Rec'], [LOC.home, 'Home'], [{ x: 70, z: 0 }, 'Calder L'], [POND, 'Pond'], [LOC.station, 'Area 7'], [LOC.hospital, 'Hospital'], [LOC.dealer, 'Marrow Motors']];
+  const lm = [[LOC.studio, 'Basement 808'], [LOC.store, 'Mini Mart'], [LOC.rec, 'Rec'], [LOC.home, 'Home'], [{ x: 70, z: 0 }, 'Calder L'], [POND, 'Pond'], [LOC.station, 'Area 7'], [LOC.hospital, 'Hospital'], [LOC.dealer, 'Marrow Motors'], [LOC.court, 'Garnet Courts'], [LOC.gas, 'Ironside Fuel'], [LOC.lakefront, 'Lakefront'], [LOC.yard, 'Rail yard']];
   g.font = '700 13px Inter, sans-serif';
   for (const [p, t] of lm) { g.fillStyle = '#fff'; g.fillRect(X(p.x) - 3, X(p.z) - 3, 6, 6); g.fillStyle = 'rgba(255,255,255,.85)'; g.fillText(t, X(p.x) + 6, X(p.z) - 5); }
   for (const B of BARRELS) { g.fillStyle = '#ff7a2a'; g.beginPath(); g.arc(X(B.x), X(B.z), 4, 0, TAU); g.fill(); }

@@ -446,9 +446,28 @@ function onTrackReleased(tr) {
 /* =========================================================
    INTERACTIONS (E)
    ========================================================= */
+function shootAround() {
+  if (cdLeft('hoops') > 0) return;
+  setCd('hoops', 45);
+  const made = Math.round(clamp(2 + Math.random() * 7 + (S.buzz > 60 ? 1 : 0), 1, 10));
+  P.poseT = 1.4; S.warmth = Math.min(100, S.warmth + 18);
+  S.stats.hoops = (S.stats.hoops || 0) + 1;
+  addBuzz(made >= 7 ? 3 : 1);
+  banner(`${made}/10 at Garnet Courts`, made >= 7 ? 'Buzz +3 · warmed up' : 'Buzz +1 · warmed up');
+  if (made >= 8) postFeed('@garnet.courts', `@${S.name} hit ${made}/10 at Garnet Courts in this cold 🥶🏀`);
+  hudDirty = true;
+}
+function lakeView() {
+  if (cdLeft('lake') > 0) return;
+  setCd('lake', 120); addHeat(-4); P.poseT = 1.2;
+  banner('Lake effect', 'Heat −4 · the city goes quiet out here');
+}
 const INTERACT = [
   { id: 'studio', x: LOC.studio.x, z: LOC.studio.z, r: 2.4, label: () => 'Enter Basement 808', act: () => openStudioMenu() },
   { id: 'store', x: LOC.store.x, z: LOC.store.z, r: 3.2, label: () => 'Enter Calder Mini Mart', act: () => openStoreMenu() },
+  { id: 'gas', x: -23.5, z: -208.6, r: 3.0, label: () => 'Enter Ironside Fuel', act: () => openStoreMenu('gas') },
+  { id: 'court', x: LOC.court.x, z: LOC.court.z, r: 8.5, label: () => cdLeft('hoops') > 0 ? `Catch your breath · ${Math.ceil(cdLeft('hoops'))}s` : 'Shoot around · warms you up', act: () => shootAround() },
+  { id: 'lake', x: LAKE_X + 19, z: -38, r: 3.2, label: () => cdLeft('lake') > 0 ? 'The lake is quiet' : 'Look out over the lake · Heat −4', act: () => lakeView() },
   { id: 'rec', x: LOC.rec.x, z: LOC.rec.z, r: 2.6, label: () => 'Enter the rec center', act: () => openRecMenu() },
   { id: 'home', x: LOC.home.x, z: LOC.home.z, r: 2.4, label: () => 'Go inside (home)', act: () => openHomeMenu() },
   { id: 'video', x: LOC.platform.x, y: PLAT_Y, z: LOC.platform.z, r: 2.6, label: () => jobAvailable('video') && !S.job ? 'Start the video shoot · $150' : null, act: () => startVideo() },

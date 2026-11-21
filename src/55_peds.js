@@ -39,10 +39,7 @@ const PEDS = [];
 const N_PEDS = IS_TOUCH ? 8 : 16;
 const PED_JACKETS = [0x1d1f24, 0x2a3a4e, 0x4a2a22, 0x5a5e66, 0x6a5040, 0x233a2a, 0x7a1e22, 0x3a2e4a, 0x8a7a5a, 0x15181c, 0xb0a890];
 const PED_SKIN = [0x5a3a26, 0x7a4a30, 0x4a2e1e, 0x8a5a3a, 0xa87a58, 0xc89a78, 0x6b4630];
-function pedLook() {
-  const j = pick(PED_JACKETS);
-  return { jacket: j, jacket2: new THREE.Color(j).multiplyScalar(1.25).getHex(), pants: pick([0x1a1c22, 0x23262e, 0x2a3040, 0x3a3228]), skin: pick(PED_SKIN), hat: Math.random() < 0.65 ? pick([0x1a1a1a, 0x8a1c24, 0x2a4a7a, 0xd8d8d8, 0x6a5a3a, 0xc07a2a]) : null, pom: Math.random() < 0.3 ? 0xeeeeee : undefined, coat: Math.random() < 0.3, hood: Math.random() < 0.35, pack: Math.random() < 0.18 ? pick([0x2a2a2a, 0x6a2a2a, 0x2a4a6a]) : undefined, scale: rand(0.9, 1.06), shoes: pick([0x15171a, 0xdedede, 0x5a3a22]) };
-}
+function pedLook() { return skinHumanOpts(randomSkin()); }
 // sidewalk corner graph on the 3x3 street grid
 const SW = 8;
 const cornerPos = (ix, iz, sx, sz) => ({ x: XL[ix] + SW * sx, z: ZL[iz] + SW * sz });

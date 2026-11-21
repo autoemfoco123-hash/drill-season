@@ -13,17 +13,23 @@ const P = {
   human: null, gun: null, gunKey: '', stats: null, triggerLatch: false,
 };
 let camYaw = Math.PI, camPitch = -0.12, camDist = 3.9;
-function buildPlayer() {
-  P.human = buildHuman({ jacket: 0x262b33, jacket2: 0x343a44, pants: 0x1b2533, skin: 0x6b4630, hat: 0xff8a2a, pom: 0xff8a2a, shoes: 0xdedede, hood: true });
+function buildPlayer() { applyPlayerSkin(); }
+// (re)build the player's body from S.skin, keeping where it stands
+function applyPlayerSkin() {
+  const old = P.human;
+  S.skin = cleanSkin(S.skin);
+  P.human = buildHuman(skinHumanOpts(S.skin));
+  if (old) { P.human.group.position.copy(old.group.position); P.human.group.rotation.y = old.group.rotation.y; P.human.group.visible = old.group.visible; scene.remove(old.group); }
   scene.add(P.human.group);
-  refreshPlayerGun();
+  P.gunKey = ''; P.gun = null; refreshPlayerGun();
+  NET.skEnc = encodeSkin(S.skin);
 }
 function refreshPlayerGun() {
   const cfg = S.guns[S.cur].cfg;
   const key = S.cur + JSON.stringify(cfg);
   P.stats = gunStats(S.cur);
   if (key === P.gunKey && P.gun) return;
-  if (P.gun) P.human.AR.hand.remove(P.gun);
+  if (P.gun && P.gun.parent) P.gun.parent.remove(P.gun);
   P.gun = buildGun(S.cur, cfg);
   P.gun.rotation.x = Math.PI / 2; P.gun.position.set(0, -0.03, 0.02); P.gun.scale.setScalar(1.35);
   P.human.AR.hand.add(P.gun);
@@ -93,7 +99,7 @@ function updatePlayer(dt) {
     S.stats.dist += P.speed * dt;
   }
   // face direction
-  const faceAim = P.aimT > 0.2 || GAME_T - P.lastShot < 0.6;
+  const faceAim = P.aimT > 0.2 || GAME_T - P.lastShot < 0.6 || fpOn();
   let targetYaw = P.bodyYaw;
   if (faceAim) targetYaw = camYaw + Math.PI;
   else if (P.speed > 0.4) targetYaw = Math.atan2(P.vel.x, P.vel.z);
@@ -101,7 +107,8 @@ function updatePlayer(dt) {
   const H = P.human;
   H.group.position.copy(P.pos);
   H.group.rotation.y = P.bodyYaw;
-  animHuman(H, dt, { speed: P.speed, crouch: P.crouch && !P.aiming ? 1 : (P.crouch ? 0.6 : 0), aim: Math.max(P.aimT, GAME_T - P.lastShot < 0.5 ? 1 : 0), pitch: camPitch, down: down ? clamp(P.downT, 0, 1) : 0, twoHand: S.cur !== 'k9', shiver: S.warmth < 30 ? 1 : 0, hands: P.handsUp > 0, pose: P.pose > 0 || (PHONE.selfie && MODE === 'phone') });
+  animHuman(H, dt, { speed: P.speed, crouch: P.crouch && !P.aiming ? 1 : (P.crouch ? 0.6 : 0), aim: Math.max(P.aimT, GAME_T - P.lastShot < 0.5 ? 1 : 0), pitch: camPitch, down: down ? clamp(P.downT, 0, 1) : 0, twoHand: S.cur !== 'k9', shiver: S.warmth < 30 ? 1 : 0, hands: P.handsUp > 0, pose: P.pose > 0 || (PHONE.selfie && MODE === 'phone') , wave: (P.waveT || 0) > 0 && !P.aiming, pose: (P.poseT || 0) > 0 });
+  P.waveT = Math.max(0, (P.waveT || 0) - dt); P.poseT = Math.max(0, (P.poseT || 0) - dt);
   if (P.gun) P.gun.visible = !(P.handsUp > 0) && !(PHONE.selfie && MODE === 'phone');
   // timers
   P.fireCd -= dt; P.switchT -= dt; P.bloom = Math.max(0, P.bloom - dt * 2.2);
@@ -125,6 +132,8 @@ function windExposure(x, z, y) {
 /* ---- camera ---- */
 let FOV_T = 62;
 function updateCarCamera(dt) {
+  if (fpOn()) { updateCarFP(dt); return; }
+  if (FP.cockpit) FP.cockpit.visible = false;
   const v = P.car, sp = Math.abs(v.speed);
   if (REAL_T - (P.lastLook || 0) > 1.4) { camYaw += angDiff(camYaw, v.yaw + Math.PI) * (1 - Math.exp(-dt * 2.6)); camPitch += (-0.16 - camPitch) * (1 - Math.exp(-dt * 2)); }
   P.shake = Math.max(0, P.shake - dt * 1.8);
@@ -154,7 +163,9 @@ function updateSelfieCamera(dt) {
 }
 function updateCamera(dt) {
   if (P.car) { updateCarCamera(dt); return; }
-  if (PHONE.selfie && MODE === 'phone') { updateSelfieCamera(dt); return; }
+  if (PHONE.selfie && MODE === 'phone') { fpHide(); updateSelfieCamera(dt); return; }
+  if (fpActive()) { updateFPCamera(dt); return; }
+  fpHide();
   const st = P.stats || gunStats(S.cur);
   const crouchH = P.crouch ? (P.aiming ? 1.32 : 1.05) : 1.58;
   P.pivotY += (P.pos.y + crouchH - P.pivotY) * (1 - Math.exp(-dt * 14));
@@ -241,7 +252,7 @@ function tryFire() {
   const chestX = P.pos.x, chestY = P.pivotY - 0.15, chestZ = P.pos.z;
   const t0 = Math.max(0.3, (chestX - _org.x) * _fwd.x + (chestY - _org.y) * _fwd.y + (chestZ - _org.z) * _fwd.z);
   _org.addScaledVector(_fwd, t0);
-  P.gun.userData.muzzle.getWorldPosition(_mz);
+  (fpActive() && FP.gun && FP.vm && FP.vm.visible ? FP.gun : P.gun).userData.muzzle.getWorldPosition(_mz); if (fpActive()) FP.kick = 1;
   const movingK = P.speed > 1 ? 1.35 : 1;
   const spreadDeg = lerp(st.spread, st.aimSpread, P.aimT) * movingK * (P.crouch ? 0.8 : 1) * (1 + P.bloom);
   let hitAny = false, headAny = false;

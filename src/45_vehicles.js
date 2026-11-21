@@ -102,7 +102,7 @@ const _zeroM = new THREE.Matrix4().makeScale(0, 0, 0);
 for (const model of CAR_MODELS) {
   const sp = CAR_SPECS[model];
   const g = buildCarGeo(sp); sp.roofY = g.roofY; sp.wbLen = sp.wb[1] - sp.wb[0];
-  const cap = model === 'police' ? 16 : 36;
+  const cap = model === 'police' ? 16 : 44;
   const mk = (geo, mat, shadow) => { const m = new THREE.InstancedMesh(geo, mat, cap); m.frustumCulled = false; m.castShadow = shadow; m.receiveShadow = shadow; for (let i = 0; i < cap; i++) m.setMatrixAt(i, _zeroM); scene.add(m); return m; };
   const M = { paint: mk(g.paint, MAT.carPaint, true), trim: mk(g.trim, MAT.carTrim, true), emis: mk(g.emis, MAT.carEmis, false), bar: g.bar ? mk(g.bar, MAT.carBar, false) : null, free: [], dirty: false };
   for (let i = 0; i < cap; i++) { M.paint.setColorAt(i, new THREE.Color(1, 1, 1)); if (M.bar) M.bar.setColorAt(i, new THREE.Color(0.1, 0.1, 0.1)); }
@@ -301,7 +301,7 @@ function spawnTrafficCar(nearX, nearZ, minD, maxD) {
     const axis = Math.random() < 0.5 ? 'x' : 'z';
     const line = pick(axis === 'x' ? GRID_Z : GRID_X);
     const dir = Math.random() < 0.5 ? 1 : -1;
-    const range = axis === 'x' ? [-92, 68] : [-88, 88];
+    const cs = axis === 'x' ? GRID_X : GRID_Z, range = [cs[0] + 12, cs[cs.length - 1] - 12];
     const along = rand(range[0], range[1]);
     const p = laneXZ({ axis, line, dir }, along);
     const d = Math.hypot(p.x - nearX, p.z - nearZ);
@@ -332,13 +332,39 @@ function trafficDirector(dt) {
 
 /* ---- parked cars from the world's parking spots ---- */
 const OWN_SPOT = { x: -4.6, z: -32, yaw: 0 };
+// Parked cars stream in around you (the district has hundreds of spots); dealer, police lot and story cars always stay.
+const PARKED = new Map();
+function spawnAtSpot(i) {
+  const s = PARK_SPOTS[i];
+  if (Math.hypot(s.x - OWN_SPOT.x, s.z - OWN_SPOT.z) < 7) return null;
+  if (VEH.some(o => Math.hypot(o.pos.x - s.x, o.pos.z - s.z) < 4)) return null;
+  if (!s.model && s.pick === undefined) s.pick = Math.floor(Math.random() * 8);
+  const model = s.model || ['hatch', 'sedan', 'sedan', 'suv', 'pickup', 'coupe', 'van', 'hatch'][s.pick];
+  if (!s.model && s.color === undefined) s.paint = s.paint !== undefined ? s.paint : pick(CAR_PAINTS);
+  const v = spawnVehicle(model, s.x, s.z, s.yaw !== undefined ? s.yaw : (s.alongX ? Math.PI / 2 : 0), { parked: true, color: s.color !== undefined ? s.color : s.paint, locked: s.locked, tag: s.tag });
+  if (v && model === 'police') v.parkedPolice = true;
+  if (v) { v.spot = i; PARKED.set(i, v); }
+  return v;
+}
 function spawnParkedCars() {
-  for (const s of PARK_SPOTS) {
-    if (Math.hypot(s.x - OWN_SPOT.x, s.z - OWN_SPOT.z) < 7) continue;
-    const model = s.model || pick(['hatch', 'sedan', 'sedan', 'suv', 'pickup', 'coupe', 'van', 'hatch']);
-    const v = spawnVehicle(model, s.x, s.z, s.yaw !== undefined ? s.yaw : (s.alongX ? Math.PI / 2 : 0), { parked: true, color: s.color, locked: s.locked, tag: s.tag });
-    if (v && model === 'police') v.parkedPolice = true;
+  PARK_SPOTS.forEach((s, i) => { if (s.tag || s.model) { s.keep = true; spawnAtSpot(i); } });
+  parkedDirector(true);
+}
+let parkedT = 0;
+function parkedDirector(force) {
+  parkedT -= 1 / 60; if (!force && parkedT > 0) return; parkedT = 0.8;
+  const fx = MODE === 'title' ? TITLE.spot.x : P.pos.x, fz = MODE === 'title' ? TITLE.spot.z : P.pos.z;
+  for (let i = 0; i < PARK_SPOTS.length; i++) {
+    const s = PARK_SPOTS[i], d = Math.hypot(s.x - fx, s.z - fz), v = PARKED.get(i);
+    if (v) {
+      const gone = v.dead || !VEH.includes(v);
+      const moved = !gone && Math.hypot(v.pos.x - s.x, v.pos.z - s.z) > 2;
+      if (gone || moved || v.driver || v.owned) { PARKED.delete(i); continue; }
+      if (!s.keep && d > 175 && !v.awake) { removeVehicle(v); PARKED.delete(i); }
+    } else if (!s.keep && d < 130) spawnAtSpot(i);
   }
+  // cars knocked off their spots and left far away get cleaned up too
+  for (const v of [...VEH]) if (v.spot !== undefined && !PARKED.has(v.spot) && !v.driver && !v.owned && !v.tag && !v.ai && !v.copAI && !v.remote && v !== OWN_CAR && Math.hypot(v.pos.x - fx, v.pos.z - fz) > 220) removeVehicle(v);
 }
 let OWN_CAR = null;
 function spawnOwnedCar(idx, near) {
@@ -445,6 +471,7 @@ function updateVehicles(dt) {
     HEADLIGHT.target.position.set(pc.pos.x + f.x * 22, 0, pc.pos.z + f.z * 22); HEADLIGHT.target.updateMatrixWorld();
   } else HEADLIGHT.intensity = 0;
   trafficDirector(dt);
+  parkedDirector();
   updateEngine();
   radioTick();
 }

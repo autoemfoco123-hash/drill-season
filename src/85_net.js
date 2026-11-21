@@ -36,13 +36,13 @@ async function initNet() {
 }
 function presencePayload() {
   const r1 = v => Math.round(v * 10) / 10;
-  const f = (P.crouch ? 1 : 0) | (P.aimT > 0.5 || GAME_T - P.lastShot < 0.5 ? 2 : 0) | (P.dead || P.downT > 0 ? 4 : 0) | (P.sprinting ? 8 : 0) | (MODE !== 'play' && MODE !== 'phone' ? 16 : 0);
+  const f = (P.crouch ? 1 : 0) | (P.aimT > 0.5 || GAME_T - P.lastShot < 0.5 ? 2 : 0) | (P.dead || P.downT > 0 ? 4 : 0) | (P.sprinting ? 8 : 0) | (MODE !== 'play' && MODE !== 'phone' ? 16 : 0) | ((P.waveT || 0) > 0 ? 32 : 0);
   return {
     v: 1, n: netName().slice(0, 16), x: r1(P.pos.x), y: r1(P.pos.y), z: r1(P.pos.z), r: Math.round(P.bodyYaw * 100) / 100, p: Math.round(camPitch * 100) / 100,
     s: r1(P.speed), f, g: GUN_IDX.indexOf(S.cur), h: Math.round(S.heat), b: Math.round(S.buzz), sh: NET.shots.slice(-6),
     dn: NET.down || null, wa: NET.wa || null,
     car: P.car ? [CAR_MODELS.indexOf(P.car.model), P.car.color, r1(P.car.pos.x), r1(P.car.pos.z), Math.round(P.car.yaw * 100) / 100, r1(P.car.speed), RADIO.on ? S.settings.radio : 0] : null,
-    wl: WANTED.level,
+    wl: WANTED.level, sk: NET.skEnc || null,
   };
 }
 function updateNetPresence(dt) {
@@ -74,13 +74,23 @@ function onPeersChange(ch) {
   hudDirty = true;
 }
 function cleanName(n) { return String(n || 'artist').replace(/[^\w.\-]/g, '').slice(0, 16) || 'artist'; }
+function remoteHuman(R, skArr) {
+  const sk = decodeSkin(skArr);
+  let opts;
+  if (sk) opts = skinHumanOpts(sk);
+  else { const c = new THREE.Color(R.col); opts = { jacket: c.clone().multiplyScalar(0.35).getHex(), jacket2: c.clone().multiplyScalar(0.5).getHex(), pants: 0x1b2230, skin: 0x6b4630, hat: c.getHex(), pom: c.getHex(), shoes: 0xdedede, hood: true }; }
+  const old = R.h, h = buildHuman(opts);
+  if (old) { h.group.position.copy(old.group.position); h.group.rotation.y = old.group.rotation.y; h.group.visible = old.group.visible; scene.remove(old.group); }
+  scene.add(h.group); R.h = h; R.skKey = sk ? skArr.join('.') : '';
+  if (R.plate) h.group.add(R.plate);
+  if (R.gun) h.AR.hand.add(R.gun);
+}
 function makeRemote(peer, pr) {
   const name = cleanName(pr.n);
   const col = hashColor(name);
   const c = new THREE.Color(col);
-  const h = buildHuman({ jacket: c.clone().multiplyScalar(0.35).getHex(), jacket2: c.clone().multiplyScalar(0.5).getHex(), pants: 0x1b2230, skin: pick([0x5a3a26, 0x7a4a30, 0x6b4630, 0x8a5a3a, 0xa87a58]), hat: c.getHex(), pom: c.getHex(), shoes: 0xdedede, hood: true });
-  scene.add(h.group);
-  const R = { peer, name, col, h, pos: new THREE.Vector3(pr.x, pr.y || 0, pr.z), tgt: new THREE.Vector3(pr.x, pr.y || 0, pr.z), yaw: pr.r || 0, tyaw: pr.r || 0, f: 0, s: 0, p: 0, g: -1, gun: null, plate: null, lastShot: 0, lastDn: null, lastWa: null, h_: 0, b_: 0, seen: performance.now(), created: performance.now() };
+  const R = { peer, name, col, h: null, pos: new THREE.Vector3(pr.x, pr.y || 0, pr.z), tgt: new THREE.Vector3(pr.x, pr.y || 0, pr.z), yaw: pr.r || 0, tyaw: pr.r || 0, f: 0, s: 0, p: 0, g: -1, gun: null, plate: null, lastShot: 0, lastDn: null, lastWa: null, h_: 0, b_: 0, seen: performance.now(), created: performance.now() };
+  remoteHuman(R, pr.sk);
   setRemotePlate(R);
   return R;
 }
@@ -92,6 +102,7 @@ function setRemotePlate(R) {
 function removeRemote(R) { scene.remove(R.h.group); if (R.veh) { removeVehicle(R.veh); R.veh = null; } }
 function applyPresence(R, pr) {
   R.seen = performance.now();
+  if (Array.isArray(pr.sk) && pr.sk.join('.') !== R.skKey) remoteHuman(R, pr.sk);
   const nm = cleanName(pr.n);
   const tier = heatTier(+pr.h || 0);
   if (nm !== R.name || tier !== heatTier(R.h_)) { R.name = nm; R.h_ = +pr.h || 0; setRemotePlate(R); }
@@ -194,7 +205,7 @@ function updateRemotes(dt) {
     R.yaw += angDiff(R.yaw, R.tyaw) * k;
     R.h.group.position.copy(R.pos); R.h.group.rotation.y = R.yaw;
     const aim = (R.f & 2) ? 1 : 0, down = (R.f & 4) ? 1 : 0;
-    animHuman(R.h, dt, { speed: R.s, crouch: (R.f & 1) && !aim, aim, pitch: R.p, down, twoHand: R.g > 0 });
+    animHuman(R.h, dt, { speed: R.s, crouch: (R.f & 1) && !aim, aim, pitch: R.p, down, twoHand: R.g > 0, wave: !!(R.f & 32) && !aim });
     // soft body push so players don't overlap
     const dx = P.pos.x - R.pos.x, dz = P.pos.z - R.pos.z, d = Math.hypot(dx, dz);
     if (d < 0.75 && d > 0.01 && Math.abs(P.pos.y - R.pos.y) < 1.5) { P.pos.x += dx / d * (0.75 - d) * 0.5; P.pos.z += dz / d * (0.75 - d) * 0.5; }

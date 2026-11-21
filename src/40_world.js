@@ -198,6 +198,25 @@ function building(x0, z0, x1, z1, h, styleIdx, variant, face) {
   addCol(x0, 0, z0, x1, h, z1, 'building');
 }
 
+/* ---- districts ---- */
+const NBX = XB.length - 1, NBZ = ZB.length - 1;
+function districtOf(i, j) {
+  if (i === 2 && j === 3) return 'park';
+  if (i === NBX - 1) return 'lake';        // Shore Dr lakefront
+  if (i === 0) return 'yard';              // Kessler rail yard
+  if (j === 0) return 'industry';          // Ironside industrial strip
+  if (i === NBX - 2) return 'ware';        // warehouses east of the L
+  if (j === NBZ - 2 && i >= 1 && i <= 3) return 'courts';  // Garnet Courts towers
+  if (j === NBZ - 1) return 'rows';        // two-flats south of Sable St
+  return 'res';
+}
+const ALLEYS = [];
+for (let i = 0; i < NBX; i++) for (let j = 0; j < NBZ; j++) {
+  const d = districtOf(i, j); if (d === 'park' || d === 'lake' || d === 'yard' || d === 'courts') continue;
+  const b = blockRect(i, j); if (b.z1 - b.z0 < 50) continue;
+  ALLEYS.push([b.x0 + (i === 0 ? 8 : 0), b.x1, (b.z0 + b.z1) / 2]);
+}
+
 /* ---- ground, roads, sidewalks ---- */
 (function ground() {
   const g = new THREE.PlaneGeometry(3000, 3000); g.rotateX(-Math.PI / 2);
@@ -210,16 +229,19 @@ function building(x0, z0, x1, z1, h, styleIdx, variant, face) {
     for (let i = 0; i < uvA.count; i++) { const u = uvA.getX(i), v = uvA.getY(i); if (alongX) uvA.setXY(i, u * L / tile, v * (vTile ? W / vTile : 1)); else uvA.setXY(i, v * L / tile, u * (vTile ? W / vTile : 1)); }
     batch.add(geo, mtx((x0 + x1) / 2, y, (z0 + z1) / 2, x1 - x0, 1, z1 - z0), 0xffffff);
   };
-  for (const z of ZL) { quad(roadB, -160, z - ROAD_HW, 160, z + ROAD_HW, 0.012, true, 12); quad(walkB, -160, z - WALK_EDGE, 160, z - ROAD_HW, 0.006, true, 4, 4); quad(walkB, -160, z + ROAD_HW, 160, z + WALK_EDGE, 0.006, true, 4, 4); }
-  for (const x of XL) { quad(roadB, x - ROAD_HW, -160, x + ROAD_HW, 160, 0.016, false, 12); quad(walkB, x - WALK_EDGE, -160, x - ROAD_HW, 160, 0.008, false, 4, 4); quad(walkB, x + ROAD_HW, -160, x + WALK_EDGE, 160, 0.008, false, 4, 4); }
+  const E = MAP_HALF + 10;
+  for (const z of ZL) { quad(roadB, -E, z - ROAD_HW, ROAD_X_END, z + ROAD_HW, 0.012, true, 12); quad(walkB, -E, z - WALK_EDGE, ROAD_X_END, z - ROAD_HW, 0.006, true, 4, 4); quad(walkB, -E, z + ROAD_HW, ROAD_X_END, z + WALK_EDGE, 0.006, true, 4, 4); }
+  for (const x of XL) { quad(roadB, x - ROAD_HW, -E, x + ROAD_HW, E, 0.016, false, 12); quad(walkB, x - WALK_EDGE, -E, x - ROAD_HW, E, 0.008, false, 4, 4); quad(walkB, x + ROAD_HW, -E, x + WALK_EDGE, E, 0.008, false, 4, 4); }
+  // lakefront promenade
+  quad(walkB, ROAD_X_END, -E, LAKE_X - 6, E, 0.007, false, 4, 4);
   const rm = new THREE.Mesh(roadB.build(), MAT.road); rm.receiveShadow = true; scene.add(rm);
   const wm = new THREE.Mesh(walkB.build(), MAT.walk); wm.receiveShadow = true; scene.add(wm);
   // alleys (slushy)
   const alleyB = new Batch();
-  for (const [x0, x1, z] of [[-85, -10, -45], [10, 60, -45], [80, 147, -45], [10, 60, 45], [80, 147, 45], [-147, -105, -45], [-147, -105, 45]]) quad(alleyB, x0, z - 3, x1, z + 3, 0.01, true, 12);
+  for (const [x0, x1, z] of ALLEYS) quad(alleyB, x0, z - 3, x1, z + 3, 0.01, true, 12);
   const am = new THREE.Mesh(alleyB.build(), MAT.road); am.receiveShadow = true; scene.add(am);
   // world bounds
-  for (const [x0, z0, x1, z1] of [[-160, -160, 160, -BOUND - 0.5], [-160, BOUND + 0.5, 160, 160], [-160, -160, -BOUND - 0.5, 160], [BOUND + 0.5, -160, 160, 160]]) addCol(x0, 0, z0, x1, 40, z1, 'bound');
+  for (const [x0, z0, x1, z1] of [[-E, -E, E, -BOUND - 0.5], [-E, BOUND + 0.5, E, E], [-E, -E, -BOUND - 0.5, E], [BOUND + 0.5, -E, E, E]]) addCol(x0, 0, z0, x1, 40, z1, 'bound');
 })();
 
 /* ---- the L: deck, columns, tracks, station ---- */
@@ -238,7 +260,7 @@ const BED_X0 = 64.4, BED_X1 = 75.6;
     vbox(B_PROPS, tx + (tx < LX ? -1.35 : 1.35), DECK_Y, 0, 0.2, 0.2, 640, 0x8a7a3a);
     for (let z = -300; z < 300; z += 1.2) vbox(B_PROPS, tx, DECK_Y - 0.02, z, 2.2, 0.06, 0.25, 0x2a221c);
   }
-  for (let z = -144; z <= 144; z += 16) {
+  for (let z = -(MAP_HALF - 6); z <= MAP_HALF - 6; z += 16) {
     if (ZL.some(l => Math.abs(z - l) < 11)) continue;
     for (const cx of [BED_X0 + 0.6, BED_X1 - 0.6]) {
       solid(cx, 0, z, 0.7, DECK_Y0 - 0.9, 0.7, steel, 'column');
@@ -433,6 +455,118 @@ function signPlane(text, x, y, z, w, h, ry, opts) {
   vbox(B_EMIS, 67.1, 1.2, -102.6, 0.6, 0.08, 0.12, 0x2050ff);
 })();
 
+/* ---- new districts: Kessler rail yard, Shore Dr lakefront, Garnet Courts hoops, Ironside Fuel ---- */
+const roadGapZ = (z, m) => ZL.some(l => Math.abs(z - l) < (m || WALK_EDGE + 1));
+function zSegments(z0, z1, m) { // stretches of a N-S line that don't cross an E-W street
+  const segs = []; let a = z0;
+  for (const l of ZL) { if (l - m > a && l - m < z1) { segs.push([a, l - m]); a = l + m; } else if (l + m > a && l - m <= a) a = l + m; }
+  if (a < z1) segs.push([a, z1]);
+  return segs;
+}
+(function railYard() {
+  const R = rng(4242);
+  const tracks = [-238, -229.5, -221, -212.5];
+  const segs = zSegments(-MAP_HALF + 2, MAP_HALF - 2, WALK_EDGE + 0.5);
+  for (const tx of tracks) {
+    for (const [a, b] of segs) {
+      vbox(B_PROPS, tx, 0, (a + b) / 2, 3.4, 0.06, b - a, 0x34302c);
+      for (let z = a + 0.6; z < b - 0.4; z += 1.4) vbox(B_PROPS, tx, 0.05, z, 2.5, 0.07, 0.26, 0x2b231c);
+    }
+    for (const off of [-0.72, 0.72]) vbox(B_PROPS, tx + off, 0.06, 0, 0.1, 0.13, 2 * MAP_HALF - 4, 0x75706a);
+  }
+  // freight cars parked on the sidings (cover)
+  const cols = [0x6a3a2a, 0x46566a, 0x7a6a3a, 0x3a4a3a, 0x8a4a2a, 0x2a3a5a, 0x5a5a5e];
+  for (const tx of tracks) {
+    let z = -MAP_HALF + 8 + R() * 20;
+    while (z < MAP_HALF - 22) {
+      const L = 13 + R() * 4;
+      if (R() < 0.6 && !ZL.some(l => z + L > l - WALK_EDGE - 1.5 && z < l + WALK_EDGE + 1.5)) {
+        const c = pick(cols), tank = R() < 0.25;
+        if (tank) { B_PROPS.add(GEO.cyl, mtx(tx, 2.4, z + L / 2, 1.45, L - 1, 1.45, Math.PI / 2, 0, 0), 0x2c2f33); addCol(tx - 1.45, 0.9, z + 0.5, tx + 1.45, 3.9, z + L - 0.5, 'cover'); }
+        else { solid(tx, 0.95, z + L / 2, 3.0, 3.5, L, c, 'cover'); vbox(B_PROPS, tx + 1.52, 1.6, z + L / 2, 0.04, 2.2, 3.2, 0x1e1e20); vbox(B_PROPS, tx - 1.52, 1.6, z + L / 2, 0.04, 2.2, 3.2, 0x1e1e20); }
+        vbox(B_SNOW, tx, tank ? 3.85 : 4.45, z + L / 2, tank ? 1.6 : 3.1, 0.12, L - 0.6, 0xffffff);
+        for (const dz of [2.4, L - 2.4]) vbox(B_PROPS, tx, 0.12, z + dz, 2.2, 0.8, 2.6, 0x1b1d20);
+        z += L + 1.0;
+      } else z += 7 + R() * 16;
+    }
+  }
+  // floodlight masts and the yard fence along Kessler Ave
+  for (const z of [-215, -130, -45, 45, 135, 215]) { vcyl(B_PROPS, -204.5, 0, z, 0.16, 12, 0x3a3f46); vbox(B_EMIS, -205.3, 11.7, z, 0.35, 0.7, 2.6, 0xfff2d8); addCol(-204.7, 0, z - 0.2, -204.3, 12, z + 0.2, 'pole'); LAMPS.push({ x: -207, y: 11.5, z, park: true }); }
+  for (const [a, b] of zSegments(-MAP_HALF + 2, MAP_HALF - 2, WALK_EDGE + 1)) fence(-202, a, -202, b, 2.4);
+  solid(-245, 0, -100, 4, 3.2, 5, 0x5a4a3a, 'building'); vbox(B_SNOW, -245, 3.2, -100, 4.2, 0.2, 5.2, 0xffffff); vbox(B_EMIS, -242.98, 1.6, -100, 0.04, 0.8, 1.2, 0xffd8a0);
+  signPlane('KESSLER YARD · NO TRESPASSING', -201.9, 2.0, -9, 6, 0.6, Math.PI / 2, { bg: '#1a1d22', fg: '#e8d8a0', glow: '#000', size: 56, w: 768, h: 80, blur: 0 });
+})();
+(function lakefront() {
+  const R = rng(777), E = MAP_HALF + 10;
+  // frozen lake out to the horizon
+  const ice = new THREE.Mesh(new THREE.PlaneGeometry(2400, 5000), MAT.ice); ice.rotation.x = -Math.PI / 2; ice.position.set(LAKE_X + 1200, 0.016, 0); ice.receiveShadow = true; scene.add(ice);
+  for (let k = 0; k < 140; k++) { const x = LAKE_X + 4 + Math.pow(R(), 1.6) * 600, z = (R() - 0.5) * 1400, w = 3 + R() * 18; B_SNOW.add(GEO.box, mtx(x, 0.02, z, w, 0.04, w * (0.3 + R() * 0.7), 0, R() * 3, 0), 0xffffff); }
+  for (let k = 0; k < 40; k++) { const x = LAKE_X + 8 + R() * 220, z = (R() - 0.5) * 600; for (let q = 0; q < 6; q++) vbox(B_SNOW, x + q * 1.1, 0, z + (R() - 0.5) * 1.2, 1.2, 0.2 + R() * 0.5, 0.8, 0xdfefff, R()); }
+  // rock revetment and the promenade rail
+  for (let z = -E + 6; z < E - 6; z += 2.4) {
+    const c = [0x62666c, 0x55595f, 0x707479][Math.floor(R() * 3)], h = 0.45 + R() * 0.7;
+    vbox(B_PROPS, LAKE_X - 3.2 + R() * 1.4, -0.1, z, 2.0 + R(), h, 2.3, c, R() * 0.6);
+    B_SNOW.add(GEO.box, mtx(LAKE_X - 3 + R(), h - 0.08, z, 1.6, 0.14, 1.8, 0, R(), 0), 0xffffff);
+  }
+  const RX = LAKE_X - 6.5;
+  for (const [a, b] of zSegments(-E + 4, E - 4, WALK_EDGE)) {
+    vbox(B_PROPS, RX, 1.0, (a + b) / 2, 0.08, 0.08, b - a, 0x2b3036);
+    for (let z = a; z <= b; z += 2.4) vcyl(B_PROPS, RX, 0, z, 0.05, 1.08, 0x2b3036);
+    addCol(RX - 0.1, 0, a, RX + 0.1, 1.1, b, 'fence');
+  }
+  for (let z = -E + 18; z < E - 12; z += 26) { if (roadGapZ(z, 12)) continue; lamp(RX - 2.2, z, -1, 0); }
+  for (let z = -E + 30; z < E - 20; z += 34) { if (roadGapZ(z, 14)) continue; vbox(B_PROPS, RX - 1.2, 0.42, z, 0.5, 0.08, 1.8, 0x5a3e26); vbox(B_PROPS, RX - 1.0, 0.5, z, 0.08, 0.5, 1.8, 0x5a3e26); vbox(B_SNOW, RX - 1.2, 0.5, z, 0.46, 0.05, 1.7, 0xffffff); }
+  // a fishing pier out onto the ice
+  const pz = -38, px0 = RX - 0.5, px1 = LAKE_X + 22;
+  vbox(B_PROPS, (px0 + px1) / 2, 0, pz, px1 - px0, 0.42, 3.6, 0x4a3a2c); vbox(B_SNOW, (px0 + px1) / 2, 0.42, pz, px1 - px0, 0.04, 3.2, 0xffffff);
+  addCol(px0, 0, pz - 1.8, px1, 0.42, pz + 1.8, 'stoop');
+  for (const s of [-1, 1]) { vbox(B_PROPS, (px0 + 2 + px1) / 2, 1.3, pz + s * 1.75, px1 - px0 - 2, 0.07, 0.07, 0x2b3036); addCol(px0 + 2, 0.42, pz + s * 1.75 - 0.08, px1, 1.4, pz + s * 1.75 + 0.08, 'fence'); for (let x = px0 + 2; x <= px1; x += 3) vcyl(B_PROPS, x, 0.42, pz + s * 1.75, 0.05, 0.92, 0x2b3036); }
+  LAMPS.push({ x: px1 - 1, y: 3.2, z: pz, park: true }); vcyl(B_PROPS, px1 - 0.6, 0.42, pz + 1.4, 0.07, 2.8, 0x3a3f46); vbox(B_EMIS, px1 - 0.6, 3.2, pz + 1.1, 0.3, 0.16, 0.5, 0xffd8a0);
+  signPlane('SHORE DR LAKEFRONT · ICE AT OWN RISK', RX - 0.2, 1.7, 9, 5.4, 0.55, -Math.PI / 2, { bg: '#0e2238', fg: '#d8ecff', glow: '#000', size: 52, w: 768, h: 80, blur: 0 });
+})();
+(function hoops() {
+  const c = LOC.court, x0 = c.x - 14, x1 = c.x + 14, z0 = c.z - 8.5, z1 = c.z + 8.5;
+  reserve(x0 - 3, z0 - 3, x1 + 3, z1 + 3);
+  const slab = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0 + 3, z1 - z0 + 3).rotateX(-Math.PI / 2), MAT.road); slab.position.set(c.x, 0.02, c.z); slab.receiveShadow = true; scene.add(slab);
+  const line = (x, z, w, d) => vbox(B_PROPS, x, 0.022, z, w, 0.012, d, 0xe8e4d8);
+  line(c.x, z0, x1 - x0, 0.1); line(c.x, z1, x1 - x0, 0.1); line(x0, c.z, 0.1, z1 - z0); line(x1, c.z, 0.1, z1 - z0); line(c.x, c.z, 0.1, z1 - z0);
+  for (let k = 0; k < 20; k++) { const a = k / 20 * TAU; line(c.x + Math.cos(a) * 1.8, c.z + Math.sin(a) * 1.8, 0.1, 0.6); }
+  for (const s of [-1, 1]) {
+    const bx = s < 0 ? x0 : x1;
+    line(bx - s * 2.9, c.z - 2.4, 5.8, 0.1); line(bx - s * 2.9, c.z + 2.4, 5.8, 0.1); line(bx - s * 5.8, c.z, 0.1, 4.8);
+    for (let k = 0; k <= 12; k++) { const a = -Math.PI / 2 + k / 12 * Math.PI; line(bx - s * Math.cos(a) * 6.7, c.z + Math.sin(a) * 6.7, 0.1, 0.5); }
+    const hx = bx - s * 1.2;
+    vcyl(B_PROPS, bx + s * 0.4, 0, c.z, 0.1, 3.4, 0x2b3036); addCol(bx + s * 0.4 - 0.12, 0, c.z - 0.12, bx + s * 0.4 + 0.12, 3.4, c.z + 0.12, 'pole');
+    vbox(B_PROPS, bx - s * 0.2, 3.15, c.z, 1.2, 0.08, 0.08, 0x2b3036);
+    vbox(B_PROPS, hx + s * 0.5, 2.75, c.z, 0.05, 1.05, 1.8, 0xeeeeee); vbox(B_PROPS, hx + s * 0.47, 2.75, c.z, 0.02, 0.45, 0.6, 0xc0322a);
+    for (const [dx, dz, w, d] of [[0, -0.23, 0.46, 0.03], [0, 0.23, 0.46, 0.03], [-0.23, 0, 0.03, 0.46], [0.23, 0, 0.03, 0.46]]) vbox(B_PROPS, hx + dx, 2.6, c.z + dz, w, 0.03, d, 0xe0621a);
+    vbox(B_SNOW, hx + s * 0.5, 3.28, c.z, 0.07, 0.04, 1.8, 0xffffff);
+  }
+  const F0 = x0 - 2, F1 = x1 + 2, G0 = z0 - 2, G1 = z1 + 2;
+  fence(F0, G0, c.x - 2, G0, 3); fence(c.x + 2, G0, F1, G0, 3); fence(F0, G1, F1, G1, 3); fence(F0, G0, F0, G1, 3); fence(F1, G0, F1, G1, 3);
+  for (const s of [-1, 1]) { vcyl(B_PROPS, c.x + s * 9, 0, G1 - 0.3, 0.09, 6.5, 0x3a3f46); vbox(B_EMIS, c.x + s * 9, 6.4, G1 - 0.8, 0.5, 0.14, 0.9, 0xfff2d8); LAMPS.push({ x: c.x + s * 9, y: 6.2, z: G1 - 1.5, park: true }); }
+  vbox(B_PROPS, c.x, 0.42, G1 + 1.2, 4, 0.08, 0.5, 0x5a3e26); vbox(B_SNOW, c.x, 0.5, G1 + 1.2, 3.8, 0.05, 0.45, 0xffffff);
+  signPlane('GARNET COURTS', c.x, 2.4, G0 - 0.08, 5, 0.6, Math.PI, { bg: '#2a1a12', fg: '#ffb347', glow: '#ff7a2a', size: 64, w: 768, h: 90 });
+})();
+(function gasStation() {
+  const cx = -42, cz = -201;
+  reserve(-66, -228, -14, -191);
+  const slab = new THREE.Mesh(new THREE.PlaneGeometry(52, 36).rotateX(-Math.PI / 2), MAT.walk); slab.position.set(-40, 0.014, -209); slab.receiveShadow = true; scene.add(slab);
+  building(-32, -228, -15, -211, 4.6, 3, 1, null);
+  shopPane(-23.5, 1.5, -210.94, 7, 2.2, 0, false);
+  signPlane('IRONSIDE FUEL · MINI MART', -23.5, 3.7, -210.92, 9, 0.8, 0, { bg: '#0a0d12', fg: '#ffd24a', glow: '#ff9a2a', size: 64, w: 1024, h: 92 });
+  LAMPS.push({ x: -23.5, y: 2.6, z: -209.5, shop: true });
+  vbox(B_PROPS, cx, 4.6, cz, 24, 0.55, 13, 0xd8dde2); vbox(B_SNOW, cx, 5.15, cz, 24.2, 0.14, 13.2, 0xffffff);
+  for (const s of [-1, 1]) vbox(B_EMIS, cx, 4.68, cz + s * 6.52, 24, 0.32, 0.04, 0xd0202a);
+  for (let dx = -10; dx <= 10; dx += 4) for (const dz of [-3.5, 0, 3.5]) vbox(B_EMIS, cx + dx, 4.57, cz + dz, 1.8, 0.03, 0.5, 0xffffff);
+  for (const dx of [-9, 9]) for (const dz of [-4, 4]) solid(cx + dx, 0, cz + dz, 0.5, 4.6, 0.5, 0xc8ccd2, 'pole');
+  for (const dx of [-7, 0, 7]) { vbox(B_PROPS, cx + dx, 0, cz, 1.6, 0.2, 6.5, 0x9aa0a8); for (const dz of [-1.6, 1.6]) { solid(cx + dx, 0.2, cz + dz, 0.75, 1.65, 0.5, 0x22303e, 'cover'); vbox(B_EMIS, cx + dx, 1.35, cz + dz + (dz < 0 ? -0.26 : 0.26), 0.4, 0.3, 0.02, 0x7ad0ff); } }
+  for (const dx of [-8, 8]) LAMPS.push({ x: cx + dx, y: 4.3, z: cz, park: true });
+  vcyl(B_PROPS, -15.5, 0, -192.5, 0.16, 6.5, 0x2b3036); addCol(-15.7, 0, -192.7, -15.3, 6.5, -192.3, 'pole');
+  signPlane('FUEL  3.89', -15.5, 6.6, -192.2, 3.2, 1.4, 0, { bg: '#0a0d12', fg: '#ffd24a', glow: '#ff9a2a', size: 110, w: 512, h: 220 });
+  PARK_SPOTS.push({ x: cx - 3.5, z: cz - 1.9, alongX: true, yaw: Math.PI / 2 }, { x: cx + 7 + 3.5, z: cz + 1.9, alongX: true, yaw: -Math.PI / 2 });
+})();
+
 /* ---- park ---- */
 const POND = { x: -50, z: 32, r: 15 };
 (function park() {
@@ -482,50 +616,60 @@ const POND = { x: -50, z: 32, r: 15 };
 })();
 
 /* ---- procedural blocks ---- */
-function blockRect(i, j) { return { x0: i === 0 ? -150 : XB[i] + WALK_EDGE, x1: i === 3 ? 150 : XB[i + 1] - WALK_EDGE, z0: j === 0 ? -150 : ZB[j] + WALK_EDGE, z1: j === 3 ? 150 : ZB[j + 1] - WALK_EDGE }; }
+function blockRect(i, j) { return { x0: i === 0 ? -MAP_HALF : XB[i] + WALK_EDGE, x1: i === NBX - 1 ? MAP_HALF : XB[i + 1] - WALK_EDGE, z0: j === 0 ? -MAP_HALF : ZB[j] + WALK_EDGE, z1: j === NBZ - 1 ? MAP_HALF : ZB[j + 1] - WALK_EDGE }; }
 (function blocks() {
   const R = rng(9137);
-  const styleFor = (i, j) => (i === 3 ? (R() < 0.6 ? 5 : 3) : (R() < 0.3 ? 0 : R() < 0.5 ? 1 : R() < 0.6 ? 2 : R() < 0.5 ? 3 : 4));
+  const styleFor = d => (d === 'ware' || d === 'industry') ? (R() < 0.6 ? 5 : 3) : d === 'rows' ? (R() < 0.45 ? 1 : R() < 0.5 ? 2 : 0) : (R() < 0.3 ? 0 : R() < 0.5 ? 1 : R() < 0.6 ? 2 : R() < 0.5 ? 3 : 4);
   const tryBuild = (x0, z0, x1, z1, h, st, face) => {
     if (overlapsReserved(x0, z0, x1, z1, 0.5)) return false;
     building(x0, z0, x1, z1, h, st, undefined, face);
     return true;
   };
-  for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
-    if (i === 1 && j === 2) continue; // park
+  for (let i = 0; i < NBX; i++) for (let j = 0; j < NBZ; j++) {
+    const dist = districtOf(i, j);
+    if (dist === 'park' || dist === 'lake' || dist === 'yard') continue;
     const b = blockRect(i, j);
-    const ware = i === 3;
-    const hasAlley = (b.z1 - b.z0) >= 50;
+    const ware = dist === 'ware' || dist === 'industry', rows = dist === 'rows', courts = dist === 'courts';
+    const outerW = i === 0, outerE = i === NBX - 1, outerN = j === 0, outerS = j === NBZ - 1;
+    const hasAlley = !courts && (b.z1 - b.z0) >= 50;
     const zc = (b.z0 + b.z1) / 2;
-    const depth = () => ware ? 14 + R() * 8 : 11 + R() * 5;
-    const height = () => ware ? 6 + R() * 5 : 6.5 + R() * 6.5;
-    // north & south edges (face E-W streets)
+    const depth = () => ware ? 14 + R() * 8 : rows ? 10 + R() * 3 : 11 + R() * 5;
+    const height = () => ware ? 6 + R() * 5 : rows ? 6 + R() * 2.6 : 6.5 + R() * 6.5;
+    // Garnet Courts: brick towers rising behind the street wall
+    if (courts) {
+      const ix0 = b.x0 + 18, ix1 = b.x1 - 18, iz0 = b.z0 + 18, iz1 = b.z1 - 18;
+      const rowsZ = [[iz0, iz0 + 14], [iz1 - 13, iz1]];
+      rowsZ.forEach(([z0, z1], k) => {
+        if (i === 2 && k === 0) return; // the hoops court
+        const w = Math.min(34, ix1 - ix0), x0 = (ix0 + ix1) / 2 - w / 2;
+        reserve(x0, z0, x0 + w, z1);
+        building(x0, z0, x0 + w, z1, 30 + R() * 14, R() < 0.6 ? 0 : 4, 1, null);
+      });
+    }
     for (const edge of ['n', 's']) {
-      if (edge === 'n' && j === 0) continue; if (edge === 's' && j === 3) continue;
-      let x = b.x0 + (i === 0 ? 8 : 0);
-      const xEnd = b.x1 - (i === 3 ? 4 : 0);
+      if (edge === 'n' && outerN) continue; if (edge === 's' && outerS) continue;
+      let x = b.x0 + (outerW ? 8 : 0);
+      const xEnd = b.x1 - (outerE ? 4 : 0);
       while (x < xEnd - 5) {
-        let w = ware ? 14 + R() * 16 : 8 + R() * 7; if (x + w > xEnd) w = xEnd - x; if (w < 5) break;
+        let w = ware ? 14 + R() * 16 : rows ? 7 + R() * 2.5 : 8 + R() * 7; if (x + w > xEnd) w = xEnd - x; if (w < 5) break;
         const d = depth(), h = height();
-        if (edge === 'n') tryBuild(x, b.z0, x + w, b.z0 + d, h, styleFor(i, j), 'n'); else tryBuild(x, b.z1 - d, x + w, b.z1, h, styleFor(i, j), 's');
-        x += w + (R() < 0.45 ? 1.2 + R() * 2.2 : 0);
+        if (edge === 'n') tryBuild(x, b.z0, x + w, b.z0 + d, h, styleFor(dist), 'n'); else tryBuild(x, b.z1 - d, x + w, b.z1, h, styleFor(dist), 's');
+        x += w + (R() < (rows ? 0.6 : 0.45) ? 1.2 + R() * 2.2 : 0);
       }
     }
-    // east & west edges (face N-S streets), leave alley mouths
     for (const edge of ['w', 'e']) {
-      if (edge === 'w' && i === 0) continue; if (edge === 'e' && i === 3) continue;
-      let z = b.z0 + (j === 0 ? 0 : 17);
-      const zEnd = b.z1 - (j === 3 ? 0 : 17);
+      if (edge === 'w' && outerW) continue; if (edge === 'e' && outerE) continue;
+      let z = b.z0 + (outerN ? 0 : 17);
+      const zEnd = b.z1 - (outerS ? 0 : 17);
       while (z < zEnd - 5) {
         let w = 8 + R() * 7; if (z + w > zEnd) w = zEnd - z; if (w < 5) break;
         if (hasAlley && z < zc + 4 && z + w > zc - 4) { z = zc + 4; continue; }
         const d = depth(), h = height();
-        if (edge === 'w') tryBuild(b.x0, z, b.x0 + d, z + w, h, styleFor(i, j), 'w'); else tryBuild(b.x1 - d, z, b.x1, z + w, h, styleFor(i, j), 'e');
+        if (edge === 'w') tryBuild(b.x0, z, b.x0 + d, z + w, h, styleFor(dist), 'w'); else tryBuild(b.x1 - d, z, b.x1, z + w, h, styleFor(dist), 'e');
         z += w + (R() < 0.4 ? 1.5 + R() * 2 : 0);
       }
     }
-    // alley: garages, dumpsters, fences
-    if (hasAlley && !(i === 0 && false)) {
+    if (hasAlley) {
       let x = b.x0 + 18;
       while (x < b.x1 - 20) {
         const w = 6 + R() * 2;
@@ -546,15 +690,15 @@ function blockRect(i, j) { return { x0: i === 0 ? -150 : XB[i] + WALK_EDGE, x1: 
   const blockedZone = (x, z) => (x > 56 && x < 84 && z > 14 && z < 50) || (x > 60 && x < 80 && z > -110 && z < -96) || (Math.abs(x - 41) < 3 && Math.abs(z + 8) < 2.5) || (Math.abs(x - LOC.home.x) < 2.5 && Math.abs(z - LOC.home.z) < 3) || (Math.abs(x - 16) < 9 && Math.abs(z + 8) < 2) || (Math.abs(x - LOC.rec.x) < 2 && Math.abs(z - LOC.rec.z) < 4);
   // E-W streets
   for (const zc of ZL) {
-    for (let x = -140; x <= 140; x += 32) {
+    for (let x = -(MAP_HALF - 10); x <= ROAD_X_END - 14; x += 32) {
       if (nearCross(x, XL, 12)) continue;
-      const side = ((x + 140) / 32) % 2 ? 1 : -1;
+      const side = ((x + MAP_HALF - 10) / 32) % 2 ? 1 : -1;
       if (x > 56 && x < 84) continue;
       lamp(x, zc + side * 8.6, 0, -side);
     }
     for (const side of [-1, 1]) {
-      let x = -144;
-      while (x < 144) {
+      let x = -(MAP_HALF - 6);
+      while (x < SHORE_X - 12) {
         const gap = 5.5 + R() * 9;
         if (!nearCross(x, XL, 14) && !blockedZone(x, zc + side * 4.6) && R() < 0.42) PARK_SPOTS.push({ x, z: zc + side * 4.6, alongX: true, yaw: side > 0 ? Math.PI / 2 : -Math.PI / 2 });
         else if (!nearCross(x, XL, 14) && R() < 0.35 && !blockedZone(x, zc + side * 6.6)) snowbank(x, zc + side * 6.6, true, 3 + R() * 2.5);
@@ -564,18 +708,18 @@ function blockRect(i, j) { return { x0: i === 0 ? -150 : XB[i] + WALK_EDGE, x1: 
   }
   // N-S streets
   for (const xc of XL) {
-    for (let z = -140; z <= 140; z += 32) {
+    for (let z = -(MAP_HALF - 10); z <= MAP_HALF - 10; z += 32) {
       if (nearCross(z, ZL, 12)) continue;
       if (xc === LX) continue;
-      const side = ((z + 140) / 32) % 2 ? 1 : -1;
+      const side = ((z + MAP_HALF - 10) / 32) % 2 ? 1 : -1;
       lamp(xc + side * 8.6, z, -side, 0);
     }
     for (const side of [-1, 1]) {
-      let z = -144;
-      while (z < 144) {
+      let z = -(MAP_HALF - 6);
+      while (z < MAP_HALF - 6) {
         const gap = 5.5 + R() * 9;
         const px = xc + side * (xc === LX ? 4.7 : 4.6);
-        if (!nearCross(z, ZL, 14) && !blockedZone(px, z) && R() < (xc === LX ? 0.3 : 0.42) && !(xc === LX && (((z + 144) % 16 + 16) % 16 < 3.5 || ((z + 144) % 16 + 16) % 16 > 12.5))) PARK_SPOTS.push({ x: px, z, alongX: false, yaw: side > 0 ? Math.PI : 0 });
+        if (!nearCross(z, ZL, 14) && !blockedZone(px, z) && R() < (xc === LX ? 0.3 : 0.42) && !(xc === LX && (((z + MAP_HALF - 6) % 16 + 16) % 16 < 3.5 || ((z + MAP_HALF - 6) % 16 + 16) % 16 > 12.5))) PARK_SPOTS.push({ x: px, z, alongX: false, yaw: side > 0 ? Math.PI : 0 });
         else if (!nearCross(z, ZL, 14) && R() < 0.3 && !blockedZone(xc + side * 6.6, z) && !(xc === LX)) snowbank(xc + side * 6.6, z, false, 3 + R() * 2.5);
         z += gap;
       }
@@ -590,8 +734,11 @@ function blockRect(i, j) { return { x0: i === 0 ? -150 : XB[i] + WALK_EDGE, x1: 
   // steam vents
   for (const [x, z] of [[-40, 0.5], [28, -1.5], [104, 1], [1.5, -62], [-1.2, 38], [24, -90], [-95, 30], [70, -20]]) vent(x, z);
   // barricades at the edges of the map
-  for (const zc of ZL) for (const xe of [-146, 146]) { snowbank(xe, zc, false, 10); }
-  for (const xc of XL) for (const ze of [-146, 146]) { if (xc === LX) { barrier(xc, ze, true, 10); continue; } snowbank(xc, ze, true, 10); }
+  for (const zc of ZL) snowbank(-(MAP_HALF - 4), zc, false, 10);
+  for (const xc of XL) for (const ze of [-(MAP_HALF - 4), MAP_HALF - 4]) { if (xc === LX) { barrier(xc, ze, true, 10); continue; } snowbank(xc, ze, true, 10); }
+  // more fire barrels and steam in the new districts
+  for (const [x, z] of [[-36, 108], [-62, 133], [-28, -186.5], [-205, -95], [-205, 92], [175, -60], [176, 70], [116, 186], [-130, 186], [30, -186]]) barrel(x, z);
+  for (const [x, z] of [[-140, -180.5], [120, 179], [-60, 180.8], [160.6, 120], [-190.5, -60]]) vent(x, z);
   // newspaper boxes / bus shelter on Calder
   for (const [x, z] of [[-60, -7.4], [8, 7.4], [95, -7.4]]) { solid(x, 0, z, 0.5, 1.1, 0.5, pick([0x1f4a8a, 0x8a1f1f, 0x2a6a3a]), 'cover'); }
   // storefront signs along Calder Ave (fictional shops)
@@ -671,7 +818,7 @@ function updateSignals(dt) {
 /* ---- street-graph navigation ---- */
 const NAV = [];
 (function nav() {
-  const xs = [-145, ...XL, 145], zs = [-145, ...ZL, 145];
+  const xs = [-(MAP_HALF - 5), ...XL, SHORE_X + 26], zs = [-(MAP_HALF - 5), ...ZL, MAP_HALF - 5];
   const idx = {};
   const add = (x, z) => { const k = x + ',' + z; if (idx[k] !== undefined) return idx[k]; idx[k] = NAV.length; NAV.push({ x, z, n: [] }); return idx[k]; };
   const link = (a, b) => { if (!NAV[a].n.includes(b)) NAV[a].n.push(b); if (!NAV[b].n.includes(a)) NAV[b].n.push(a); };
@@ -680,6 +827,10 @@ const NAV = [];
   // park interior + alleys
   const pk = add(-50, 50), pk2 = add(-60, 12), pk3 = add(-30, 30);
   link(pk, add(-95, 90)); link(pk2, add(-95, 0)); link(pk3, add(0, 0)); link(pk, pk3); link(pk2, pk3); link(pk, add(0, 90));
+  // lakefront promenade runs the length of Shore Dr
+  for (let k = 0; k < zs.length - 1; k++) link(add(SHORE_X + 26, zs[k]), add(SHORE_X + 26, zs[k + 1]));
+  // the hoops court off Garnet St
+  link(add(LOC.court.x, LOC.court.z - 14), add(LOC.court.x, 90)); link(add(LOC.court.x, LOC.court.z - 14), add(LOC.court.x, LOC.court.z)); link(add(LOC.court.x, 90), add(-95, 90)); link(add(LOC.court.x, 90), add(0, 90));
 })();
 function nearestNav(x, z, needClear) {
   let best = -1, bd = Infinity;
@@ -704,11 +855,15 @@ function navPath(sx, sz, tx, tz) {
   return path;
 }
 function inPark(x, z) { return x > -85 && x < -10 && z > 10 && z < 80; }
-function onIce(x, z, y) { return y < 0.3 && Math.hypot(x - POND.x, z - POND.z) < POND.r; }
+function onIce(x, z, y) { return y < 0.3 && (Math.hypot(x - POND.x, z - POND.z) < POND.r || x > LAKE_X); }
 function underDeck(x, z, y) { return x > DECK_X0 && x < DECK_X1 && y < DECK_Y0; }
 function streetName(x, z) {
   for (let k = 0; k < XL.length; k++) if (Math.abs(x - XL[k]) < WALK_EDGE + 1) { for (let j = 0; j < ZL.length; j++) if (Math.abs(z - ZL[j]) < WALK_EDGE + 1) return XN[k] + ' & ' + ZN[j]; return XN[k]; }
   for (let j = 0; j < ZL.length; j++) if (Math.abs(z - ZL[j]) < WALK_EDGE + 1) return ZN[j];
   if (inPark(x, z)) return 'Calder Park';
+  if (x > LAKE_X) return 'Frozen lake';
+  if (x > SHORE_X + WALK_EDGE) return 'Lakefront';
+  if (x < XL[0] - WALK_EDGE) return 'Kessler rail yard';
+  if (Math.hypot(x - LOC.court.x, z - LOC.court.z) < 16) return 'Garnet Courts';
   return 'Alley';
 }

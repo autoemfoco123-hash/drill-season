@@ -55,7 +55,8 @@ function newState(name) {
     unread: { benny: 0, kiara: 0, coach: 0, vance: 0, saint: 0, reyes: 0 },
     feed: [], tracks: [], flags: {}, cd: {}, endings: {}, tracked: null, buffs: { coffee: 0, warmers: 0 }, job: null,
     stats: { tracks: 0, best: null, buzzPeak: 4, heatPeak: 0, walkAways: 0, fights: 0, downs: 0, cashEarned: 0, rides: 0, shots: 0, coldTime: 0, dist: 0, disses: 0, timesDowned: 0, merch: 0, videos: 0, layLows: 0, pvpDowns: 0, busted: 0, carsTaken: 0, drive: 0, photos: 0 },
-    settings: { sens: 1, vol: 0.8, music: 0.85, invertY: false, quality: IS_TOUCH ? 'low' : 'high', radio: 1, score: true, voices: true },
+    skin: defaultSkin(),
+    settings: { sens: 1, vol: 0.8, music: 0.85, invertY: false, quality: IS_TOUCH ? 'low' : 'high', radio: 1, score: true, voices: true, fp: false, fov: 70 },
     garage: [{ model: 'hatch', color: 0x2a6a8a }],
     social: { followers: 214, following: 96, bio: 'drill · Calder Park · Chicago', posts: [] },
     day: 1,
@@ -93,10 +94,14 @@ function saveGame() {
 function wipeSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { } }
 
 /* ---------- map constants ---------- */
-const XL = [-95, 0, 70], ZL = [-90, 0, 90];
-const XN = ['Harlan Ave', 'Bishop St', 'Marrow St'], ZN = ['Low End Rd', 'Calder Ave', 'Garnet St'];
-const XB = [-150, -95, 0, 70, 150], ZB = [-150, -90, 0, 90, 150];
-const BOUND = 147;
+const MAP_HALF = 250;                // the district is 500 m across
+const XL = [-190, -95, 0, 70, 160], ZL = [-180, -90, 0, 90, 180];
+const XN = ['Kessler Ave', 'Harlan Ave', 'Bishop St', 'Marrow St', 'Shore Dr'], ZN = ['Ironside Rd', 'Low End Rd', 'Calder Ave', 'Garnet St', 'Sable St'];
+const XB = [-MAP_HALF, ...XL, MAP_HALF], ZB = [-MAP_HALF, ...ZL, MAP_HALF];
+const BOUND = MAP_HALF - 3;
+const SHORE_X = XL[XL.length - 1];    // Shore Dr runs along the lake
+const ROAD_X_END = SHORE_X + 10;      // east-west streets end at Shore Dr
+const LAKE_X = SHORE_X + 46;          // frozen lake from here east
 const ROAD_HW = 6, WALK_EDGE = 10;
 const LX = 70;                      // L line runs above Marrow St
 const DECK_Y0 = 6.8, DECK_Y = 7.2, PLAT_Y = 7.6;
@@ -119,6 +124,10 @@ const LOC = {
   pavilion: { x: -66, z: 56, name: 'Park pavilion' },
   stairs: { x: 62, z: 45, name: 'L stairs, Marrow St' },
   storeFront: { x: 20, z: -7.5, name: 'Mini Mart window' },
+  court: { x: -47.5, z: 121, name: 'Garnet Courts hoops' },
+  gas: { x: -40, z: -197, name: 'Ironside Fuel' },
+  lakefront: { x: 190, z: 0, name: 'Shore Dr lakefront' },
+  yard: { x: -224, z: -40, name: 'Kessler rail yard' },
 };
 const COACH_POS = { x: -7.6, z: 69 };
 const BENNY_POS = { x: 37.6, z: -7.6 };

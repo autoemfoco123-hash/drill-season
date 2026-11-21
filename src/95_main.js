@@ -70,6 +70,7 @@ addEventListener('keydown', e => {
     return;
   }
   if (MODE === 'bench') { if (code === 'Escape') closeBench(); return; }
+  if (MODE === 'wardrobe') { if (code === 'Escape') closeWardrobe(); return; }
   if (MODE === 'phone') { if (code === 'Tab' || code === 'Escape' || code === 'KeyP') closePhone(); return; }
   if (MODE === 'pause') { if (code === 'Escape') resumeGame(); return; }
   keys[code] = true;
@@ -78,6 +79,8 @@ addEventListener('keydown', e => {
   switch (code) {
     case 'Tab': case 'KeyP': openPhone(); break;
     case 'KeyR': if (P.car) cycleRadio(); else startReload(); break;
+    case 'KeyV': toggleFP(); break;
+    case 'KeyG': if (!P.car) { P.waveT = 2.2; NET.presT = 0; } break;
     case 'KeyF': carPress(); break;
     case 'KeyH': if (P.car) sfx.honk(P.car.pos.x, P.car.pos.z); break;
     case 'Digit1': switchWeapon('k9'); break;
@@ -125,6 +128,7 @@ function setupTouch() {
   hold('tc-band', () => useBandage());
   hold('tc-phone', () => { if (MODE === 'play') openPhone(); else if (MODE === 'phone') closePhone(); });
   hold('tc-pause', () => openPause());
+  hold('tc-cam', () => toggleFP());
 }
 
 /* =========================================================
@@ -135,10 +139,20 @@ const sanitizeName = v => String(v || '').trim().replace(/^@+/, '').replace(/[^A
 function setupTitle() {
   SAVED = loadSave();
   const cont = $('t-continue');
-  if (SAVED) { cont.hidden = false; cont.textContent = 'Continue as @' + SAVED.name; } else cont.hidden = true;
+  if (SAVED) { cont.hidden = false; $('t-cont-d').textContent = `@${SAVED.name} · Day ${SAVED.day || 1} · $${Math.round(SAVED.cash || 0).toLocaleString('en-US')} · Buzz ${Math.round(SAVED.buzz || 0)}`; $('t-name-l').textContent = 'Or start a new artist'; }
+  else { cont.hidden = true; $('t-name-l').textContent = 'New artist'; }
   $('t-confirm').hidden = true; $('t-msg').textContent = '';
+  // the menu shows your saved look (or the one you picked last time)
+  let look = SAVED && SAVED.skin;
+  if (!look) { try { look = JSON.parse(localStorage.getItem('ds.skin') || 'null'); } catch (e) { look = null; } }
+  S.skin = cleanSkin(look || S.skin);
+  if (SAVED && SAVED.settings) S.settings = Object.assign({}, S.settings, SAVED.settings);
+  TITLE.prefsTouched = false; TITLE.wave = 2.2; TITLE.turn = 0;
+  applyPlayerSkin(); titleWho();
+  for (const p of ['main', 'set', 'help']) $('t-' + p).hidden = p !== 'main';
+  $('title').querySelector('.t-wrap').hidden = false;
 }
-$('t-name').addEventListener('input', e => { const s = sanitizeName(e.target.value); if (s !== e.target.value.replace(/^@+/, '')) e.target.value = s; });
+$('t-name').addEventListener('input', e => { const s = sanitizeName(e.target.value); if (s !== e.target.value.replace(/^@+/, '')) e.target.value = s; titleWho(); });
 $('t-form').addEventListener('submit', e => {
   e.preventDefault();
   const nm = sanitizeName($('t-name').value);
@@ -148,11 +162,19 @@ $('t-form').addEventListener('submit', e => {
   startGame(newState(nm));
 });
 $('t-continue').onclick = () => { if (SAVED) startGame(SAVED); };
+$('t-continue').addEventListener('pointerenter', () => { TITLE.wave = 1.4; });
 $('t-erase').onclick = () => { wipeSave(); startGame(newState(pendingName)); };
 $('t-cancel').onclick = () => { $('t-confirm').hidden = true; };
 function startGame(state) {
   initAudio();
+  if (WARD.open) { WARD.open = false; $('ward').hidden = true; document.body.classList.toggle('ward', false); }
+  stageLights(false);
+  const titleS = S;
   S = state; S.job = null; S.flags.saintChallengeLive = false;
+  if (titleS && titleS !== state && titleS.skin) S.skin = cleanSkin(titleS.skin);
+  if (titleS && titleS !== state && TITLE.prefsTouched) Object.assign(S.settings, titleS.settings);
+  S.skin = cleanSkin(S.skin);
+  applyPlayerSkin();
   if (S.settings.score === undefined) S.settings.score = true;
   if (S.settings.voices === undefined) S.settings.voices = true;
   if (!(S.settings.radio >= 0 && S.settings.radio < STATIONS.length)) S.settings.radio = 1;
@@ -207,14 +229,6 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) saveG
    ========================================================= */
 let castT = 1, saveT = 20, netSaveT = 30, lastFrame = performance.now();
 const _focus = new THREE.Vector3();
-function titleCam(dt) {
-  const t = REAL_T * 0.035;
-  const k = (Math.sin(t) + 1) / 2;
-  camera.position.set(lerp(-34, 30, k), 1.9 + Math.sin(t * 1.7) * 0.4, 4.5);
-  camera.lookAt(70, 8.5 + Math.sin(t) * 1.2, -18);
-  if (Math.abs(camera.fov - 50) > 0.1) { camera.fov = 50; camera.updateProjectionMatrix(); setParticleScale(); }
-  camera.updateMatrixWorld();
-}
 function frame(now) {
   requestAnimationFrame(frame);
   let dt = (now - lastFrame) / 1000; lastFrame = now;
@@ -225,10 +239,9 @@ function frame(now) {
   const indoor = MODE === 'menu' || MODE === 'bench' || MODE === 'rhythm';
   if (MODE !== 'pause' && MODE !== 'ending') GAME_T += dt;
   if (MODE === 'title') {
-    titleCam(dt);
+    titleStage(dt);
     updateVehicles(dt); updatePeds(dt);
     updateAmbience(dt, WIND.gust, false, 0);
-    P.human.group.visible = false;
   } else if (MODE !== 'pause' && MODE !== 'ending') {
     S.playTime += dt;
     if (live) {
@@ -248,6 +261,7 @@ function frame(now) {
     updateEconomy(dt);
     const fire = updateVitals(dt, indoor);
     updateAmbience(dt, WIND.gust * (indoor || P.car ? 0.3 : windExposure(P.pos.x, P.pos.z, P.pos.y)), indoor || !!P.car, fire);
+    if (MODE === 'wardrobe') { updateVehicles(dt); updatePeds(dt); wardrobeStage(dt); }
     if (MODE === 'cutscene') updateCutscene(dt);
     else if (live) updateCamera(dt);
     saveT -= dt; if (saveT <= 0) { saveT = 20; saveGame(); }
