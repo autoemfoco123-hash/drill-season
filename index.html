@@ -2808,24 +2808,32 @@ async function loadRealism() {
 }
 /* ---- scanned props (CC0, Poly Haven), drawn instanced ---- */
 const _gl = new GLTFLoader();
-const loadGLB = p => new Promise(res => _gl.load('assets/models/' + p, g => res(g), undefined, () => res(null)));
+// models are stored as glTF JSON (buffer in base64) + JPEG textures, served as plain data files;
+// the buffer is packed back into a GLB here so the loader never has to fetch a data: URL
+function packGLB(json) {
+  const b64 = json.buffers[0].uri.split(',')[1]; delete json.buffers[0].uri;
+  const bs = atob(b64), bin = new Uint8Array(bs.length); for (let i = 0; i < bs.length; i++) bin[i] = bs.charCodeAt(i);
+  const js = new TextEncoder().encode(JSON.stringify(json)), jl = (js.length + 3) & ~3, bl = (bin.length + 3) & ~3, total = 28 + jl + bl;
+  const buf = new ArrayBuffer(total), dv = new DataView(buf), u8 = new Uint8Array(buf);
+  dv.setUint32(0, 0x46546C67, true); dv.setUint32(4, 2, true); dv.setUint32(8, total, true);
+  dv.setUint32(12, jl, true); dv.setUint32(16, 0x4E4F534A, true); u8.set(js, 20); u8.fill(0x20, 20 + js.length, 20 + jl);
+  dv.setUint32(20 + jl, bl, true); dv.setUint32(24 + jl, 0x004E4942, true); u8.set(bin, 28 + jl);
+  return buf;
+}
+const loadModel = n => fetch('assets/models/' + n + '.json').then(r => r.ok ? r.json() : null)
+  .then(j => j && new Promise(res => _gl.parse(packGLB(j), 'assets/models/', g => res(g), () => res(null))))
+  .catch(() => null);
 const _pm = new THREE.Matrix4(), _pq = new THREE.Quaternion(), _pv = new THREE.Vector3(), _ps = new THREE.Vector3(), _pUp = new THREE.Vector3(0, 1, 0);
 // place copies of a model; each placement is { x, y, z, ry, s } and the model's base sits on y
 function instanceModel(g, list, o) {
   if (!g || !list.length) return [];
   o = o || {};
   const root = g.scene; root.updateMatrixWorld(true);
-  let keep = null;
-  if (o.half) { // some scans hold two copies side by side: keep the left one
-    const all = new THREE.Box3().setFromObject(root), mid = all.getCenter(new THREE.Vector3()).x; keep = new Set();
-    root.traverse(m => { if (m.isMesh) { const b = new THREE.Box3().setFromObject(m); if (b.getCenter(new THREE.Vector3()).x < mid) keep.add(m); } });
-  }
-  const box = new THREE.Box3(); root.traverse(m => { if (m.isMesh && (!keep || keep.has(m))) box.expandByObject(m); });
-  const c = box.getCenter(new THREE.Vector3());
+  const box = new THREE.Box3().setFromObject(root), c = box.getCenter(new THREE.Vector3());
   const fix = new THREE.Matrix4().makeTranslation(-c.x, -box.min.y, -c.z);
   const out = [];
   root.traverse(m => {
-    if (!m.isMesh || (keep && !keep.has(m))) return;
+    if (!m.isMesh) return;
     const local = new THREE.Matrix4().multiplyMatrices(fix, m.matrixWorld);
     const mats = Array.isArray(m.material) ? m.material : [m.material];
     for (const mt of mats) { mt.envMapIntensity = o.env || 0.9; if (o.tint) mt.color.multiply(o.tint); }
@@ -2859,7 +2867,7 @@ function planProps() {
 }
 async function loadProps() {
   planProps();
-  const [barrel, hydrant, bins, jersey, manhole, bag] = await Promise.all(['Barrel_02', 'fire_hydrant', 'metal_trash_can', 'concrete_road_barrier', 'water_manhole_cover', 'trashbag'].map(n => loadGLB(n + '.glb')));
+  const [barrel, hydrant, bins, jersey, manhole, bag] = await Promise.all(['Barrel_02', 'fire_hydrant', 'metal_trash_can', 'concrete_road_barrier', 'water_manhole_cover', 'trashbag'].map(loadModel));
   if (barrel) {
     const r = instanceModel(barrel, BARRELS.map(b => ({ x: b.x, z: b.z, ry: (b.x * 13.7 + b.z) % TAU, s: 1.08 })), { env: 0.8, tint: new THREE.Color(0.75, 0.62, 0.55) });
     if (r.meshes) {
@@ -2873,7 +2881,7 @@ async function loadProps() {
     if (instanceModel(jersey, list, { env: 0.6 }).meshes) FALLBACK.barrier.visible = false;
   }
   if (manhole && instanceModel(manhole, VENTS.map(v => ({ x: v.x, y: 0.005, z: v.z, ry: v.t, s: 1.6 })), { shadow: false, env: 0.8 }).meshes) FALLBACK.vent.visible = false;
-  if (hydrant && instanceModel(hydrant, PROP_SPOTS.hydrants, { env: 0.9, half: true }).meshes) for (const h of PROP_SPOTS.hydrants) addCol(h.x - 0.22, 0, h.z - 0.22, h.x + 0.22, 0.85, h.z + 0.22, 'cover');
+  if (hydrant && instanceModel(hydrant, PROP_SPOTS.hydrants, { env: 0.9 }).meshes) for (const h of PROP_SPOTS.hydrants) addCol(h.x - 0.22, 0, h.z - 0.22, h.x + 0.22, 0.85, h.z + 0.22, 'cover');
   if (bag) instanceModel(bag, PROP_SPOTS.bags, { env: 0.7 });
   if (bins && instanceModel(bins, PROP_SPOTS.bins, { env: 0.8 }).meshes) for (const b of PROP_SPOTS.bins) { const ax = b.ry === 0; addCol(b.x - (ax ? 0.95 : 0.3), 0, b.z - (ax ? 0.3 : 0.95), b.x + (ax ? 0.95 : 0.3), 0.92, b.z + (ax ? 0.3 : 0.95), 'cover'); }
   REAL.props = true;
