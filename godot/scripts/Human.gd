@@ -22,6 +22,9 @@ var _geo = { "v": [], "n": [], "c": [], "i": [], "b": [] }
 var _bones = []         # pivots, parents always before children
 var _bone_parent = []
 var skel = null
+var _rest = []          # each pivot's built position, to put the body back together after a ragdoll
+var rag = null          # the ragdoll while it is active (see ragdoll_start)
+var getup = 0.0         # 1 -> 0 while standing back up after a ragdoll
 
 func _init():
 	phase = randf() * 10.0
@@ -112,6 +115,7 @@ func _finish():
 	skel.add_child(mi)
 	mi.skeleton = NodePath("..")
 	_geo = { "v": [], "n": [], "c": [], "i": [], "b": [] }
+	for b in _bones: _rest.append(b.translation)
 	sync_bones()
 
 # copy the pivots' poses onto the skeleton (bones have identity rests, so pose == pivot transform)
@@ -288,6 +292,12 @@ func _rot(n, x, y, z):
 	n.transform.basis = _basis_xyz(x, y, z)
 
 func animate(dt, pose):
+	if rag != null:
+		ragdoll_update(dt)
+		return
+	if getup > 0:
+		getup = max(0.0, getup - dt * 1.6)
+		pose["down"] = max(pose.get("down", 0.0), getup)
 	var sp = pose.get("speed", 0.0)
 	phase += dt * ((3.2 + sp * 1.25) if sp > 0.2 else 0.0)
 	var ph = phase
@@ -297,6 +307,7 @@ func animate(dt, pose):
 		crouch = pose["crouch"]
 	cr = lerp(cr, crouch, 1 - exp(-dt * 12))
 	var c = cr
+	hips.translation.x = 0.0
 	hips.translation.y = lerp(0.92, 0.56, c) - abs(sin(ph)) * 0.04 * amp
 	var swing = sin(ph) * 0.75 * amp
 	var spine_x = lerp(0.06 * amp, 0.35, c)
@@ -349,8 +360,251 @@ func animate(dt, pose):
 		spine_z = sin(G.REAL_T * 40) * 0.015
 	_rot(spine, spine_x, spine_y, spine_z)
 	_rot(head_g, lerp(0, -pitch * 0.6, aim), 0, 0)
+	var em = pose.get("emote", "")
+	if em != "":
+		_emote(em, float(pose.get("et", 0.0)))
 	var dn = pose.get("down", 0.0)
 	_rot(root, -dn * PI / 2 * 0.96, 0, 0)
 	root.translation = Vector3(0, dn * 0.18, -dn * 0.5)
 	shadow.visible = dn < 0.5
 	sync_bones()
+
+
+# ---------- ragdoll ----------
+# A verlet ragdoll: 15 points (pelvis, chest, head, hips, knees, feet, shoulders, elbows,
+# hands) held together by distance constraints, falling under gravity and pushed out of the
+# city's boxes. Every frame the pivots are aimed along the points, so the same skinned mesh
+# flops around. Cheap enough for a dozen bodies on an old CPU.
+const RAG_LINKS = [[0, 1], [1, 2], [0, 3], [0, 6], [3, 6], [3, 4], [4, 5], [6, 7], [7, 8], [1, 9], [1, 12], [9, 12], [9, 10], [10, 11], [12, 13], [13, 14],
+	[0, 9], [0, 12], [3, 1], [6, 1], [2, 9], [2, 12]]
+const RAG_MIN = [[3, 5, 0.55], [6, 8, 0.55], [9, 11, 0.45], [12, 14, 0.45], [2, 0, 0.9], [5, 1, 0.6], [8, 1, 0.6]]
+
+func ragdoll_active():
+	return rag != null and not rag.rest
+
+func is_ragdoll():
+	return rag != null
+
+func _gp(n, off = Vector3()):
+	return n.global_transform.xform(off)
+
+# impulse: metres per second added to the whole body (plus a bit of spin from 'twist')
+func ragdoll_start(vel = Vector3(), impulse = Vector3(), twist = 0.0):
+	if skel == null: return
+	if rag != null:
+		# already flopping: just add the new push
+		for i in range(rag.p.size()):
+			rag.o[i] -= (impulse + Vector3(0, impulse.length() * 0.15, 0)) / 60.0
+		rag.rest = false; rag.still = 0.0
+		return
+	getup = 0.0
+	var pts = [_gp(hips), _gp(spine, Vector3(0, 0.6, 0)), _gp(head_g, Vector3(0, 0.06, 0)),
+		_gp(L.thigh), _gp(L.knee), _gp(L.knee, Vector3(0, -0.42, 0.04)), _gp(R.thigh), _gp(R.knee), _gp(R.knee, Vector3(0, -0.42, 0.04)),
+		_gp(AL.sh), _gp(AL.elbow), _gp(AL.hand), _gp(AR.sh), _gp(AR.elbow), _gp(AR.hand)]
+	var old = []
+	var dt0 = 1.0 / 60.0
+	var c = pts[0]
+	var up = Vector3.UP
+	for i in range(pts.size()):
+		# the higher a point, the more the push tips it over; twist spins the body
+		var v = vel + impulse * (0.7 + 0.5 * clamp((pts[i].y - c.y) / 0.8, -0.5, 1.0)) + up.cross(pts[i] - c) * twist
+		old.append(pts[i] - v * dt0)
+	var lens = []
+	for l in RAG_LINKS: lens.append(pts[l[0]].distance_to(pts[l[1]]))
+	var mins = []
+	for m in RAG_MIN: mins.append(pts[m[0]].distance_to(pts[m[1]]) * m[2])
+	rag = { "p": pts, "o": old, "len": lens, "min": mins, "acc": 0.0, "still": 0.0, "rest": false, "t": 0.0, "xh": global_transform.basis.x }
+	if shadow: shadow.visible = false
+	if finger: finger.visible = false
+
+func ragdoll_update(dt):
+	if rag == null: return
+	rag.t += dt
+	if not rag.rest:
+		rag.acc = min(rag.acc + dt, 0.05)
+		var h = 1.0 / 60.0
+		while rag.acc >= h:
+			rag.acc -= h
+			_rag_step(h)
+	_rag_pose()
+
+func _rag_step(h):
+	var P = rag.p
+	var O = rag.o
+	var g = Vector3(0, -W.GRAV * h * h, 0)
+	var moving = 0.0
+	for i in range(P.size()):
+		var cur = P[i]
+		var v = (cur - O[i]) * 0.992
+		O[i] = cur
+		P[i] = cur + v + g
+		moving = max(moving, v.length() / h)
+	for _it in range(4):
+		for k in range(RAG_LINKS.size()):
+			var a = RAG_LINKS[k][0]
+			var b = RAG_LINKS[k][1]
+			var d = P[b] - P[a]
+			var L0 = d.length()
+			if L0 < 1e-5: continue
+			var diff = (L0 - rag.len[k]) / L0 * 0.5
+			P[a] += d * diff; P[b] -= d * diff
+		for k in range(RAG_MIN.size()):
+			var a2 = RAG_MIN[k][0]
+			var b2 = RAG_MIN[k][1]
+			var d2 = P[b2] - P[a2]
+			var L1 = d2.length()
+			if L1 < rag.min[k] and L1 > 1e-5:
+				var diff2 = (L1 - rag.min[k]) / L1 * 0.5
+				P[a2] += d2 * diff2; P[b2] -= d2 * diff2
+		for i in range(P.size()):
+			var r = 0.14 if i == 2 else (0.1 if i < 2 else 0.06)
+			var res = W.collide_point(P[i], r)
+			if res[1]:
+				var np = res[0]
+				# friction on whatever it lies on
+				var vel = np - O[i]
+				O[i] = np - Vector3(vel.x * 0.55, vel.y, vel.z * 0.55)
+				P[i] = np
+	if moving < 0.35:
+		rag.still += h
+		if rag.still > 0.6 and rag.t > 1.0: rag.rest = true
+	else:
+		rag.still = 0.0
+
+func _frame(origin, y, xhint):
+	y = y.normalized()
+	var x = xhint - y * xhint.dot(y)
+	if x.length() < 0.05:
+		x = y.cross(Vector3(0, 0, 1))
+		if x.length() < 0.05: x = Vector3(1, 0, 0)
+	x = x.normalized()
+	return Transform(Basis(x, y, x.cross(y)), origin)
+
+func _rag_pose():
+	var P = rag.p
+	var up = P[1] - P[0]
+	var xs = P[12] - P[9]
+	if xs.length() < 0.05: xs = rag.xh
+	rag.xh = xs.normalized()
+	var xh = P[6] - P[3]
+	root.global_transform = _frame(P[0] - (P[1] - P[0]).normalized() * 0.0, Vector3.UP, rag.xh)
+	hips.global_transform = _frame(P[0], up, xh if xh.length() > 0.05 else rag.xh)
+	spine.global_transform = _frame(P[0], up, rag.xh)
+	var neck = spine.global_transform.xform(Vector3(0, 0.78, 0))
+	head_g.global_transform = _frame(neck, P[2] - P[1], rag.xh)
+	var legs = [[L, 3, 4, 5], [R, 6, 7, 8]]
+	for lg in legs:
+		var Lg = lg[0]
+		Lg.thigh.global_transform = _frame(P[lg[1]], P[lg[1]] - P[lg[2]], rag.xh)
+		Lg.knee.global_transform = _frame(Lg.thigh.global_transform.xform(Vector3(0, -0.45, 0)), P[lg[2]] - P[lg[3]], rag.xh)
+	var arms = [[AL, 9, 10, 11], [AR, 12, 13, 14]]
+	for am in arms:
+		var A = am[0]
+		A.sh.global_transform = _frame(P[am[1]], P[am[1]] - P[am[2]], rag.xh)
+		A.elbow.global_transform = _frame(A.sh.global_transform.xform(Vector3(0, -0.3, 0)), P[am[2]] - P[am[3]], rag.xh)
+		A.hand.global_transform = _frame(A.elbow.global_transform.xform(Vector3(0, -0.29, 0)), P[am[2]] - P[am[3]], rag.xh)
+	sync_bones()
+
+# where the body lies (on the ground under the pelvis)
+func ragdoll_center():
+	if rag == null: return global_transform.origin
+	var c = rag.p[0]
+	return Vector3(c.x, max(0.0, W.ground_at(c.x, c.z, c.y + 0.3)), c.z)
+
+# put the body back together and start the stand-up animation
+func ragdoll_stop():
+	if rag == null: return
+	var c = ragdoll_center()
+	var f = rag.p[1] - rag.p[0]
+	var yaw = atan2(f.x, f.z) if Vector2(f.x, f.z).length() > 0.05 else rotation.y
+	rag = null
+	for i in range(_bones.size()):
+		_bones[i].transform = Transform(Basis(), _rest[i])
+	translation = c
+	rotation = Vector3(0, yaw + PI, 0)
+	getup = 1.0
+	if shadow: shadow.visible = true
+	sync_bones()
+	return c
+
+
+# ---------- emotes (dances and gestures), layered over the normal pose ----------
+const EMOTES = ["dance1", "dance2", "dance3", "hype", "clap", "laugh", "shrug", "salute", "point", "facepalm", "flex", "sit", "snowangel"]
+
+func _emote(em, t):
+	var k = clamp(t / 0.25, 0.0, 1.0)     # ease in over a quarter second
+	if em == "dance1":
+		var b = t * TAU * 1.1
+		var s = sin(b)
+		hips.translation.y = 0.89 - abs(s) * 0.06
+		hips.translation.x = s * 0.06
+		_rot(L.thigh, -0.25 - max(0, s) * 0.4, 0, -0.08); _rot(L.knee, 0.3 + max(0, s) * 0.7, 0, 0)
+		_rot(R.thigh, -0.25 - max(0, -s) * 0.4, 0, 0.08); _rot(R.knee, 0.3 + max(0, -s) * 0.7, 0, 0)
+		_rot(AL.sh, -0.5 + s * 0.45, 0, -0.35); _rot(AL.elbow, -1.6, 0, 0)
+		_rot(AR.sh, -0.5 - s * 0.45, 0, 0.35); _rot(AR.elbow, -1.6, 0, 0)
+		_rot(spine, 0.1, s * 0.28, s * 0.06); _rot(head_g, -0.1 + abs(s) * 0.18, 0, 0)
+	elif em == "dance2":
+		var a = t * 5.0
+		hips.translation.y = 0.9 - abs(sin(a * 0.5)) * 0.05
+		_rot(AL.sh, 0, 0, -1.45 - sin(a) * 0.35 * k); _rot(AL.elbow, -0.5 - sin(a + 1.2) * 0.6, 0, 0)
+		_rot(AR.sh, 0, 0, 1.45 - sin(a + 2.4) * 0.35 * k); _rot(AR.elbow, -0.5 - sin(a + 3.6) * 0.6, 0, 0)
+		_rot(spine, 0.05, 0, sin(a) * 0.09); _rot(head_g, 0, 0, -sin(a) * 0.12)
+		_rot(L.knee, 0.2 + max(0, sin(a * 0.5)) * 0.3, 0, 0); _rot(R.knee, 0.2 + max(0, -sin(a * 0.5)) * 0.3, 0, 0)
+	elif em == "dance3":
+		# the robot: snaps between square poses
+		var q = int(floor(t * 3.2)) % 6
+		var P = [[-1.57, 0.0, -1.57, 0.0, -1.57, -1.57], [0.0, 0.0, -1.57, -1.57, 0.0, -1.57], [-1.57, -0.6, 0.0, -1.57, 0.6, 0.0],
+			[0.0, -1.5, -1.57, 0.0, 1.5, -1.57], [-1.57, 0.0, -1.57, -1.57, 0.0, 0.0], [-2.9, -0.2, 0.0, 0.0, 0.0, -1.57]][q]
+		_rot(AL.sh, P[0], 0, P[1]); _rot(AL.elbow, P[2], 0, 0)
+		_rot(AR.sh, P[3], 0, P[4]); _rot(AR.elbow, P[5], 0, 0)
+		_rot(head_g, 0, [0.5, -0.5, 0.0, 0.5, -0.5, 0.0][q], 0); _rot(spine, 0, [0.3, -0.3, 0.0, -0.3, 0.3, 0.0][q], 0)
+		hips.translation.y = 0.9 if q % 2 == 0 else 0.86
+	elif em == "hype":
+		var j = abs(sin(t * 7.0))
+		hips.translation.y = 0.92 + j * 0.16
+		_rot(L.knee, 0.6 - j * 0.5, 0, 0); _rot(R.knee, 0.6 - j * 0.5, 0, 0)
+		_rot(L.thigh, -0.4 + j * 0.3, 0, 0); _rot(R.thigh, -0.4 + j * 0.3, 0, 0)
+		_rot(AL.sh, -2.6 - j * 0.3, 0, -0.3); _rot(AL.elbow, -0.4 - (1 - j) * 1.2, 0, 0)
+		_rot(AR.sh, -2.6 - (1 - j) * 0.3, 0, 0.3); _rot(AR.elbow, -0.4 - j * 1.2, 0, 0)
+		_rot(head_g, -0.3, 0, 0)
+	elif em == "clap":
+		var cc = 0.5 + 0.5 * sin(t * 14.0)
+		_rot(AL.sh, -1.15 * k, 0, 0.15 + 0.25 * cc); _rot(AL.elbow, -1.05 * k, 0, 0)
+		_rot(AR.sh, -1.15 * k, 0, -0.15 - 0.25 * cc); _rot(AR.elbow, -1.05 * k, 0, 0)
+	elif em == "laugh":
+		var lb = abs(sin(t * 9.0))
+		_rot(spine, 0.12 + lb * 0.18, 0, 0); _rot(head_g, -0.35 + lb * 0.25, 0, 0)
+		_rot(AL.sh, -0.5, 0, 0.12); _rot(AL.elbow, -1.7, 0, 0)
+		_rot(AR.sh, -0.5, 0, -0.12); _rot(AR.elbow, -1.7, 0, 0)
+	elif em == "shrug":
+		_rot(AL.sh, -0.25 * k, 0, -0.5 * k); _rot(AL.elbow, -1.5 * k, 0, 0)
+		_rot(AR.sh, -0.25 * k, 0, 0.5 * k); _rot(AR.elbow, -1.5 * k, 0, 0)
+		_rot(head_g, 0, 0, 0.18 * k); _rot(spine, -0.05, 0, 0)
+	elif em == "salute":
+		_rot(AR.sh, -1.25 * k, 0, 0.95 * k); _rot(AR.elbow, -2.3 * k, 0, 0)
+		_rot(spine, -0.06, 0, 0); _rot(head_g, -0.05, 0, 0)
+	elif em == "point":
+		_rot(AR.sh, -1.55 * k, 0, 0.04); _rot(AR.elbow, -0.05, 0, 0)
+		_rot(spine, 0.02, -0.15, 0)
+	elif em == "facepalm":
+		_rot(AL.sh, -1.3 * k, 0, 0.38 * k); _rot(AL.elbow, -2.45 * k, 0, 0)
+		_rot(head_g, 0.4 * k, 0, 0.1 * sin(t * 2)); _rot(spine, 0.12 * k, 0, 0)
+	elif em == "flex":
+		var fl = 0.15 * sin(t * 6)
+		_rot(AL.sh, 0, 0, -1.5 * k); _rot(AL.elbow, 0, 0, (-1.45 + fl) * k)
+		_rot(AR.sh, 0, 0, 1.5 * k); _rot(AR.elbow, 0, 0, (1.45 - fl) * k)
+		_rot(head_g, -0.15, 0.3 * sin(t * 1.5), 0)
+	elif em == "sit":
+		hips.translation.y = lerp(0.92, 0.3, k)
+		_rot(L.thigh, -1.5 * k, 0, -0.12); _rot(R.thigh, -1.5 * k, 0, 0.12)
+		_rot(L.knee, 1.45 * k, 0, 0); _rot(R.knee, 1.45 * k, 0, 0)
+		_rot(AL.sh, -0.7 * k, 0, 0); _rot(AL.elbow, -0.5 * k, 0, 0)
+		_rot(AR.sh, -0.7 * k, 0, 0); _rot(AR.elbow, -0.5 * k, 0, 0)
+		_rot(spine, 0.15 * k, 0, 0)
+	elif em == "snowangel":
+		var fa = 0.5 + 0.5 * sin(t * 3.2)
+		_rot(AL.sh, 0, 0, -(0.3 + 1.6 * fa)); _rot(AL.elbow, -0.1, 0, 0)
+		_rot(AR.sh, 0, 0, 0.3 + 1.6 * fa); _rot(AR.elbow, -0.1, 0, 0)
+		_rot(L.thigh, 0, 0, -(0.05 + 0.4 * fa)); _rot(R.thigh, 0, 0, 0.05 + 0.4 * fa)
+		_rot(L.knee, 0.05, 0, 0); _rot(R.knee, 0.05, 0, 0)
+		_rot(spine, 0, 0, 0); _rot(head_g, 0, 0, 0)

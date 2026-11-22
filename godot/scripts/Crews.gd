@@ -8,7 +8,9 @@ var CREWS = []
 var ambush_t = 90.0
 var walk_hold = 0.0
 const HANDLES = ["@halo.dre", "@halo_kj", "@halo.moe", "@halo.tay", "@halo_bigs", "@halo.nunu", "@halo_lex", "@halo.zay", "@halo_ock", "@halo.rell", "@halo.sosa", "@halo_trey"]
-const STANDOFF = ["You lost?", "Wrong block.", "Keep walking or don't.", "Ain't nothing for you out here.", "Heard the track. Say it again."]
+const STANDOFF = ["You lost?", "Wrong block.", "@saint.halo said you been talking.", "Keep walking or don't.", "Ain't nothing for you out here.", "Heard the track. Say it again."]
+const SAINT_STANDOFF = ["Look who it is. The rapper.", "Say my name again. Go ahead.", "Calder Ave ain't yours.", "You made a song. I made this block."]
+const WALK = ["Yeah, keep walking.", "Smart.", "Next time.", "That's what I thought."]
 
 class Enemy:
 	var main
@@ -51,11 +53,14 @@ func clear():
 		if is_instance_valid(e.h): e.h.queue_free()
 	ENEMIES.clear(); CREWS.clear()
 
-func spawn_crew(at, n, shooters):
-	var c = { "members": [], "state": "approach", "t": 0.0, "so": 0.0, "aim_hold": 0.0, "fought": false, "over": false, "leave_t": 0.0 }
+func spawn_crew(at, n, shooters, o = {}):
+	var c = { "members": [], "state": "approach", "t": 0.0, "so": 0.0, "aim_hold": 0.0, "fought": false, "over": false, "leave_t": 0.0, "saint": o.get("saint", false), "challenge": o.get("challenge", false) }
 	CREWS.append(c)
-	for i in range(n):
-		var type = "shooter" if i < shooters else "runner"
+	var types = []
+	if c.saint: types.append("saint")
+	for i in range(n): types.append("shooter" if i < shooters else "runner")
+	for i in range(types.size()):
+		var type = types[i]
 		var p = at
 		for _k in range(12):
 			var a = G.rand(0, TAU)
@@ -68,21 +73,33 @@ func spawn_crew(at, n, shooters):
 func _spawn(type, p, crew):
 	var e = Enemy.new()
 	e.main = main; e.type = type; e.T = G.D["ETYPES"][type]; e.crew = crew; e.pos = p; e.hp = float(e.T.hp)
-	e.name = G.pick(HANDLES); e.fire_cd = G.rand(0.6, 1.2); e.strafe = 1 if randf() < 0.5 else -1
-	e.h = load("res://scripts/Human.gd").new().build({ "jacket": e.T.jacket, "jacket2": e.T.jacket2, "pants": 0x18191c, "skin": G.pick([0x5a3a26, 0x7a4a30, 0x4a2e1e, 0x8a5a3a, 0x6b4630]), "hat": 0x8a1c24, "head": "hood" if type == "runner" else "beanie", "mask": 0x111214 if randf() < 0.6 else null })
+	e.name = G.D["CAST"]["saint"].name if type == "saint" else G.pick(HANDLES); e.fire_cd = G.rand(0.6, 1.2); e.strafe = 1 if randf() < 0.5 else -1
+	e.h = load("res://scripts/Human.gd").new().build({ "jacket": e.T.jacket, "jacket2": e.T.jacket2, "pants": 0x18191c, "skin": G.pick([0x5a3a26, 0x7a4a30, 0x4a2e1e, 0x8a5a3a, 0x6b4630]), "hat": 0x8a1c24, "chain": type == "saint", "head": "hood" if type == "runner" else ("none" if type == "saint" else "beanie"), "hair": "braids" if type == "saint" else "none", "mask": 0x111214 if randf() < 0.6 and type != "saint" else null })
 	main.add_child(e.h)
-	e.gun = load("res://assets/guns/" + e.T.gun + ".glb").instance()
+	e.gun = GUN.build(e.T.gun, GUN.def_cfg())
 	e.gun.rotation = Vector3(PI / 2, 0, 0); e.gun.translation = Vector3(0, -0.03, 0.02); e.gun.scale = Vector3.ONE * 1.35
 	e.h.gun_slot.add_child(e.gun)
 	e.yaw = atan2(main.player.pos.x - p.x, main.player.pos.z - p.z)
 	ENEMIES.append(e); crew.members.append(e)
 	return e
 
-func engage(c, _why = ""):
-	if c.state == "combat": return
+func leader(c):
+	for e in c.members:
+		if e.type == "saint" and not e.is_down(): return e
+	for e in c.members:
+		if not e.is_down(): return e
+	return null
+
+func engage(c, why = ""):
+	if c.state == "combat" or c.over: return
+	var was = c.state == "standoff"
 	c.state = "combat"; c.fought = true
-	main.hud.say(c.members[0].name, G.pick(["Bad move.", "Here we go.", "Now you did it."]))
-	G.S["heat"] = min(100, G.S["heat"] + 2)
+	var L = leader(c)
+	if L: main.hud.say(L.name, G.pick(["Your Heat talks for you.", "No talking tonight."] if why == "skip" else ["Bad move.", "Here we go.", "Now you did it."]))
+	main.story.add_heat(5)
+	main.story.on_crew_engaged()
+	if why == "skip": main.hud.banner("No standoff", "Your Heat is too high to talk")
+	elif was: main.hud.banner("Fight", "")
 
 func damage(e, dmg, head, dir, melee):
 	if e.is_down(): return
@@ -92,7 +109,9 @@ func damage(e, dmg, head, dir, melee):
 	e.see_t = max(e.see_t, 0.3)
 	if e.hp <= 0:
 		e.state = "down"; e.down_t = 0
+		e.h.ragdoll_start(Vector3(e.vel.x, 0, e.vel.z) * 0.5, Vector3(dir.x, 0, dir.z) * (3.2 if melee else 2.2) + Vector3(0, 1.0, 0), G.rand(-1, 1))
 		main.sfx.play3d("bodyfall", e.pos, 0.8)
+		if e.type == "saint": main.story.on_saint_down()
 		G.S["stats"]["downs"] = G.S["stats"].get("downs", 0) + 1
 		G.S["heat"] = min(100, G.S["heat"] + 3)
 
@@ -165,9 +184,10 @@ func update(dt):
 			if not c.over:
 				c.over = true
 				if c.fought:
-					G.S["heat"] = min(100, G.S["heat"] + 4)
-					main.hud.banner("Fight over", "Heat +4")
+					main.story.add_heat(4)
+					if not c.saint or not G.S["flags"].get("saintDown", false): main.hud.banner("Fight over", "Heat +4")
 					main.gang.rep(3)
+					main.story.on_crew_defeated(c)
 		var dmin = INF
 		for e in alive: dmin = min(dmin, e.pos.distance_to(P.pos))
 		c.t += dt
@@ -208,15 +228,28 @@ func active_standoff():
 	return null
 
 func _standoff(c, alive):
+	if G.S["heat"] >= 75 and not c.saint:
+		engage(c, "skip"); return
 	c.state = "standoff"; c.so = 0
-	main.hud.say(alive[0].name, G.pick(STANDOFF))
+	var L = leader(c)
+	main.hud.say(L.name, G.pick(SAINT_STANDOFF if L.type == "saint" else STANDOFF))
+	main.player.shake = max(main.player.shake, 0.2)
+	if c.challenge and L.type == "saint": main.cutscene.play(main.cutscene.cut_saint(L))
 
 func _walk_away(c):
+	if c.state != "standoff": return
 	c.state = "leave"; c.leave_t = 0
-	for e in c.members: e.leave_to = e.pos + Vector3(G.rand(-40, 40), 0, G.rand(-40, 40))
-	G.S["heat"] = max(0, G.S["heat"] - 6)
-	main.hud.banner("Walked away", "Heat −6")
+	var P = main.player
+	for e in c.members:
+		var a = atan2(e.pos.x - P.pos.x, e.pos.z - P.pos.z)
+		e.leave_to = Vector3(clamp(e.pos.x + sin(a) * 60, -W.BOUND + 7, W.BOUND - 7), 0, clamp(e.pos.z + cos(a) * 60, -W.BOUND + 7, W.BOUND - 7))
+	var L = leader(c)
+	if L: main.hud.say(L.name, "That's what you do. Walk." if L.type == "saint" else G.pick(WALK))
+	var dh = -12 if c.saint else -9
+	main.story.add_heat(dh)
+	main.hud.banner("Walked away", "Heat %d" % dh)
 	main.sfx.play("whoosh", 0.4)
+	main.story.on_walk_away(c)
 
 func _spawn_point(min_d, max_d):
 	var P = main.player
@@ -240,8 +273,10 @@ func _update_enemy(e, dt):
 	if e.is_down():
 		e.down_t += dt
 		e.vel *= exp(-dt * 3)
-		if e.vel.length() > 0.1: W.move_body(e, e.vel.x * dt, e.vel.z * dt, dt)
-		H.translation = e.pos
+		if H.is_ragdoll(): e.pos = H.ragdoll_center()
+		else:
+			if e.vel.length() > 0.1: W.move_body(e, e.vel.x * dt, e.vel.z * dt, dt)
+			H.translation = e.pos
 		H.animate(dt, { "down": min(1.0, e.down_t / 0.55) })
 		e.gun.visible = false
 		if e.down_t > 26:

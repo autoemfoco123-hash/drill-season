@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/chi_1.ogg-0cf3e22ee2297322d45f7e405da02f6d.oggstr"
+
+[deps]
+
+source_file="res://assets/studio/chi_1.ogg"
+dest_files=[ "res://.import/chi_1.ogg-0cf3e22ee2297322d45f7e405da02f6d.oggstr" ]
+
+[params]
+
+loop=true
+loop_offset=0

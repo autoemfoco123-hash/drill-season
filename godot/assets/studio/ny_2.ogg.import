@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/ny_2.ogg-63f3e0dc31da9139979de26aeab9b173.oggstr"
+
+[deps]
+
+source_file="res://assets/studio/ny_2.ogg"
+dest_files=[ "res://.import/ny_2.ogg-63f3e0dc31da9139979de26aeab9b173.oggstr" ]
+
+[params]
+
+loop=true
+loop_offset=0

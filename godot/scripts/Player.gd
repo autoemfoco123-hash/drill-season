@@ -52,13 +52,22 @@ var step_acc = 0.0
 var vm = null           # first-person hands and gun
 var vm_gun = null
 var vm_key = ""
+var emote_name = ""     # a dance or gesture from the emote wheel
+var emote_t = 0.0
+var emote_dur = 0.0
+var rag_t = 0.0         # time left on the ground as a ragdoll
+var flopped = false
+var slip_t = 0.0
+var throw_t = 0.0
+var snow_cd = 0.0
+var clap_t = 0.0
 const PUNCHES = [{ "dmg": 9, "cd": 0.3, "side": -1, "reach": 1.75 }, { "dmg": 12, "cd": 0.36, "side": 1, "reach": 1.8 }, { "dmg": 19, "cd": 0.62, "side": -1, "reach": 1.7, "hook": true }]
 
 func setup(m):
 	main = m
 
 func stats():
-	return G.D["WEAPONS"][G.S["cur"]]
+	return GUN.stats(G.S["cur"])
 
 func spawn():
 	_build_body()
@@ -80,12 +89,12 @@ func _build_body():
 	_refresh_gun()
 
 func _refresh_gun():
-	var key = G.S["cur"]
+	var key = G.S["cur"] + JSON.print(GUN.cfg_of(G.S["cur"]))
 	if key == gun_key and gun_model:
 		return
 	if gun_model:
 		gun_model.queue_free()
-	gun_model = load("res://assets/guns/" + key + ".glb").instance()
+	gun_model = GUN.build(G.S["cur"])
 	gun_model.rotation = Vector3(PI / 2, 0, 0)
 	gun_model.translation = Vector3(0, -0.03, 0.02)
 	gun_model.scale = Vector3.ONE * 1.35
@@ -109,7 +118,7 @@ func fp_on():
 func _input(e):
 	if G.MODE != "play":
 		return
-	if e is InputEventMouseMotion and Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED:
+	if e is InputEventMouseMotion and Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED and not main.hud.wheel_open():
 		look(e.relative.x, e.relative.y)
 	if e is InputEventMouseButton and e.pressed and Input.get_mouse_mode() != Input.MOUSE_MODE_CAPTURED:
 		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
@@ -122,7 +131,7 @@ func _input(e):
 		if car: main.sfx.next_station()
 		else: start_reload()
 	elif e.is_action_pressed("next_weapon") and not car:
-		cycle_weapon()
+		pass   # tap cycles, hold opens the weapon wheel (HUD)
 	elif e.is_action_pressed("gun1"): switch_weapon("k9")
 	elif e.is_action_pressed("gun2"): switch_weapon("draft")
 	elif e.is_action_pressed("gun3"): switch_weapon("plow")
@@ -133,6 +142,10 @@ func _input(e):
 		use_bandage()
 	elif e.is_action_pressed("wave") and not car:
 		wave_t = 2.2
+	elif e.is_action_pressed("flop") and not car:
+		flop()
+	elif e.is_action_pressed("snowball") and not car:
+		throw_snowball()
 	elif e.is_action_pressed("flip"):
 		flip_t = max(flip_t, 2.4)
 		main.peds.flip_react(pos)
@@ -173,7 +186,7 @@ func update(dt):
 	# right stick and arrow keys look
 	var lx = Input.get_action_strength("look_r") - Input.get_action_strength("look_l")
 	var ly = Input.get_action_strength("look_d") - Input.get_action_strength("look_u")
-	if abs(lx) + abs(ly) > 0.05 and G.MODE == "play":
+	if abs(lx) + abs(ly) > 0.05 and G.MODE == "play" and not main.hud.wheel_open():
 		var k = 1100 * dt * float(G.S["settings"]["pad"].get("sens", 1.0)) / max(0.1, float(G.S["settings"].get("sens", 1.0)))
 		look(sign(lx) * pow(abs(lx), 1.6) * k, sign(ly) * pow(abs(ly), 1.6) * k * 0.72)
 	if car:
@@ -185,6 +198,7 @@ func update(dt):
 			G.S["health"] = min(60, G.S["health"] + dt * 1.5)
 		return
 	human.visible = true
+	if _ragdoll_update(dt): return
 	var busy = G.MODE != "play"
 	var ix = Input.get_action_strength("move_r") - Input.get_action_strength("move_l")
 	var iz = Input.get_action_strength("move_f") - Input.get_action_strength("move_b")
@@ -201,6 +215,16 @@ func update(dt):
 	var st = stats()
 	aim_t = clamp(aim_t + (1 if aiming else -1) * dt * 7 * (1.8 if G.S.get("fists", false) else float(st.get("aimSpeed", 1))), 0, 1)
 	var moving = Vector2(ix, iz).length() > 0.1
+	# emotes play until you move (or run out)
+	if emote_name != "":
+		emote_t += dt
+		if (moving and emote_t > 0.3) or aiming or (emote_dur > 0 and emote_t > emote_dur) or Input.is_action_pressed("fire"):
+			emote_name = ""
+		elif emote_name == "clap":
+			clap_t -= dt
+			if clap_t <= 0:
+				clap_t = 0.45; main.sfx.play3d("clap", pos + Vector3(0, 1.3, 0), 0.35, G.rand(1.6, 1.9))
+	throw_t = max(0, throw_t - dt); snow_cd = max(0, snow_cd - dt)
 	var want_sprint = not busy and Input.is_action_pressed("sprint") and iz > 0.3 and not aiming and moving
 	if want_sprint and crouch: crouch = false
 	var cold_k = 0.4 if G.S.get("warmth", 100) < 35 else 1.0
@@ -226,6 +250,16 @@ func update(dt):
 		mz /= ml
 	var mag = min(1, Vector2(ix, iz).length())
 	var ice = main.vehicles.on_ice(pos.x, pos.z, pos.y)
+	if ice and sprinting and on_ground:
+		slip_t += dt
+		if slip_t > 0.4 and randf() < dt * 0.9:
+			slip_t = 0
+			knock(Vector3(vel.x * 0.9, 2.5, vel.z * 0.9), 0, 2.2)
+			main.hud.banner("Slipped on the ice", "")
+			main.story.post_feed("@ice.cold.ivy", "just watched somebody eat it on the ice on %s" % main.hud.street_name(pos))
+			return
+	else:
+		slip_t = 0
 	var acc = (1.8 if ice else 13.0) if on_ground else 2.5
 	var k2 = 1 - exp(-acc * dt)
 	vel.x += (mx * spd * mag - vel.x) * k2
@@ -253,12 +287,17 @@ func update(dt):
 	var fists = G.S.get("fists", false)
 	human.animate(dt, {
 		"speed": speed, "crouch": (1.0 if not aiming else 0.6) if crouch else 0.0, "aim": 0.0 if fists else max(aim_t, 1.0 if G.GAME_T - last_shot < 0.5 else 0.0),
-		"pitch": cam_pitch, "down": clamp(down_t, 0, 1) if down else 0.0, "twoHand": G.S["cur"] != "k9", "shiver": G.S.get("warmth", 100) < 30,
+		"pitch": cam_pitch, "down": (clamp(down_t, 0, 1) if down else 0.0) if emote_name != "snowangel" else min(1.0, emote_t * 3), "twoHand": G.S["cur"] != "k9", "shiver": G.S.get("warmth", 100) < 30,
 		"hands": hands_up > 0, "wave": wave_t > 0 and not aiming, "flip": flipping(),
 		"fists": fists, "guard": fists and aiming, "punch": punch_t / punch_dur if punch_t > 0 else 0.0, "punchSide": punch_side, "hook": punch_hook,
+		"emote": emote_name, "et": emote_t,
 	})
+	if throw_t > 0:
+		# overhand throw on the right arm
+		var tk = throw_t / 0.45
+		human._rot(human.AR.sh, lerp(-2.7, -0.6, 1 - tk), 0, 0.2); human._rot(human.AR.elbow, lerp(-1.6, -0.2, 1 - tk), 0, 0); human.sync_bones()
 	if gun_model:
-		gun_model.visible = not fists and hands_up <= 0
+		gun_model.visible = not fists and hands_up <= 0 and emote_name == "" and throw_t <= 0
 	# timers
 	fire_cd -= dt; switch_t -= dt; bloom = max(0, bloom - dt * 2.2)
 	if reload_t > 0:
@@ -338,7 +377,7 @@ func _hide_vm():
 
 # first person: your hands and the gun (or both fists)
 func _update_vm(dt, a):
-	var key = G.S["cur"] + str(G.S.get("fists", false))
+	var key = G.S["cur"] + str(G.S.get("fists", false)) + JSON.print(GUN.cfg_of(G.S["cur"]))
 	if vm == null or key != vm_key:
 		if vm: vm.queue_free()
 		vm = Spatial.new()
@@ -351,7 +390,7 @@ func _update_vm(dt, a):
 				_vm_part(f, SphereMesh.new(), skin, Vector3(), Vector3(0.05, 0.045, 0.055))
 				_vm_part(f, CylinderMesh.new(), sleeve, Vector3(s * 0.04, -0.1, 0.2), Vector3(0.045, 0.22, 0.045), Vector3(1.2, 0, 0))
 		else:
-			vm_gun = load("res://assets/guns/" + G.S["cur"] + ".glb").instance()
+			vm_gun = GUN.build(G.S["cur"])
 			vm_gun.rotation = Vector3(0, PI, 0)
 			vm.add_child(vm_gun)
 			_vm_part(vm, SphereMesh.new(), skin, Vector3(0.004, -0.032, 0.035), Vector3(0.04, 0.045, 0.05))
@@ -455,6 +494,8 @@ func try_fire():
 	var chest = Vector3(pos.x, pivot_y - 0.15, pos.z)
 	org += fwd * max(0.3, (chest - org).dot(fwd))
 	var muzzle = human.gun_slot.global_transform.origin + fwd * 0.3
+	if fp_on() and vm_gun and vm_gun.has_node("Muzzle"): muzzle = vm_gun.get_node("Muzzle").global_transform.origin
+	elif gun_model and gun_model.has_node("Muzzle"): muzzle = gun_model.get_node("Muzzle").global_transform.origin
 	var spread = lerp(float(st.spread), float(st.aimSpread), aim_t) * (1.35 if speed > 1 else 1.0) * (0.8 if crouch else 1.0) * (1 + bloom)
 	var hit_any = false
 	var head_any = false
@@ -464,6 +505,7 @@ func try_fire():
 		var hp = org + d * (float(st.range) * 2 if res.t == INF else res.t)
 		if i < 3:
 			main.sfx.tracer(muzzle, hp)
+			if i == 0: main.net.send_shot(muzzle, hp)
 		if res.who != null:
 			var dmg = float(st.dmg) * (1.8 if res.head else 1.0) * (0.5 if res.t > float(st.range) else 1.0)
 			var dir = Vector3(d.x, 0, d.z)
@@ -492,7 +534,7 @@ func shoot_ray(o, d, max_t):
 	var who = null
 	var head = false
 	var hit_car = null
-	for list in [main.crews.ENEMIES, main.peds.PEDS, main.police.COPS]:
+	for list in [main.crews.ENEMIES, main.peds.PEDS, main.police.COPS, main.net.targets()]:
 		for e in list:
 			if e.is_down(): continue
 			var r = ray_body(o, d, e.pos, e.crouched if "crouched" in e else false)
@@ -550,7 +592,7 @@ func punch():
 func melee_target(p, f, reach):
 	var best = null
 	var bs = INF
-	for list in [main.crews.ENEMIES, main.peds.PEDS, main.police.COPS]:
+	for list in [main.crews.ENEMIES, main.peds.PEDS, main.police.COPS, main.net.targets()]:
 		for e in list:
 			if e.is_down(): continue
 			var dv = Vector3(e.pos.x - p.x, 0, e.pos.z - p.z)
@@ -574,7 +616,8 @@ func _land_punch(h):
 	shake = max(shake, 0.2 if hook else 0.1)
 	Input.start_joy_vibration(0, 0.6 if hook else 0.3, 0.6, 0.14 if hook else 0.08)
 	e.take_hit(h.pu.dmg, false, h.f, true, true)
-	e.vel.x += h.f.x * (4 if hook else 2.2); e.vel.z += h.f.z * (4 if hook else 2.2)
+	if "vel" in e:
+		e.vel.x += h.f.x * (4 if hook else 2.2); e.vel.z += h.f.z * (4 if hook else 2.2)
 
 # incoming punch: your guard blocks most of it when you face it
 func take_punch(dmg, from):
@@ -601,21 +644,111 @@ func hurt(dmg, from, silent = false):
 
 func _downed():
 	if dead: return
-	dead = true; down_t = 4
+	dead = true; down_t = 4; emote_name = ""
 	G.S["stats"]["timesDowned"] = G.S["stats"].get("timesDowned", 0) + 1
 	if car: exit_vehicle(true)
+	if not human.is_ragdoll():
+		human.ragdoll_start(Vector3(vel.x, 0, vel.z), Vector3(randf() - 0.5, 0.5, randf() - 0.5) * 2.0, G.rand(-1, 1))
+	rag_t = 99
 	main.sfx.play("boom", 0.6)
-	main.hud.banner("Down", "Calder General")
-	yield(get_tree().create_timer(3.0), "timeout")
+	yield(get_tree().create_timer(1.2), "timeout")
+	main.cutscene.play(main.cutscene.cut_downed(), self, "_hospital")
+
+func _hospital():
 	main.crews.clear(); main.police.clear()
 	G.S["health"] = 60; G.S["warmth"] = 75
 	var lost = round(G.S["cash"] * 0.2)
 	G.S["cash"] -= lost
 	G.S["heat"] = max(0, G.S["heat"] - 25)
+	if human.is_ragdoll(): human.ragdoll_stop()
+	human.getup = 0.0
+	rag_t = 0; flopped = false
 	place(G.D["LOC"]["hospital"].x, 0, G.D["LOC"]["hospital"].z, PI / 2)
 	dead = false; down_t = 0
 	main.hud.banner("Calder General", "Hospital bill " + G.fmt_money(lost))
 	G.save_game()
+
+# ---------- ragdoll, emotes and snowballs ----------
+func is_ragdoll():
+	return human != null and human.is_ragdoll()
+
+# knocked off your feet: v is the push, dmg the damage, t how long you stay down
+func knock(v, dmg, t = 2.0):
+	if car or dead: return
+	emote_name = ""
+	human.ragdoll_start(Vector3(vel.x, 0, vel.z), v, G.rand(-1.5, 1.5))
+	rag_t = max(rag_t, t); flopped = false
+	shake = 1.0
+	if dmg > 0: hurt(dmg, null, true)
+
+func flop():
+	if dead or car: return
+	if is_ragdoll():
+		if flopped: rag_t = 0.0
+		return
+	var f = Vector3(-sin(cam_yaw), 0, -cos(cam_yaw))
+	human.ragdoll_start(Vector3(vel.x, 0, vel.z), f * 2.5 + Vector3(0, 1.0, 0), G.rand(-1, 1))
+	rag_t = 30; flopped = true; emote_name = ""
+	G.S["stats"]["emotes"] = int(G.S["stats"].get("emotes", 0)) + 1
+	main.sfx.play3d("bodyfall", pos, 0.6)
+	main.peds.react_to_emote(pos, "flop")
+
+func _ragdoll_update(dt):
+	if not is_ragdoll(): return false
+	human.ragdoll_update(dt)
+	var c = human.ragdoll_center()
+	pos = c; vel = Vector3(); speed = 0; aim_t = 0; aiming = false
+	rag_t -= dt
+	var still = human.rag != null and human.rag.rest
+	var push = Input.get_action_strength("move_f") + Input.get_action_strength("move_b") + Input.get_action_strength("move_l") + Input.get_action_strength("move_r")
+	var want_up = flopped and G.MODE == "play" and (Input.is_action_just_pressed("jump") or push > 0.5) and human.rag.t > 0.8
+	if not dead and ((rag_t <= 0 and (still or human.rag.t > 6)) or want_up):
+		human.ragdoll_stop()
+		place(c.x, c.y, c.z)
+		body_yaw = human.rotation.y
+		rag_t = 0; flopped = false
+	return true
+
+func emote(name, dur = 0.0):
+	if car or dead or is_ragdoll(): return
+	emote_name = name; emote_t = 0.0; emote_dur = dur; clap_t = 0
+	G.S["stats"]["emotes"] = int(G.S["stats"].get("emotes", 0)) + 1
+	if name.begins_with("dance") or name == "hype":
+		main.peds.react_to_emote(pos, "dance")
+		main.gang.dance_along(name)
+	elif name == "laugh" or name == "flex" or name == "point":
+		main.peds.react_to_emote(pos, name)
+
+func hands_up_for(t):
+	hands_up = max(hands_up, t)
+
+func throw_snowball():
+	if snow_cd > 0 or dead or car or is_ragdoll(): return
+	snow_cd = 0.7; throw_t = 0.45; emote_name = ""
+	# aim at whatever the crosshair is on, with an arc
+	var cam = main.camera.global_transform
+	var f = -cam.basis.z
+	var res = shoot_ray(cam.origin, f, 45.0)
+	var target = cam.origin + f * (res.t if res.t != INF else 18.0)
+	if res.who != null: target = res.who.pos + Vector3(0, 1.3, 0)
+	else:
+		# a little aim assist: the person closest to the crosshair within a narrow cone
+		var best = 0.97
+		for list in [main.peds.PEDS, main.crews.ENEMIES, main.police.COPS, main.gang.FOL, main.net.targets()]:
+			for e in list:
+				if e.is_down() if e.has_method("is_down") else e.state == "down": continue
+				var to = e.pos + Vector3(0, 1.3, 0) - cam.origin
+				var dl = to.length()
+				if dl < 2 or dl > 30: continue
+				var c = to.normalized().dot(f)
+				if c > best:
+					best = c; target = e.pos + Vector3(0, 1.3, 0)
+	yield(get_tree().create_timer(0.16), "timeout")
+	var from = pos + Vector3(0, 1.75, 0) + Vector3(f.x, 0, f.z).normalized() * 0.4
+	var d = target - from
+	var t = clamp(d.length() / 18.0, 0.12, 1.6)
+	var v = d / t + Vector3(0, 0.5 * 14.0 * t, 0)
+	main.fx.throw_snowball(from, v, self)
 
 func use_bandage():
 	if G.S.get("bandages", 0) > 0 and G.S["health"] < 100 and heal_t <= 0:

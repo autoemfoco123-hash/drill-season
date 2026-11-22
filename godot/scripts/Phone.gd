@@ -11,6 +11,11 @@ var app = ""
 var gang_tab = "crew"
 var form = { "name": "", "tag": "", "color": 0 }
 var msg = ""
+var thread = null
+var blok_tab = "feed"
+var ip_edit = null
+const APPS = [["map", "Map", "#3a7bd5"], ["msgs", "Messages", "#34c759"], ["jobs", "Jobs", "#ff9a3c"], ["blok", "Blok", "#ff4f81"], ["camera", "Camera", "#8e8e93"], ["gang", "Gang", "#ff4b3a"],
+	["garage", "Garage", "#5ac8fa"], ["style", "Wardrobe", "#c79bff"], ["online", "Online", "#30d158"], ["settings", "Settings", "#636366"], ["pad", "Controller", "#ffd60a"], ["stats", "Stats", "#64d2ff"]]
 
 class BigMap extends Control:
 	var main
@@ -114,23 +119,36 @@ func _sec(text):
 	_lbl(text.to_upper(), G.font_s, Color(1, 0.7, 0.28))
 
 func _home():
-	app = ""
+	app = ""; thread = null
 	title_lbl.text = G.clock_str() + " · Day " + str(int(G.S.get("day", 1)))
 	_clear()
-	var grid = GridContainer.new(); grid.columns = 2
+	var grid = GridContainer.new(); grid.columns = 3; grid.add_constant_override("hseparation", 10); grid.add_constant_override("vseparation", 10)
 	body.add_child(grid)
 	var first = null
-	for a in [["map", "Map"], ["gang", "Gang"], ["garage", "Garage"], ["style", "Style"], ["settings", "Settings"], ["pad", "Controller"], ["stats", "Stats"]]:
-		var b = _btn(a[1], self, "show_app", [a[0]], false, grid)
-		b.rect_min_size = Vector2(164, 64)
+	var unread = 0
+	for k in G.S["unread"].keys(): unread += int(G.S["unread"][k])
+	for a in APPS:
+		var label = a[1]
+		if a[0] == "msgs" and unread > 0: label += " (%d)" % unread
+		var b = _btn(label, self, "show_app", [a[0]], false, grid)
+		b.rect_min_size = Vector2(106, 74)
+		var n = StyleBoxFlat.new(); n.bg_color = Color(a[2]).darkened(0.35); n.set_corner_radius_all(16)
+		var f = n.duplicate(); f.bg_color = Color(a[2]); f.set_border_width_all(2); f.border_color = Color(1, 1, 1)
+		b.add_stylebox_override("normal", n); b.add_stylebox_override("hover", f); b.add_stylebox_override("focus", f); b.add_stylebox_override("pressed", f)
+		b.add_font_override("font", G.font_s)
 		if first == null: first = b
+	var tr = main.train.next_train_in()
+	_lbl("Next L train at Calder in %d s" % int(tr), G.font_xs, Color(0.62, 0.68, 0.76))
 	_btn("Close", self, "close")
 	first.grab_focus()
 
 func show_app(id):
+	if id == "style":
+		close(); main.wardrobe.open(); return
 	app = id
 	_clear()
-	var names = { "map": "Map", "gang": "Gang", "garage": "Garage", "style": "Style", "settings": "Settings", "pad": "Controller", "stats": "Stats" }
+	var names = {}
+	for a in APPS: names[a[0]] = a[1]
 	title_lbl.text = names.get(id, id)
 	call("_app_" + id)
 	for c in body.get_children():
@@ -140,6 +158,178 @@ func show_app(id):
 			for cc in c.get_children():
 				if cc is Button and not cc.disabled:
 					cc.grab_focus(); return
+
+# ---------- Messages ----------
+func _app_msgs():
+	var C = G.D["CAST"]
+	if thread != null:
+		var who = thread
+		title_lbl.text = C[who].name
+		G.S["unread"][who] = 0
+		_btn("‹ All messages", self, "_msgs_back")
+		var th = G.S["threads"].get(who, [])
+		if th.size() == 0: _lbl("No messages yet.", G.font_s, Color(0.62, 0.68, 0.76))
+		for m in th:
+			var card = PanelContainer.new()
+			var sb = StyleBoxFlat.new(); sb.bg_color = Color(C[who].color).darkened(0.55); sb.set_corner_radius_all(14)
+			sb.content_margin_left = 12; sb.content_margin_right = 12; sb.content_margin_top = 8; sb.content_margin_bottom = 8
+			card.add_stylebox_override("panel", sb)
+			var l = Label.new(); l.text = m.text; l.autowrap = true; l.add_font_override("font", G.font_s); l.rect_min_size = Vector2(300, 0)
+			card.add_child(l); body.add_child(card)
+		return
+	var any = false
+	for who in ["benny", "kiara", "coach", "vance", "saint", "reyes"]:
+		var th2 = G.S["threads"].get(who, [])
+		if th2.size() == 0: continue
+		any = true
+		var last = th2[-1].text
+		var u = int(G.S["unread"].get(who, 0))
+		var b = _btn("%s%s" % [C[who].name, ("  ● %d new" % u) if u > 0 else ""], self, "_open_thread", [who])
+		b.align = Button.ALIGN_LEFT; b.rect_min_size = Vector2(0, 40)
+		_lbl("    " + last.substr(0, 60) + ("…" if last.length() > 60 else ""), G.font_xs, Color(0.7, 0.75, 0.82))
+		b.add_color_override("font_color", Color(C[who].color).lightened(0.4))
+	if not any: _lbl("No messages yet. People text you as the story moves.", G.font_s, Color(0.62, 0.68, 0.76))
+
+func _open_thread(who):
+	thread = who; show_app("msgs")
+func _msgs_back():
+	thread = null; show_app("msgs")
+
+# ---------- Jobs ----------
+func _app_jobs():
+	var st = main.story
+	_lbl("Track a job to put it on your map.", G.font_xs, Color(0.62, 0.68, 0.76))
+	for id in st.JOB_IDS:
+		var ok = st.job_available(id)
+		var cast = G.D["CAST"][st.JOB_GIVER[id]]
+		var tracked = G.S.get("tracked") == id
+		_lbl(("● " if tracked else "") + st.JOB_TITLE[id] + "  ·  " + cast.name, G.font_m, Color(cast.color) if ok else Color(0.5, 0.54, 0.6))
+		_lbl(st.job_desc(id) if ok else st.job_lock(id), G.font_xs, Color(0.85, 0.88, 0.92) if ok else Color(0.5, 0.54, 0.6))
+		if ok:
+			var cd = st.cd_left(st.JOB_CD[id]) if st.JOB_CD.has(id) else 0.0
+			_btn(("Untrack" if tracked else "Track") + "  ·  " + st.job_reward(id), self, "_track", [id])
+
+func _track(id):
+	main.story.track_job(id); show_app("jobs")
+
+# ---------- Blok ----------
+func _app_blok():
+	var row = HBoxContainer.new(); body.add_child(row)
+	for t in [["feed", "Feed"], ["me", "Profile"]]:
+		var b = _btn(("● " if blok_tab == t[0] else "") + t[1], self, "_blok_tab", [t[0]], false, row)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_btn("Post a photo", self, "show_app", ["camera"])
+	if blok_tab == "me":
+		var so = G.S["social"]
+		_lbl("@" + str(G.S["name"]), G.font_l, Color(1, 0.7, 0.28))
+		_lbl(str(so.get("bio", "")), G.font_s, Color(0.75, 0.8, 0.88))
+		_lbl("%d posts   ·   %s followers   ·   %d following" % [so["posts"].size(), G.fmt_money(main.blok.followers()).substr(1), int(so.get("following", 96))], G.font_s)
+		for p in so["posts"]: _post_card("@" + str(G.S["name"]), Color(1, 0.7, 0.28), p.caption, p.get("img"), p.likes, p.comments, p.at, p.kind)
+		if so["posts"].size() == 0: _lbl("No posts yet. Record a track, shoot a video or take a photo.", G.font_s, Color(0.62, 0.68, 0.76))
+		return
+	var posts = []
+	for p in G.S["social"]["posts"]: posts.append([float(p.at), "@" + str(G.S["name"]), Color(1, 0.7, 0.28), p.caption, p.get("img"), p.likes, p.comments, p.kind])
+	for f in G.S["feed"]: posts.append([float(f.get("at", 0)), f.h, Color(0.55, 0.62, 0.7), f.text, null, int(f.get("likes", 0)), [], "text"])
+	posts.sort_custom(self, "_by_time")
+	for i in range(min(25, posts.size())):
+		var q = posts[i]
+		_post_card(q[1], q[2], q[3], q[4], q[5], q[6], q[0], q[7])
+
+func _by_time(a, b): return a[0] > b[0]
+func _blok_tab(t):
+	blok_tab = t; show_app("blok")
+
+func _ago(ms):
+	var s2 = max(0, OS.get_unix_time() - ms / 1000.0)
+	if s2 < 60: return "now"
+	if s2 < 3600: return "%dm" % int(s2 / 60)
+	if s2 < 86400: return "%dh" % int(s2 / 3600)
+	return "%dd" % int(s2 / 86400)
+
+func _post_card(handle, col, text, img, likes, comments, at, kind):
+	var card = PanelContainer.new()
+	var sb = StyleBoxFlat.new(); sb.bg_color = Color(0.08, 0.09, 0.12); sb.set_corner_radius_all(12)
+	sb.content_margin_left = 10; sb.content_margin_right = 10; sb.content_margin_top = 8; sb.content_margin_bottom = 8
+	card.add_stylebox_override("panel", sb)
+	var v = VBoxContainer.new(); card.add_child(v)
+	var h = Label.new(); h.text = handle + "  ·  " + _ago(at); h.add_font_override("font", G.font_xs); h.add_color_override("font_color", col); v.add_child(h)
+	var tex = main.blok.texture_for(img)
+	if tex:
+		var tr = TextureRect.new(); tr.texture = tex; tr.expand = true; tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED; tr.rect_min_size = Vector2(300, 168); v.add_child(tr)
+	elif kind == "track":
+		var cover = ColorRect.new(); cover.color = Color(0.45, 0.25, 0.08); cover.rect_min_size = Vector2(300, 60); v.add_child(cover)
+		var ct = Label.new(); ct.text = "♪ " + str(text).to_upper(); ct.autowrap = true; ct.add_font_override("font", G.font_m); ct.rect_min_size = Vector2(290, 0); cover.add_child(ct)
+	var t = Label.new(); t.text = str(text); t.autowrap = true; t.add_font_override("font", G.font_s); t.rect_min_size = Vector2(300, 0); v.add_child(t)
+	var meta = Label.new(); meta.text = "♥ %d   ·   %d comments" % [int(likes), comments.size()]; meta.add_font_override("font", G.font_xs); meta.add_color_override("font_color", Color(0.62, 0.68, 0.76)); v.add_child(meta)
+	var last = comments.slice(max(0, comments.size() - 2), comments.size() - 1) if comments.size() > 0 else []
+	for c in last:
+		var cl = Label.new(); cl.text = c.h + "  " + c.t; cl.autowrap = true; cl.add_font_override("font", G.font_xs); cl.rect_min_size = Vector2(300, 0); v.add_child(cl)
+	body.add_child(card)
+
+# ---------- Camera ----------
+const CAPTIONS = ["Calder after dark", "the Hawk is out", "booth tonight", "Bishop St forever", "-10 and still outside", "lake effect", "who want smoke? (snowball)", "new fit", "my block", "the L at night"]
+func _app_camera():
+	_lbl("Point the camera, pick a caption, and the phone hides for the shot. It posts to Blok.", G.font_xs, Color(0.62, 0.68, 0.76))
+	var grid = GridContainer.new(); grid.columns = 2; body.add_child(grid)
+	for c in CAPTIONS:
+		var b = _btn(c, self, "_snap", [c], false, grid); b.rect_min_size = Vector2(164, 40)
+
+func _snap(caption):
+	close()
+	yield(get_tree().create_timer(0.25), "timeout")
+	main.blok.take_photo(caption)
+	main.hud.toast("Blok:  Posted \u201c%s\u201d" % caption)
+
+# ---------- Online ----------
+func _app_online():
+	var net = main.net
+	net.lan_listen(true)
+	var st = { "offline": "Playing solo", "hosting": "Hosting · %d online" % (net.R.size() + 1), "joining": "Joining…", "online": "Online · %d players" % (net.R.size() + 1) }[net.status]
+	_lbl(st, G.font_l, Color(0.48, 0.88, 0.65) if net.online() else Color(1, 0.7, 0.28))
+	if net.msg != "": _lbl(net.msg, G.font_xs, Color(0.75, 0.8, 0.88))
+	if net.status == "offline":
+		_btn("Host a game", self, "_host")
+		_sec("Join by IP")
+		ip_edit = LineEdit.new(); ip_edit.placeholder_text = "192.168.0.10"; ip_edit.text = str(G.S["settings"].get("lastIp", "")); ip_edit.add_font_override("font", G.font_m)
+		body.add_child(ip_edit)
+		_btn("Join", self, "_join")
+		_sec("Games nearby (same Wi-Fi)")
+		if net.LAN.size() == 0: _lbl("None found yet. Ask a friend to host, then press Refresh.", G.font_xs, Color(0.62, 0.68, 0.76))
+		for k in net.LAN.keys():
+			var g = net.LAN[k]
+			_btn("@%s · %d playing · %s" % [g.name, g.players, g.ip], self, "_join_lan", [g.ip, g.port])
+		_btn("Refresh", self, "show_app", ["online"])
+	else:
+		if net.status == "hosting":
+			_lbl("Your address: " + PoolStringArray(net.my_ips()).join(", ") + "  ·  port %d (UDP)" % net.PORT, G.font_xs, Color(0.85, 0.88, 0.92))
+		_sec("Players")
+		for r in net.R.values():
+			var gt = (" [" + str(r.gang[2]) + "]") if typeof(r.gang) == TYPE_ARRAY else ""
+			var can = typeof(G.S.get("gang")) == TYPE_DICTIONARY and not net._same_gang(r)
+			_btn("@" + r.name + gt + ("  ·  Invite to gang" if can else ""), self, "_invite", [r.id], not can)
+		if net.R.size() == 0: _lbl("Waiting for players…", G.font_xs, Color(0.62, 0.68, 0.76))
+		_btn("Leave", self, "_leave_net")
+	if net.invites.size() > 0:
+		_sec("Gang invites")
+		for i in range(net.invites.size()):
+			var inv = net.invites[i]
+			_btn("Join [%s] %s" % [inv.g[2], inv.g[1]], self, "_accept", [i])
+	_lbl("Over the internet the host opens UDP port %d on their router. Online works between copies of this Godot version; the browser version has its own rooms." % net.PORT, G.font_xs, Color(0.5, 0.56, 0.64))
+
+func _host():
+	main.net.host(); show_app("online")
+func _join():
+	var ip = ip_edit.text if ip_edit else ""
+	G.S["settings"]["lastIp"] = ip
+	main.net.join(ip); show_app("online")
+func _join_lan(ip, port):
+	main.net.join(ip, port); show_app("online")
+func _invite(id):
+	main.net.invite(id)
+func _accept(i):
+	main.net.accept_invite(i); show_app("online")
+func _leave_net():
+	main.net.leave(); show_app("online")
 
 func _app_map():
 	var m = BigMap.new(); m.name = "BigMap"; m.main = main; m.rect_min_size = Vector2(340, 470)

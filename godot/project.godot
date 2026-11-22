@@ -19,6 +19,7 @@ config/icon="res://icon.png"
 
 G="*res://scripts/Game.gd"
 W="*res://scripts/Col.gd"
+GUN="*res://scripts/Guns.gd"
 
 [display]
 

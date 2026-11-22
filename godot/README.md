@@ -78,14 +78,20 @@ O jogo salva sozinho a cada 20 segundos e ao sair, em
 | Recarregar | R | X / Quadrado |
 | Entrar ou sair do carro | F | Y / Triângulo |
 | Interagir, falar, recrutar | E | RB / R1 |
-| Trocar de arma | Q, ou 1 2 3, e 4 para os punhos | LB / L1 |
+| Trocar de arma | toque Q (ou 1 2 3, e 4 para os punhos) | toque LB / L1 |
+| Roda de armas (câmera lenta) | segure Q | segure LB / L1 |
+| Roda de emotes (danças, palmas, rir, sentar, anjo na neve...) | segure Z | segure D-pad esquerda |
+| Bola de neve | X | pela roda de armas |
+| Se jogar no chão (ragdoll) | J (Espaço ou andar para levantar) | pela roda de emotes |
 | Correr | Shift | L3 |
 | 1ª ou 3ª pessoa | V | R3 |
 | Celular | Tab ou P | D-pad cima |
 | Curativo | B | D-pad baixo |
-| Acenar / dedo do meio | G / T | D-pad esquerda / direita |
+| Acenar / dedo do meio | G / T | roda de emotes / D-pad direita |
 | Mapa | M | Select / View |
 | Pausar | Esc | Start / Menu |
+| Estúdio (jogo de ritmo) | D F J K ou setas | ◀ ▶ X B |
+| Pular cena | Espaço ou Enter | A / Cruz |
 
 No carro, W ou o gatilho direito acelera, S ou o gatilho esquerdo freia e dá ré, e H
 buzina.
@@ -112,34 +118,41 @@ Se ainda ficar lento, rode numa janela menor:
 ./DrillSeason.x86_64 --resolution 960x540
 ```
 
-## O que já está no Godot
+## O que tem no Godot
 
-- A cidade inteira, com o ciclo de dia e noite no mesmo relógio do jogo web e as janelas
-  acendendo à noite.
-- Personagem com o mesmo guarda-roupa.
-- Câmera em 3ª e 1ª pessoa.
-- As três armas, punhos (jab, direto, gancho e guarda), curativos, frio.
-- Carros: dirigir, roubar, trânsito com semáforos, carros estacionados, a sua garagem e
-  compras na Marrow Motors.
-- As quatro rádios.
-- Pedestres, polícia com estrelas de procurado, ser preso ou ir para o hospital.
-- Crews rivais com encarada e tiroteio.
-- Gangues: criar, os seis tipos de recruta, recrutar na rua, seguidores que lutam, e o
-  filtro de nomes reais e ofensivos.
-- HUD com minimapa.
-- Celular com os apps Mapa, Gangue, Garagem, Visual, Configurações, Controle e Estatísticas.
-- Loja, posto, casa, lago, quadra e centro comunitário.
+Tudo do jogo web, mais algumas coisas só daqui:
 
-Ainda só existe no jogo web:
+- **História completa:** o elenco manda mensagens conforme a história anda, trabalhos
+  (sessão no estúdio, diss paga, gravação de clipe na plataforma do L, entrega de merch, levar
+  a irmã pra casa, ficar em casa, showcase no centro comunitário, o detetive, a lagoa),
+  cutscenes e os **4 finais** (Way Out, Witness, Crown, Locked Up).
+- **Estúdio Basement 808:** o jogo de ritmo com batidas gravadas do motor de música do jogo
+  web (Chicago, UK e NY drill), notas, faixas lançadas, streams pagando.
+- **Bancada de armas:** miras, canos, pentes, bocais, acabamentos e pingentes, com prévia 3D
+  girando e as mudanças de atributos. As armas são montadas peça por peça no Godot.
+- **Blok:** feed, perfil, curtidas, comentários e seguidores; o app Câmera tira foto do que
+  você está vendo e posta.
+- **O trem L andando** no horário compartilhado, parando em Calder; ficar nos trilhos derruba você.
+- **Neve caindo** com o vento, fogo nos barris, vapor dos bueiros, e o **frio**: vento,
+  fontes de calor, café, aquecedores de mão, ulceração.
+- **Ragdoll** em todo mundo: quem cai baleado, nocauteado, atropelado ou pelo trem cai de verdade.
+  Dá para escorregar no gelo correndo e se jogar no chão (J).
+- **Emotes:** três danças, hype, palmas, rir, dar de ombros, continência, apontar, mão na cara,
+  músculo, sentar e anjo na neve. Quem está perto reage, e a sua gangue dança junto.
+- **Guerra de bolas de neve:** as pessoas riem, devolvem, fogem ou escorregam; a polícia não acha graça.
+- **Online:** um jogador hospeda (celular → Online → Host), os outros entram pelo IP ou pela
+  lista de jogos na mesma rede. Todo mundo se vê andando, dirigindo, atirando, socando e
+  dançando; dá para convidar gente para a gangue, e quem é da mesma gangue não se fere. Pela
+  internet, quem hospeda libera a porta UDP 24680 no roteador. O online liga cópias do Godot;
+  o jogo de navegador tem as salas dele.
+- **Interface nova:** minimapa arredondado com prédios e marcadores, barras de vida, calor e
+  fôlego, dinheiro que rola, estrelas de procurado, caixa de ajuda, feed de notificações,
+  mensagens grandes no centro, rodas de armas e de emotes, e um **editor de personagem** em tela
+  cheia com prévia 3D (casa → Wardrobe, ou o app Wardrobe no celular). Num jogo novo ele
+  abre depois da cena de abertura.
 
-- O estúdio (o jogo de ritmo).
-- A rede social Blok.
-- Missões da história e cutscenes, e os finais.
-- A bancada de armas.
-- O multiplayer online.
-- O trem andando, a neve caindo e o sistema completo de calor.
-
-O save guarda tudo isso, então nada se perde ao ir e voltar entre as duas versões.
+O save tem o mesmo formato do web; o progresso importado traz a história, as faixas, o Blok,
+as peças das armas, a gangue e o visual.
 
 ## Para desenvolvedores
 
@@ -154,5 +167,7 @@ Teste automático, sem tela:
 ```bash
 DS_SHOTS=/tmp/shots xvfb-run godot3 --path godot --autotest
 ```
+
+`tools/record-beats.js` grava as batidas do estúdio a partir do jogo web.
 
 Ele grava capturas e um `autotest.log`.

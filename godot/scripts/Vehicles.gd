@@ -231,10 +231,9 @@ func hit_people(v):
 				p.take_hit(sp * 7, false, Vector3(v.vel.x, 0, v.vel.y).normalized(), v.driver == "player", false)
 	if v.driver != "player" and not main.player.car:
 		var d2 = Vector3(main.player.pos.x - v.pos.x, 0, main.player.pos.z - v.pos.z)
-		if abs(d2.dot(f)) < v.sp.len / 2 + 0.4 and abs(-d2.x * f.z + d2.z * f.x) < v.sp.wid / 2 + 0.35 and main.player.down_t <= 0:
-			main.player.vel.x += v.vel.x * 0.8; main.player.vel.z += v.vel.y * 0.8
-			main.player.down_t = 1.6
-			main.player.hurt(sp * 4, v.pos)
+		if abs(d2.dot(f)) < v.sp.len / 2 + 0.4 and abs(-d2.x * f.z + d2.z * f.x) < v.sp.wid / 2 + 0.35 and not main.player.is_ragdoll():
+			main.player.knock(Vector3(v.vel.x, 0, v.vel.y) * 0.9 + Vector3(0, min(7.0, sp * 0.4), 0), sp * 4, 2.2)
+			main.sfx.play3d("bodyfall", main.player.pos, 0.7)
 
 # ---------- traffic ----------
 func signal_state(ix, iz, axis):
@@ -435,6 +434,8 @@ func update(dt):
 	for v in VEH.duplicate():
 		if v.dead: continue
 		var inp = { "thr": 0.0, "steer": 0.0, "hand": false }
+		if v.driver == "remote":
+			continue
 		if v.driver == "player":
 			inp = _player_input()
 		elif v.cop:

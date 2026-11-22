@@ -45,6 +45,9 @@ class Follower:
 	var slot = 0
 	var fighting = false
 	var last_say = -99.0
+	var emote = ""
+	var emote_t = 0.0
+	var emote_left = 0.0
 
 func setup(m):
 	main = m
@@ -251,7 +254,7 @@ func spawn_follower(rec, at = null):
 	f.h = load("res://scripts/Human.gd").new().build(recruit_opts(int(rec.seed), rec.type))
 	main.add_child(f.h)
 	if rec.type == "shooter":
-		f.gun = load("res://assets/guns/k9.glb").instance()
+		f.gun = GUN.build("k9", GUN.def_cfg())
 		f.gun.rotation = Vector3(PI / 2, 0, 0); f.gun.translation = Vector3(0, -0.03, 0.02); f.gun.scale = Vector3.ONE * 1.35
 		f.h.gun_slot.add_child(f.gun)
 	FOL.append(f)
@@ -323,8 +326,19 @@ func _hurt(f, dmg, from):
 	main.sfx.blood(f.pos + Vector3(0, 1.2, 0), f.pos - from)
 	if f.hp <= 0:
 		f.state = "down"; f.down_t = 0
+		f.h.ragdoll_start(Vector3(), (f.pos - from).normalized() * 2.0 + Vector3(0, 0.8, 0), G.rand(-1, 1))
 		main.sfx.play3d("bodyfall", f.pos, 0.8)
 		if f.gun: f.gun.visible = false
+
+# your crew joins in when you dance
+func dance_along(name):
+	for f in FOL:
+		if f.state != "down" and not f.riding and f.pos.distance_to(main.player.pos) < 14:
+			f.emote = name if randf() < 0.6 else G.pick(["dance1", "dance2", "dance3", "clap"])
+			f.emote_t = G.rand(0, 1); f.emote_left = G.rand(4, 8)
+
+func producer_boost():
+	return 1 + 0.15 * min(2, count("producer"))
 
 func lookout_boost():
 	for f in FOL:
@@ -375,6 +389,7 @@ func _update_follower(f, dt):
 	var T = types()[f.rec.type]
 	if f.state == "down":
 		f.down_t += dt
+		if H.is_ragdoll(): f.pos = H.ragdoll_center()
 		H.animate(dt, { "down": min(1.0, f.down_t / 0.5) })
 		if f.down_t > 5:
 			f.rec["hurtUntil"] = G.S.get("playTime", 0) + 150
@@ -469,7 +484,12 @@ func _update_follower(f, dt):
 	if face != null: f.yaw += G.ang_diff(f.yaw, face) * (1 - exp(-dt * 9))
 	H.translation = f.pos; H.rotation = Vector3(0, f.yaw, 0)
 	var box = f.rec.type == "brawler" and fighting
-	H.animate(dt, { "speed": sp, "aim": aim, "pitch": 0.0, "fists": box, "guard": box, "punch": f.punch_t / 0.3 if f.punch_t > 0 else 0.0, "punchSide": f.punch_side, "shiver": G.S.get("warmth", 100) < 25 })
+	var em = ""
+	if f.emote_left > 0:
+		f.emote_left -= dt; f.emote_t += dt
+		if fighting or sp > 1.0: f.emote_left = 0
+		else: em = f.emote
+	H.animate(dt, { "speed": sp, "aim": aim, "pitch": 0.0, "fists": box, "guard": box, "punch": f.punch_t / 0.3 if f.punch_t > 0 else 0.0, "punchSide": f.punch_side, "shiver": G.S.get("warmth", 100) < 25 and em == "", "emote": em, "et": f.emote_t })
 	f.fighting = fighting
 
 func _shoot(f, e):

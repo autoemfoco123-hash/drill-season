@@ -11,6 +11,14 @@ var sfx
 var hud
 var phone
 var title
+var story
+var cutscene
+var studio
+var blok
+var train
+var fx
+var net
+var wardrobe
 var camera
 var env
 var sun
@@ -47,8 +55,17 @@ func _ready():
 	hud = _system("res://scripts/HUD.gd", "HUD")
 	phone = _system("res://scripts/Phone.gd", "Phone")
 	title = _system("res://scripts/Title.gd", "Title")
-	for s in [sfx, vehicles, player, peds, police, crews, gang, hud, phone, title]:
+	story = _system("res://scripts/Story.gd", "Story")
+	cutscene = _system("res://scripts/Cutscene.gd", "Cutscene")
+	studio = _system("res://scripts/Studio.gd", "Studio")
+	blok = _system("res://scripts/Blok.gd", "Blok")
+	train = _system("res://scripts/Train.gd", "Train")
+	fx = _system("res://scripts/FX.gd", "FX")
+	net = _system("res://scripts/Net.gd", "Net")
+	wardrobe = _system("res://scripts/Wardrobe.gd", "Wardrobe")
+	for s in [sfx, vehicles, player, peds, police, crews, gang, hud, phone, title, story, cutscene, studio, blok, train, fx, net, wardrobe]:
 		s.setup(self)
+	story.build_npcs()
 	title.open()
 	if autotest:
 		var t = load("res://scripts/AutoTest.gd").new()
@@ -145,6 +162,7 @@ func set_quality(q):
 	sun.shadow_enabled = q == "high"
 	lamp_count = 4 if q == "high" else (2 if q == "medium" else 0)
 	camera.far = 240 if q == "high" else (190 if q == "medium" else 160)
+	if fx: fx.set_quality(q)
 
 # ---------- day and night on the shared clock (same curve as the web game) ----------
 func _smooth(a, b, x):
@@ -233,12 +251,16 @@ func _process(dt):
 		title.update(dt)
 		vehicles.update(dt)
 		peds.update(dt)
+		story.update(dt)
+		train.update(dt)
+		fx.update(dt)
 		update_day_night(camera.global_transform.origin)
+		net.update(dt)
 		return
 	if G.MODE != "pause":
 		G.GAME_T += dt
 		G.S["playTime"] = G.S.get("playTime", 0) + dt
-	var live = G.MODE == "play" or G.MODE == "phone"
+	var live = G.MODE == "play" or G.MODE == "phone" or G.MODE == "cutscene"
 	if live:
 		player.update(dt)
 		vehicles.update(dt)
@@ -246,7 +268,15 @@ func _process(dt):
 		gang.update(dt)
 		crews.update(dt)
 		police.update(dt)
-		player.update_camera(dt)
+		if G.MODE != "cutscene": player.update_camera(dt)
+	cutscene.update(dt)
+	story.update(dt)
+	train.update(dt)
+	fx.update(dt)
+	blok.update(dt)
+	studio.update(dt)
+	wardrobe.update(dt)
+	net.update(dt)
 	update_day_night(player.pos)
 	sfx.update(dt)
 	hud.update(dt)
@@ -264,11 +294,17 @@ func start_game(state):
 	vehicles.spawn_owned_car()
 	gang.sync_followers()
 	hud.show()
-	hud.banner("@" + G.S["name"], "Calder Park · Day " + str(G.S.get("day", 1)))
+	story.last_min = -1
+	if not G.S["flags"].get("introSeen", false) and not autotest:
+		G.S["flags"]["introSeen"] = true
+		cutscene.play(cutscene.cut_intro(), wardrobe, "open", [true])
+	else:
+		hud.banner("@" + G.S["name"], "Calder Park · Day " + str(G.S.get("day", 1)))
 	G.save_game()
 
 func exit_to_title():
 	G.save_game()
+	cutscene.end(); studio.close_all(); wardrobe.close()
 	if player.car:
 		player.exit_vehicle(true)
 	crews.clear()

@@ -175,3 +175,28 @@ class Body:
 	var height = 1.75
 	var on_ground = true
 	var air_y = 0.0
+
+# pushes a point (radius r) out of any box it sank into, by the shortest way; for ragdolls
+# and thrown things. Returns [new position, touched something]
+func collide_point(p, r):
+	var touched = false
+	if p.y < r:
+		p.y = r; touched = true
+	var cand = query(p.x - r, p.z - r, p.x + r, p.z + r)
+	for b in DYN:
+		if b.on: cand.append(b)
+	for b in cand:
+		if p.x < b.x0 - r or p.x > b.x1 + r or p.z < b.z0 - r or p.z > b.z1 + r or p.y < b.y0 - r or p.y > b.y1 + r:
+			continue
+		var pen = [p.x - (b.x0 - r), (b.x1 + r) - p.x, p.y - (b.y0 - r), (b.y1 + r) - p.y, p.z - (b.z0 - r), (b.z1 + r) - p.z]
+		var m = 0
+		for i in range(1, 6):
+			if pen[i] < pen[m]: m = i
+		if m == 0: p.x = b.x0 - r
+		elif m == 1: p.x = b.x1 + r
+		elif m == 2: p.y = b.y0 - r
+		elif m == 3: p.y = b.y1 + r
+		elif m == 4: p.z = b.z0 - r
+		else: p.z = b.z1 + r
+		touched = true
+	return [p, touched]

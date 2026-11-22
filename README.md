@@ -36,8 +36,9 @@ Play it at **https://autoemfoco123-hash.github.io/drill-season/** once GitHub Pa
 
 - It has the same city, cars, guns, sounds and radio stations, which are exported from the web build by `tools/export-godot.js` and `tools/record-radio.js`.
 - It uses the same save format. To move your progress, open the phone in the web game and go to **Settings → Export my progress**. That downloads `drill-season-save.json`. Then click **Import progress from the web game** in the Godot version.
+- It has everything the web game has: the story, cutscenes and endings, the studio rhythm game, the workbench, Blok, the moving L train and the cold. On top of that it adds ragdolls, emotes, snowball fights, a character creator, a redesigned HUD and online play between Godot copies (host or join by IP or on the local network).
 
-`godot/README.md` (in Portuguese) explains how to run it, lists the controls and covers what is still web-only.
+`godot/README.md` (in Portuguese) explains how to run it and lists the controls.
 
 ### Multiplayer
 

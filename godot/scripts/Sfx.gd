@@ -75,6 +75,16 @@ func play(name, vol = 0.6, pitch = 1.0):
 	var a = p2[i2]; i2 = (i2 + 1) % p2.size()
 	a.stream = s; a.volume_db = _vol(vol); a.pitch_scale = pitch * G.rand(0.95, 1.05); a.play()
 
+# a room clapping and whooping (the web game's sfx.cheer)
+func cheer():
+	for i in range(14):
+		_cheer_clap(randf() * 1.6)
+	play("whoosh", 0.2, 0.7)
+
+func _cheer_clap(delay):
+	yield(get_tree().create_timer(delay + 0.01), "timeout")
+	play("clap", 0.14 + randf() * 0.1, 0.85 + randf() * 0.3)
+
 func play3d(name, at, vol = 0.6, pitch = 1.0):
 	var s = stream(name)
 	if s == null: return
@@ -95,6 +105,9 @@ func shot(kind, at, vol = 1.0):
 func impact(at, metal = false):
 	play3d("imp_metal" if metal else ("imp_snow" if at.y < 0.22 else "imp_brick"), at, 0.5)
 	_spawn_bits(at, Vector3.UP, 4, false)
+
+func dust(at, n = 5):
+	_spawn_bits(at, Vector3.UP, n, false)
 
 func blood(at, dir):
 	_spawn_bits(at, dir, 6, true)

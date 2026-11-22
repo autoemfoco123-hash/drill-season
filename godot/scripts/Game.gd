@@ -18,6 +18,10 @@ var font_s = null
 var font_m = null
 var font_l = null
 var font_xl = null
+var font_xs = null
+var font_cash = null     # HUD numbers: heavy with a dark outline, readable on snow
+var font_big = null      # big centre messages
+var font_hud = null      # HUD labels with an outline
 var _unix0 = 0
 var _ticks0 = 0
 var _mats = {}
@@ -40,14 +44,20 @@ func _ready():
 	font_m = _font(18, true)
 	font_l = _font(26, true)
 	font_xl = _font(64, true)
+	font_xs = _font(12, true)
+	font_cash = _font(34, true, 3)
+	font_big = _font(56, true, 4)
+	font_hud = _font(17, true, 2)
 	_setup_input()
 	S = new_state("")
 
-func _font(size, bold):
+func _font(size, bold, outline = 0):
 	var f = DynamicFont.new()
 	f.font_data = load("res://fonts/DejaVuSans-Bold.ttf" if bold else "res://fonts/DejaVuSans.ttf")
 	f.size = size
 	f.use_filter = true
+	if outline > 0:
+		f.outline_size = outline; f.outline_color = Color(0, 0, 0, 0.85)
 	return f
 
 # ---------- one clock for everyone, the same as the web game: 1 real second = 1 game minute ----------
@@ -106,19 +116,29 @@ func default_skin():
 	return { "tone": 4, "hair": "short", "hairCol": 0x0f0d0c, "beard": 0, "head": "beanie", "headCol": 0xff8a2a, "pom": 1, "top": "puffer", "topCol": 0x262b33, "top2": 0x343a44, "pants": "jeans", "pantsCol": 0x1b2533, "pants2": 0xe8e8ea, "shoes": "sneaker", "shoesCol": 0xdedede, "chain": 0, "watch": 0, "glasses": 0, "bag": "none", "bagCol": 0x15171a, "build": 1 }
 
 func new_state(name):
+	var dc = D.get("DEF_CFG", { "optic": "iron", "barrel": "standard", "mag": "std", "muzzle": "none", "finish": "gunmetal", "charm": "none" })
+	var dp = ["optic:iron", "barrel:standard", "mag:std", "muzzle:none"]
 	return {
 		"v": 1, "name": name if name != "" else "Unknown", "cash": 150, "buzz": 4, "heat": 0, "health": 100, "warmth": 100, "bandages": 1,
-		"playTime": 0, "pos": null, "cur": "k9", "fists": false,
+		"night": 1, "clock": 21 * 60 + 30, "playTime": 0, "pos": null, "cur": "k9", "fists": false,
 		"guns": {
-			"k9": { "owned": true, "mag": 12, "res": 36 },
-			"draft": { "owned": false, "mag": 30, "res": 60 },
-			"plow": { "owned": false, "mag": 6, "res": 12 },
+			"k9": { "owned": true, "mag": 12, "res": 36, "cfg": dc.duplicate() },
+			"draft": { "owned": false, "mag": 30, "res": 60, "cfg": dc.duplicate() },
+			"plow": { "owned": false, "mag": 6, "res": 12, "cfg": dc.duplicate() },
 		},
-		"flags": {}, "gang": null, "recruits": [], "endings": {},
-		"stats": { "tracks": 0, "downs": 0, "shots": 0, "punches": 0, "knockouts": 0, "carsTaken": 0, "busted": 0, "timesDowned": 0, "dist": 0, "drive": 0 },
+		"parts": { "k9": dp.duplicate(), "draft": dp.duplicate(), "plow": dp.duplicate() },
+		"cos": ["finish:gunmetal", "charm:none"],
+		"threads": { "benny": [], "kiara": [], "coach": [], "vance": [], "saint": [], "reyes": [] },
+		"unread": { "benny": 0, "kiara": 0, "coach": 0, "vance": 0, "saint": 0, "reyes": 0 },
+		"feed": [], "tracks": [], "flags": {}, "gang": null, "recruits": [], "cd": {}, "endings": {}, "tracked": null,
+		"buffs": { "coffee": 0, "warmers": 0 }, "job": null,
+		"stats": { "tracks": 0, "best": null, "buzzPeak": 4, "heatPeak": 0, "walkAways": 0, "fights": 0, "downs": 0, "cashEarned": 0, "rides": 0, "shots": 0,
+			"coldTime": 0, "dist": 0, "disses": 0, "timesDowned": 0, "merch": 0, "videos": 0, "layLows": 0, "pvpDowns": 0, "busted": 0, "carsTaken": 0, "drive": 0, "photos": 0,
+			"punches": 0, "knockouts": 0, "emotes": 0, "snowballs": 0 },
 		"skin": default_skin(),
-		"settings": { "sens": 1.0, "vol": 0.8, "music": 0.85, "invertY": false, "quality": "low", "radio": 1, "fp": false, "fov": 70, "pad": { "sens": 1.0, "invertY": false } },
+		"settings": { "sens": 1.0, "vol": 0.8, "music": 0.85, "invertY": false, "quality": "low", "radio": 1, "score": true, "voices": true, "fp": false, "fov": 70, "pad": { "sens": 1.0, "invertY": false } },
 		"garage": [{ "model": "hatch", "color": 0x2a6a8a }],
+		"social": { "followers": 214, "following": 96, "bio": "drill · Calder Park · Chicago", "posts": [] },
 		"day": 1,
 	}
 
@@ -233,7 +253,8 @@ func _setup_input():
 		"use": [[KEY_E], [], [], [JOY_R]], "next_weapon": [[KEY_Q], [], [], [JOY_L]],
 		"sprint": [[KEY_SHIFT], [], [], [JOY_L3]], "camera": [[KEY_V], [], [], [JOY_R3]],
 		"phone": [[KEY_TAB, KEY_P], [], [], [JOY_DPAD_UP]], "bandage": [[KEY_B], [], [], [JOY_DPAD_DOWN]],
-		"wave": [[KEY_G], [], [], [JOY_DPAD_LEFT]], "flip": [[KEY_T], [], [], [JOY_DPAD_RIGHT]],
+		"wave": [[KEY_G], [], [], []], "flip": [[KEY_T], [], [], [JOY_DPAD_RIGHT]],
+		"emote": [[KEY_Z], [], [], [JOY_DPAD_LEFT]], "flop": [[KEY_J], [], [], []], "snowball": [[KEY_X], [], [], []],
 		"horn": [[KEY_H], [], [], []], "pause": [[KEY_ESCAPE], [], [], [JOY_START]],
 		"gun1": [[KEY_1], [], [], []], "gun2": [[KEY_2], [], [], []], "gun3": [[KEY_3], [], [], []], "fists": [[KEY_4], [], [], []],
 		"map": [[KEY_M], [], [], [JOY_SELECT]],

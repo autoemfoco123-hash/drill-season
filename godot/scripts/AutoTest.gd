@@ -11,7 +11,8 @@ func run(m):
 	out = OS.get_environment("DS_SHOTS")
 	if out == "": out = OS.get_user_data_dir().plus_file("shots")
 	Directory.new().make_dir_recursive(out)
-	call_deferred("_go")
+	if OS.get_environment("DS_JOIN") != "": call_deferred("_join_mode")
+	else: call_deferred("_go")
 
 func _wait(s):
 	yield(get_tree().create_timer(s), "timeout")
@@ -36,6 +37,197 @@ func _diag():
 	_log("city meshes %d  draw calls %d  objects %d  fps %d" % [acc[0], Performance.get_monitor(Performance.RENDER_DRAW_CALLS_IN_FRAME), Performance.get_monitor(Performance.RENDER_OBJECTS_IN_FRAME), Engine.get_frames_per_second()])
 	var cam = get_viewport().get_camera()
 	_log("cam %s current=%s main_cam=%s xf %s" % [str(cam), str(cam.current) if cam else "-", str(main.camera), str(cam.global_transform) if cam else "-"])
+
+# a second copy of the game that joins the first one and dances
+func _join_mode():
+	yield(_wait(1.0), "completed")
+	var st = G.new_state("peer_two")
+	st["skin"] = G.preset_skin(2)
+	main.title._close()
+	main.start_game(st)
+	main.player.place(4, 0, -24, 0)
+	var ip = OS.get_environment("DS_JOIN")
+	var t0 = G.REAL_T
+	while G.REAL_T - t0 < 60:
+		if not main.net.online() and main.net.status == "offline": main.net.join(ip)
+		yield(_wait(2.0), "completed")
+		if main.net.online():
+			main.player.emote("dance2")
+			_log("joined, peers %d" % main.net.R.size())
+	get_tree().quit()
+
+func _face_ped(P, dist):
+	var f = Vector3(-sin(P.cam_yaw), 0, -cos(P.cam_yaw))
+	var p = main.peds.make(P.pos.x + f.x * dist, P.pos.z + f.z * dist)
+	p.state = "walk"; p.target = null
+	return p
+
+# every feature added after the first port, with screenshots
+func _tour():
+	yield(get_tree(), "idle_frame")
+	var P = main.player
+	var S = G.S
+	main.crews.clear(); main.police.clear()
+	G.time_offset += (12 * 60 - G.world_minutes())
+	P.place(-2.5, 0, -30, 0); P.cam_yaw = 0; P.cam_pitch = -0.1
+	yield(_wait(1.0), "completed")
+	# weapon wheel
+	main.hud._open_wheel("weapon"); main.hud.wheel_sel = 0
+	yield(_wait(0.3), "completed")
+	yield(_shot("09_weapon_wheel"), "completed")
+	main.hud._close_wheel(true)
+	_log("weapon wheel picked fists: %s" % str(S.get("fists")))
+	P.switch_weapon("k9")
+	# emote wheel + a dance the street joins
+	Input.action_press("emote")
+	main.hud._open_wheel("emote"); main.hud.wheel_vec = Vector2(60, -60)
+	yield(_wait(0.3), "completed")
+	yield(_shot("10_emote_wheel"), "completed")
+	main.hud.wheel_sel = 2
+	Input.action_release("emote")
+	yield(get_tree(), "idle_frame")
+	_face_ped(P, 4)
+	main.peds.react_to_emote(P.pos, "dance")
+	P.cam_yaw = PI
+	yield(_wait(1.6), "completed")
+	_log("emote: %s" % P.emote_name)
+	yield(_shot("11_dance"), "completed")
+	P.emote_name = ""
+	# ragdoll: flop, then get up
+	P.cam_yaw = 0.6
+	P.flop()
+	yield(_wait(1.4), "completed")
+	_log("ragdoll after flop: %s, pelvis y %.2f" % [str(P.is_ragdoll()), P.human.rag.p[0].y if P.human.rag else -1])
+	yield(_shot("12_ragdoll"), "completed")
+	P.flop()
+	yield(_wait(1.2), "completed")
+	_log("got up: %s" % str(not P.is_ragdoll()))
+	# a pedestrian shot down falls as a ragdoll
+	var pd = _face_ped(P, 6)
+	pd.take_hit(200, false, Vector3(0, 0, -1), false, false)
+	yield(_wait(0.8), "completed")
+	_log("ped ragdoll: %s" % str(pd.h.is_ragdoll()))
+	# snowball fight
+	P.cam_yaw = 0; P.cam_pitch = 0.05
+	var tgt = _face_ped(P, 5)
+	yield(_wait(0.4), "completed")
+	P.throw_snowball()
+	yield(_wait(1.2), "completed")
+	_log("snowballs landed: %d" % int(S["stats"].get("snowballs", 0)))
+	# the studio: cutscene, verse select, the rhythm game, release
+	S["flags"]["studioCut"] = false
+	var L = G.D["LOC"]
+	P.place(L.studio.x, 0, L.studio.z + 1.5, PI)
+	main.story.studio_menu()
+	yield(_wait(1.2), "completed")
+	yield(_shot("13_cutscene"), "completed")
+	main.cutscene.end()
+	yield(_wait(0.3), "completed")
+	yield(_shot("14_studio_menu"), "completed")
+	main.hud.close_menu()
+	main.studio.start_rhythm("tribute", { "style": "chi" })
+	var t0 = G.REAL_T
+	var hits = 0
+	while G.REAL_T - t0 < 7.0:
+		yield(get_tree(), "idle_frame")
+		var now = main.studio.rh_now()
+		for n in main.studio.RH.notes:
+			if n.hit == "" and abs(n.t - now) < 0.03:
+				main.studio._hit(n.lane); hits += 1
+		if G.REAL_T - t0 > 5.0 and G.REAL_T - t0 < 5.05: yield(_shot("15_rhythm"), "completed")
+	for n in main.studio.RH.notes:
+		if n.hit == "":
+			n.hit = "perfect"
+			main.studio.RH.pts += 1.0
+	main.studio._finish()
+	yield(_wait(0.3), "completed")
+	yield(_shot("16_results"), "completed")
+	_log("rhythm hits while playing: %d, grade %s" % [hits, main.studio.RH.result.grade])
+	var tracks0 = S["tracks"].size()
+	main.studio._release()
+	yield(_wait(0.3), "completed")
+	main.hud.close_menu()
+	_log("tracks %d -> %d, feed %d, blok posts %d" % [tracks0, S["tracks"].size(), S["feed"].size(), S["social"]["posts"].size()])
+	# workbench
+	S["cash"] = 9000
+	main.studio.open_bench()
+	main.studio._bench_part("optic", "holo")
+	main.studio._bench_part("finish", "crimson")
+	main.studio._bench_part("charm", "crown")
+	yield(_wait(0.5), "completed")
+	yield(_shot("17_bench"), "completed")
+	_log("k9 cfg %s, zoom %.2f" % [JSON.print(GUN.cfg_of("k9")), float(GUN.stats("k9").zoom)])
+	main.studio.close_bench(); main.hud.close_menu()
+	# the character creator
+	main.wardrobe.open()
+	main.wardrobe.step("hair", 1); main.wardrobe._set_color("topCol", 13115434); main.wardrobe.step("head", 2)
+	yield(_wait(0.6), "completed")
+	yield(_shot("18_wardrobe"), "completed")
+	main.wardrobe._set_cat(0)
+	yield(_wait(0.2), "completed")
+	main.wardrobe.save()
+	_log("skin saved: top %s col %s head %s" % [S["skin"].top, str(S["skin"].topCol), S["skin"].head])
+	# phone apps
+	main.phone.open("msgs")
+	yield(_wait(0.3), "completed")
+	yield(_shot("19_msgs"), "completed")
+	main.phone._open_thread("benny")
+	yield(_wait(0.2), "completed")
+	main.phone.show_app("jobs")
+	yield(_wait(0.3), "completed")
+	yield(_shot("20_jobs"), "completed")
+	main.phone.close()
+	yield(main.blok.take_photo("autotest snap"), "completed")
+	main.phone.open("blok")
+	yield(_wait(0.4), "completed")
+	yield(_shot("21_blok"), "completed")
+	main.phone.show_app("online")
+	yield(_wait(0.3), "completed")
+	main.phone.close()
+	# the L at Calder: shift the clock until a train is in the station
+	var T = main.train.TR[0]
+	var ph = fposmod(G.world_seconds() + T.off, main.train.CYCLE)
+	G.time_offset += fposmod(main.train.T1 + 2 - ph, main.train.CYCLE)
+	P.place(64.2, float(G.D["PLAT_Y"]), 9, PI)
+	P.cam_yaw = -PI / 2 - 0.4; P.cam_pitch = -0.05
+	yield(_wait(1.5), "completed")
+	_log("train 0: %s z %.1f" % [T.state, T.z])
+	yield(_shot("22_train"), "completed")
+	# an ending
+	main.story.trigger_ending("wayout")
+	yield(_wait(1.5), "completed")
+	yield(_shot("23_ending_cut"), "completed")
+	main.cutscene.end()
+	yield(_wait(0.5), "completed")
+	yield(_shot("24_ending"), "completed")
+	main.story._ending_continue()
+	_log("endings: %s, mode %s" % [JSON.print(S["endings"]), G.MODE])
+	# busted
+	P.place(2, 0, -20, 0)
+	main.police.add_wanted(30, P.pos)
+	main.police._busted()
+	yield(_wait(1.0), "completed")
+	main.cutscene.end()
+	_log("busted count %d, mode %s" % [int(S["stats"].get("busted", 0)), G.MODE])
+	# online: host a game
+	var ok = main.net.host()
+	_log("net host: %s %s" % [str(ok), main.net.status])
+	if OS.get_environment("DS_PEER") != "":
+		var t1 = G.REAL_T
+		while main.net.R.size() == 0 and G.REAL_T - t1 < 40: yield(get_tree(), "idle_frame")
+		yield(_wait(2.0), "completed")
+		var rr = main.net.R.values()
+		_log("net peers: %d %s" % [rr.size(), ("@" + rr[0].name + " at " + str(rr[0].pos)) if rr.size() > 0 else ""])
+		if rr.size() > 0:
+			P.place(rr[0].pos.x + 3, 0, rr[0].pos.z + 3, PI * 0.75)
+			yield(_wait(1.0), "completed")
+			yield(_shot("25_online"), "completed")
+	main.net.leave()
+	# HUD in daylight with a job tracked
+	S["tracked"] = "studio"
+	P.place(-2.5, 0, -30, 0); P.cam_yaw = 0
+	yield(_wait(1.0), "completed")
+	yield(_shot("26_hud"), "completed")
 
 func _log(t):
 	log_lines.append(t)
@@ -141,6 +333,7 @@ func _go():
 	yield(_wait(0.6), "completed")
 	yield(_shot("08_phone_gang"), "completed")
 	main.phone.close()
+	yield(_tour(), "completed")
 	_log("traffic %d peds %d cops %d" % [main.vehicles.TRAFFIC.size(), main.peds.PEDS.size(), main.police.COPS.size()])
 	_log("fps %d" % Engine.get_frames_per_second())
 	var f = File.new()

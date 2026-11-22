@@ -1,8 +1,9 @@
 // Exports the web build's content into the Godot project (godot/assets):
 //   world/city.glb    every static mesh of the city, split into 128 m chunks (CHUNK=...)
 //   cars/<model>.glb  the eight car models (paint, trim, lights, light bar)
-//   guns/<id>.glb     the three guns, train/train.glb the L train
-//   data.json         map layout, collision boxes, locations, specs, skins, recruit types
+//   train/train.glb   the L train (guns are built in Godot by scripts/Guns.gd)
+//   data.json         map layout, collision boxes, locations, specs, skins, recruit types,
+//                     workbench parts, story text
 //   sfx/*.ogg         the synthesized sound bank, rendered to files
 // Needs: npm install (three), Playwright with Chromium, ffmpeg.  Usage: node tools/export-godot.js
 const { chromium } = require('playwright');
@@ -101,14 +102,11 @@ const save = (rel, b64) => { const f = path.join(OUT, rel); fs.mkdirSync(path.di
     console.log('cars done');
   }
 
-  if (want('guns')) {
-    for (const id of ['k9', 'draft', 'plow']) {
-      const b64 = await ev(`(() => { const gun = buildGun('${id}', DEF_CFG()); gun.traverse(o => { if (o.material && !o.material.name) o.material.name = 'gun_' + (o.material.color ? o.material.color.getHexString() : 'x'); }); return window.__glb(gun); })()`);
-      save('guns/' + id + '.glb', b64);
-    }
+  // guns are built in Godot itself (scripts/Guns.gd) so workbench parts show up
+  if (want('train')) {
     const tb = await ev(`(() => { const m = TRAINS[0].mesh.clone(); m.position.set(0, 0, 0); m.rotation.set(0, 0, 0); m.visible = true; m.traverse(o => { o.visible = true; if (o.material && !o.material.name) o.material.name = 'train_' + (o.material.color ? o.material.color.getHexString() : 'x'); }); return window.__glb(m); })()`);
     save('train/train.glb', tb);
-    console.log('guns and train done');
+    console.log('train done');
   }
 
   if (want('data')) {
@@ -124,6 +122,10 @@ const save = (rel, b64) => { const f = path.join(OUT, rel); fs.mkdirSync(path.di
       RTYPES, GANG_COLORS, STATIONS: STATIONS.map(s => ({ name: s.name, short: s.short })),
       INTERACT: INTERACT.map(it => ({ id: it.id, x: it.x, y: it.y || 0, z: it.z, r: it.r })),
       ETYPES: Object.fromEntries(Object.entries(ETYPES).map(([k, t]) => [k, { hp: t.hp, speed: t.speed, gun: t.gun, rate: t.rate, burst: t.burst, dmg: t.dmg, acc: t.acc, jacket: t.jacket, jacket2: t.jacket2 }])),
+      PARTS, DEF_CFG: DEF_CFG(), COACH_POS, BENNY_POS, MERCH_DROPS, FEED_HANDLES, COMMENTS, TITLE_WORDS,
+      STYLES, VERSES: Object.fromEntries(Object.entries(VERSES).map(([k, v]) => [k, { name: v.name, desc: typeof v.desc === 'function' ? '' : v.desc, chips: v.chips }])),
+      ENDINGS: Object.fromEntries(Object.entries(ENDINGS).map(([k, e]) => [k, { title: e.title, color: e.color, line: typeof e.line === 'function' ? e.line() : e.line }])),
+      TRAIN: { CAR_L, TRAIN_CARS, TRAIN_HALF, TRAIN_CYCLE, T1, T2, T3, RUN, list: TRAINS.map(T => ({ x: T.x, dir: T.dir, off: T.off })) },
     })`);
     fs.mkdirSync(OUT, { recursive: true });
     fs.writeFileSync(path.join(OUT, 'data.json'), data);

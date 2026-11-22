@@ -48,6 +48,9 @@ class Ped:
 	var rq_name = ""
 	var plate = null
 	var crouched = false
+	var emote = ""
+	var emote_t = 0.0
+	var emote_left = 0.0
 	func is_down(): return state == "down"
 	func take_hit(dmg, head, dir, by_player, melee):
 		if melee: main.peds.punched(self, dmg, dir, by_player)
@@ -102,6 +105,8 @@ func place_on_graph(p, near, min_d, max_d):
 		var d = Vector2(x - near.x, z - near.z).length()
 		if d < min_d or d > max_d or W.is_blocked(x, z, 0.4): continue
 		p.pos = Vector3(x, 0, z); p.vel = Vector3(); p.node = n; p.prev = c; p.target = b; p.state = "walk"; p.hp = 40; p.down_t = 0
+		if p.h.is_ragdoll(): p.h.ragdoll_stop()
+		p.h.getup = 0.0; p.emote_left = 0
 		p.h.visible = true
 		return true
 	return false
@@ -126,6 +131,8 @@ func shot(p, dmg, dir, by_player):
 	main.sfx.blood(p.pos + Vector3(0, 1.2, 0), dir)
 	if p.hp <= 0:
 		p.state = "down"; p.down_t = 0
+		var fling = p.vel.length() > 5
+		p.h.ragdoll_start(Vector3(p.vel.x, 0, p.vel.z) * 0.4, Vector3(dir.x, 0, dir.z) * G.rand(1.5, 3) + p.vel * 0.7 + Vector3(0, 3.5 if fling else 0.6, 0), G.rand(-2, 2) if fling else 0.0)
 		main.sfx.play3d("bodyfall", p.pos, 0.8)
 		if by_player:
 			main.police.add_wanted(22, p.pos); G.S["heat"] = min(100, G.S["heat"] + 5)
@@ -139,6 +146,7 @@ func punched(p, dmg, dir, by_player):
 	p.hp -= dmg
 	if p.hp <= 0:
 		p.state = "down"; p.down_t = 0; p.ko = true
+		p.h.ragdoll_start(Vector3(), Vector3(dir.x, 0, dir.z) * 3.2 + Vector3(0, 1.2, 0), G.rand(-1, 1))
 		main.sfx.play3d("bodyfall", p.pos, 0.8)
 		if by_player:
 			main.police.add_wanted(14, p.pos); G.S["heat"] = min(100, G.S["heat"] + 2)
@@ -188,11 +196,16 @@ func update(dt):
 		if p.state == "down":
 			p.down_t += dt
 			p.vel *= exp(-dt * 3)
-			if p.vel.length() > 0.1: W.move_body(p, p.vel.x * dt, p.vel.z * dt, dt)
-			H.translation = p.pos
-			H.animate(dt, { "down": min(1.0, p.down_t / 0.5) })
+			if H.is_ragdoll():
+				p.pos = H.ragdoll_center()
+			elif p.vel.length() > 0.1: W.move_body(p, p.vel.x * dt, p.vel.z * dt, dt)
+			if not H.is_ragdoll(): H.translation = p.pos
+			H.visible = dP < 80
+			if H.visible: H.animate(dt, { "down": min(1.0, p.down_t / 0.5) })
 			if p.ko and p.down_t > 11 and G.MODE == "play":
 				p.ko = false; p.state = "flee"; p.flee_t = 8; p.hp = 25; p.from = P.pos
+				if H.is_ragdoll():
+					p.pos = H.ragdoll_stop(); p.yaw = H.rotation.y
 				continue
 			if p.down_t > 40:
 				if p.temp or not place_on_graph(p, focus, 45, 95): remove(p)
@@ -244,6 +257,10 @@ func update(dt):
 				if abs(G.ang_diff(P.cam_yaw + PI, to_p)) < 0.25:
 					p.state = "flee"; p.flee_t = 8; p.from = P.pos
 		var answering = false
+		if p.emote_left > 0 and p.state == "walk":
+			p.emote_left -= dt; p.emote_t += dt; tgt = null
+			p.yaw += G.ang_diff(p.yaw, atan2(P.pos.x - p.pos.x, P.pos.z - p.pos.z)) * (1 - exp(-dt * 6))
+			answering = true
 		if p.state == "walk" and p.flip_back_t > 0:
 			if p.flip_delay > 0: p.flip_delay -= dt
 			else:
@@ -283,7 +300,8 @@ func update(dt):
 		H.translation = p.pos; H.rotation = Vector3(0, p.yaw, 0)
 		if dP < 70:
 			H.visible = true
-			H.animate(dt, { "speed": sp, "crouch": p.state == "flee" and sp < 0.6, "mug": p.state == "walk" and not answering and fmod(G.REAL_T + p.rq_seed % 20, 20) < 6, "flip": answering, "fists": brawl, "guard": brawl, "punch": p.punch_t / 0.3 if brawl and p.punch_t > 0 else 0.0, "punchSide": p.punch_side })
+			var em = p.emote if p.emote_left > 0 else ""
+			H.animate(dt, { "speed": sp, "crouch": p.state == "flee" and sp < 0.6, "mug": p.state == "walk" and not answering and fmod(G.REAL_T + p.rq_seed % 20, 20) < 6, "flip": answering and em == "" and p.flip_back_t > 0, "fists": brawl, "guard": brawl, "punch": p.punch_t / 0.3 if brawl and p.punch_t > 0 else 0.0, "punchSide": p.punch_side, "emote": em, "et": p.emote_t })
 		else:
 			H.visible = false
 		main.gang.update_recruit_plate(p)
@@ -308,3 +326,68 @@ func _brawl(p, dt, dP):
 			p.atk_cd = G.rand(0.75, 1.2); p.punch_t = 0.0001; p.punch_side = -1 if randf() < 0.5 else 1; p.hit_t = 0.13
 			main.sfx.play3d("swing", p.pos + Vector3(0, 1.4, 0), 0.4)
 	return true
+
+
+# ---------- fun reactions ----------
+# when you dance, flop, laugh or flex, the people nearby react
+func react_to_emote(at, kind):
+	var near = []
+	for p in PEDS:
+		if p.state == "walk" and p.pos.distance_to(at) < 13: near.append(p)
+	near.sort_custom(self, "_by_dist")
+	for i in range(min(3, near.size())):
+		var p = near[i]
+		var r = randf()
+		var em = ""
+		if kind == "dance": em = G.pick(["dance1", "dance2", "dance3", "clap"]) if r < 0.75 else "laugh"
+		elif kind == "flop": em = "laugh" if r < 0.6 else ("point" if r < 0.85 else "facepalm")
+		elif kind == "flex": em = "clap" if r < 0.5 else "shrug"
+		elif kind == "laugh": em = "laugh"
+		elif kind == "point": em = "shrug"
+		if em == "": continue
+		p.emote = em; p.emote_t = G.rand(0, 1); p.emote_left = G.rand(3.5, 8.0)
+		if i == 0 and randf() < 0.7:
+			var line = { "dance": ["Okay, I see you!", "Ayy, Calder!", "Don't stop!"], "flop": ["You good?!", "Bro fell for no reason.", "Somebody record that."],
+				"flex": ["Okay, strong man.", "Put your coat back on."], "laugh": ["What's funny?", "Ha!"], "point": ["What you pointing at?"] }.get(kind, ["Ha."])
+			main.hud.say("Passerby", G.pick(line))
+
+# a snowball landed on someone
+func snowball_hit(who, v):
+	var P = main.player
+	if who is Ped:
+		var r = randf()
+		if r < 0.12:
+			who.h.ragdoll_start(Vector3(), Vector3(v.x, 0, v.z).normalized() * 2.5 + Vector3(0, 1, 0), G.rand(-1, 1))
+			who.state = "down"; who.down_t = 0; who.ko = true; who.hp = max(who.hp, 1)
+			main.hud.say("Passerby", "Whoa-!")
+		elif r < 0.55:
+			who.emote = "laugh"; who.emote_left = 1.2; who.emote_t = 0
+			main.hud.say("Passerby", G.pick(["Oh, it's ON.", "Snow war!", "You asked for this!"]))
+			_throw_back(who, 0.9)
+		elif r < 0.8:
+			main.hud.say("Passerby", G.pick(["Really?!", "In this cold?!", "My face!"]))
+			who.state = "flee"; who.flee_t = 5; who.from = P.pos
+		else:
+			punched(who, 0.1, Vector3(v.x, 0, v.z).normalized(), false)
+			main.hud.say("Passerby", "You got jokes?")
+	elif "rec" in who:
+		# your own gang throws one back
+		main.hud.say(who.rec.name, G.pick(["Ha! Bet.", "Watch your back.", "Snow fight!"]))
+		_throw_back(who, 0.7)
+	elif "crew" in who:
+		main.crews.engage(who.crew, "snow")
+	else:
+		main.hud.say("POLICE", G.pick(["A snowball? At an officer?", "Real funny. Keep walking."]))
+		main.police.add_wanted(8, who.pos)
+
+func _throw_back(who, delay):
+	yield(get_tree().create_timer(delay), "timeout")
+	if not is_instance_valid(who.h) or who.is_down(): return
+	var P = main.player
+	var from = who.pos + Vector3(0, 1.7, 0)
+	var to = P.pos + Vector3(0, 1.3, 0)
+	var flat = Vector2(to.x - from.x, to.z - from.z)
+	var d = flat.length()
+	var tt = clamp(d / 15.0, 0.2, 1.2)
+	var v = Vector3(flat.x / tt, (to.y - from.y) / tt + 7.0 * tt, flat.y / tt)
+	main.fx.throw_snowball(from, v, who)

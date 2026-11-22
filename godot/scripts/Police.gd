@@ -94,6 +94,7 @@ func cop_hit(c, dmg, dir, by_player, melee):
 	if c.hp <= 0:
 		c.state = "down"; c.down_t = 0
 		if c.gun: c.gun.visible = false
+		c.h.ragdoll_start(Vector3(), Vector3(dir.x, 0, dir.z) * (3.0 if melee else 2.0) + Vector3(0, 0.8, 0), G.rand(-1, 1))
 		main.sfx.play3d("bodyfall", c.pos, 0.8)
 
 func spawn_cruiser():
@@ -171,7 +172,7 @@ func spawn_cop(p, car):
 	c.main = main; c.car = car; c.pos = p; c.yaw = car.yaw if car else 0.0; c.fire_cd = G.rand(0.8, 1.4)
 	c.h = load("res://scripts/Human.gd").new().build({ "jacket": 0x1b2436, "jacket2": 0x232e44, "pants": 0x161b26, "skin": G.pick([0x5a3a26, 0x7a4a30, 0x4a2e1e, 0x8a5a3a, 0xa87a58, 0xc89a78]), "hat": 0x10141e, "cap": true, "head": "cap", "badge": true, "shoes": 0x0c0c0c })
 	main.add_child(c.h)
-	c.gun = load("res://assets/guns/k9.glb").instance()
+	c.gun = GUN.build("k9", GUN.def_cfg())
 	c.gun.rotation = Vector3(PI / 2, 0, 0); c.gun.translation = Vector3(0, -0.03, 0.02); c.gun.scale = Vector3.ONE * 1.35
 	c.h.gun_slot.add_child(c.gun)
 	COPS.append(c)
@@ -255,7 +256,8 @@ func update(dt):
 		var H = c.h
 		if c.is_down():
 			c.down_t += dt
-			H.translation = c.pos
+			if H.is_ragdoll(): c.pos = H.ragdoll_center()
+			else: H.translation = c.pos
 			H.animate(dt, { "down": min(1.0, c.down_t / 0.5) })
 			if c.down_t > 30: remove_cop(c)
 			continue
@@ -311,9 +313,14 @@ func update(dt):
 func _busted():
 	var P = main.player
 	bust_t = 0
+	if G.MODE != "play": return
+	G.S["stats"]["busted"] = G.S["stats"].get("busted", 0) + 1
+	main.cutscene.play(main.cutscene.cut_busted(), self, "_after_bust")
+
+func _after_bust():
+	var P = main.player
 	var fine = round(min(G.S["cash"], 150 + level * 120))
 	G.S["cash"] -= fine
-	G.S["stats"]["busted"] = G.S["stats"].get("busted", 0) + 1
 	clear()
 	var st = G.D["LOC"]["station"]
 	P.place(st.x, 0, st.z + 6, PI)
