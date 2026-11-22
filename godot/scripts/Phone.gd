@@ -10,6 +10,10 @@ var title_lbl
 var app = ""
 var gang_tab = "crew"
 var form = { "name": "", "tag": "", "color": 0 }
+var srv_form = { "name": "", "motd": "", "pw": "", "max": 16, "pvp": true }
+var join_sid = ""
+var join_pw = ""
+var chat_text = ""
 var msg = ""
 var thread = null
 var blok_tab = "feed"
@@ -83,6 +87,7 @@ func open(which = ""):
 
 func close():
 	panel.visible = false
+	if main.net.mode == "browse": main.net.browse(false)
 	if G.MODE == "phone": G.MODE = "play"
 	main.sfx.play("lock", 0.5)
 
@@ -97,7 +102,8 @@ var online_t = 0.0
 func update(dt):
 	if panel.visible and app == "online" and main.net.mode != "off":
 		online_t -= dt
-		if online_t <= 0:
+		# don't rebuild while someone is typing (a password, a chat line, a server name)
+		if online_t <= 0 and not (body.get_focus_owner() is LineEdit):
 			online_t = 2.0; show_app("online")
 	if panel.visible and app == "map":
 		var m = body.get_node_or_null("BigMap")
@@ -286,20 +292,61 @@ func _snap(caption):
 	main.hud.toast("Blok:  Posted \u201c%s\u201d" % caption)
 
 # ---------- Online ----------
+func _edit(text, ph, key, dict_name, secret = false, maxlen = 32):
+	var le = LineEdit.new(); le.text = text; le.placeholder_text = ph; le.secret = secret; le.max_length = maxlen
+	le.add_font_override("font", G.font_m)
+	le.connect("text_changed", self, "_typed", [dict_name, key])
+	body.add_child(le)
+	return le
+
+func _typed(t, dict_name, key):
+	if dict_name == "srv": srv_form[key] = t
+	elif dict_name == "join": join_pw = t
+	elif dict_name == "chat": chat_text = t
+
 func _app_online():
 	var net = main.net
-	net.lan_listen(net.mode == "off" or net.mode == "lan_client")
+	net.lan_listen(net.mode in ["off", "browse", "lan_client"])
+	if net.mode == "off" and not net.browsing: net.browse(true)
 	var n = net.R.size() + 1
 	var head = "Playing solo"
-	if net.mode == "relay": head = ("Online · room %s · %d here" % [net.room_label(), n]) if net.online() else "Connecting…"
+	if net.mode == "relay" and net.server != null:
+		head = ("%s · %d/%d" % [net.server.name, n, net.server.max]) if net.online() else "Connecting to " + net.server.name + "…"
+		if net.online() and not net.hosting and not net.welcomed: head = "Joining " + net.server.name + "…"
+	elif net.mode == "relay": head = ("Online · room %s · %d here" % [net.room_label(), n]) if net.online() else "Connecting…"
 	elif net.mode == "lan_host": head = "Hosting on this network · %d here" % n
 	elif net.mode == "lan_client": head = ("Joined · %d here" % n) if net.online() else "Joining…"
-	_lbl(head, G.font_l, Color(0.48, 0.88, 0.65) if net.online() else Color(1, 0.7, 0.28))
-	if net.note != "": _lbl(net.note, G.font_xs, Color(0.75, 0.8, 0.88))
-	if net.mode == "off":
-		_sec("Over the internet")
-		_lbl("No ports to open. Anyone on Linux, Windows or Mac in the same room sees you.", G.font_xs, Color(0.62, 0.68, 0.76))
-		_btn("Play online · public room", self, "_go_public")
+	_lbl(head, G.font_l, Color(0.48, 0.88, 0.65) if net.online() and net.mode != "browse" else Color(1, 0.7, 0.28))
+	if net.note != "" and net.mode != "browse": _lbl(net.note, G.font_xs, Color(0.75, 0.8, 0.88))
+	if net.mode == "off" or net.mode == "browse":
+		_sec("Servers")
+		_lbl("Servers anyone in the world can join, on Android, Linux, Windows and Mac. No ports to open.", G.font_xs, Color(0.62, 0.68, 0.76))
+		var list = net.server_list()
+		if list.empty():
+			_lbl("Looking for servers…" if net.status != "online" else "No servers right now. Create one below.", G.font_xs, Color(0.75, 0.8, 0.88))
+		for sv in list.slice(0, 11) if list.size() > 12 else list:
+			var tags = ["%d/%d" % [sv.p, sv.x]]
+			if sv.r != "": tags.append(sv.r)
+			if sv.d: tags.append("24h")
+			if sv.k: tags.append("password")
+			if not sv.pvp: tags.append("no PvP")
+			_btn(sv.name + "   " + PoolStringArray(tags).join(" · "), self, "_pick_server", [sv.sid], sv.p >= sv.x)
+			if join_sid == sv.sid:
+				if sv.motd != "": _lbl(sv.motd, G.font_xs, Color(0.85, 0.88, 0.92))
+				if sv.k:
+					_edit(join_pw, "server password", "pw", "join", true)
+				_btn("Join " + sv.name, self, "_join_server", [sv.sid])
+		_sec("Create a server")
+		if srv_form.name == "": srv_form.name = "@%s's server" % str(G.S.get("name", "player"))
+		_edit(srv_form.name, "server name", "name", "srv", false, 32)
+		_edit(srv_form.motd, "message of the day (optional)", "motd", "srv", false, 120)
+		_edit(srv_form.pw, "password (optional)", "pw", "srv", true, 32)
+		_btn("Players: %d" % int(srv_form.max), self, "_srv_max")
+		_btn("PvP: " + ("on" if srv_form.pvp else "off"), self, "_srv_pvp")
+		_btn("Create server", self, "_create_server")
+		_lbl("This game hosts the server while it is open. For one that stays up day and night, run the dedicated server (README).", G.font_xs, Color(0.62, 0.68, 0.76))
+		_sec("Quick play")
+		_btn("Public room", self, "_go_public")
 		_btn("Create a private room", self, "_go_private")
 		ip_edit = LineEdit.new(); ip_edit.placeholder_text = "room code (from a friend)"; ip_edit.text = str(G.S["settings"].get("lastRoom", "")); ip_edit.add_font_override("font", G.font_m)
 		body.add_child(ip_edit)
@@ -315,7 +362,21 @@ func _app_online():
 				_btn("Nearby: @%s · %d playing" % [g.name, g.players], self, "_join_lan", [g.ip, g.port])
 		_btn("Refresh", self, "show_app", ["online"])
 	else:
-		if net.mode == "relay" and net.room != net.PUBLIC_ROOM:
+		if net.server != null:
+			if net.server.motd != "": _lbl(net.server.motd, G.font_s, Color(0.85, 0.88, 0.92))
+			_lbl("PvP " + ("on" if net.server.pvp else "off") + ("  ·  password" if net.server.pw else ""), G.font_xs, Color(0.62, 0.68, 0.76))
+			if net.hosting:
+				_lbl("You are hosting. Players anywhere see your server in Online → Servers. Leaving closes it.", G.font_xs, Color(1, 0.7, 0.28))
+			_sec("Chat")
+			var start = max(0, net.chat.size() - 8)
+			for i in range(start, net.chat.size()):
+				var c = net.chat[i]
+				_lbl("@%s:  %s" % [c.n, c.m], G.font_xs, Color(0.88, 0.9, 0.95))
+			if net.chat.size() == 0: _lbl("No messages yet.", G.font_xs, Color(0.62, 0.68, 0.76))
+			var ce = _edit(chat_text, "say something", "m", "chat", false, 120)
+			ce.connect("text_entered", self, "_send_chat_enter")
+			_btn("Send", self, "_send_chat")
+		elif net.mode == "relay" and net.room != net.PUBLIC_ROOM:
 			_lbl("Room code:  " + net.room.to_upper(), G.font_xl if net.room.length() <= 6 else G.font_l, Color(1, 0.7, 0.28))
 			_lbl("Send this code to your friends. They open Online, type it and press Join.", G.font_xs, Color(0.75, 0.8, 0.88))
 		if net.mode == "lan_host":
@@ -325,14 +386,57 @@ func _app_online():
 			var gt = (" [" + str(r.gang[2]) + "]") if typeof(r.gang) == TYPE_ARRAY else ""
 			var can = typeof(G.S.get("gang")) == TYPE_DICTIONARY and not net._same_gang(r)
 			_btn("@" + r.name + gt + ("  ·  Invite to gang" if can else ""), self, "_invite", [r.id], not can)
+			if net.hosting: _btn("Kick @" + r.name, self, "_kick", [r.id])
 		if net.R.size() == 0: _lbl("Nobody else here yet.", G.font_xs, Color(0.62, 0.68, 0.76))
 		_btn("Refresh", self, "show_app", ["online"])
-		_btn("Leave", self, "_leave_net")
+		_btn("Close server and leave" if net.hosting else "Leave", self, "_leave_net")
 	if net.invites.size() > 0:
 		_sec("Gang invites")
 		for i in range(net.invites.size()):
 			var inv = net.invites[i]
 			_btn("Join [%s] %s" % [str(inv.g[2]).substr(0, 4), str(inv.g[1]).substr(0, 18)], self, "_accept", [i])
+
+func _pick_server(sid):
+	join_sid = sid; join_pw = ""
+	var sv = main.net.servers.get(sid)
+	if sv != null and not sv.k:
+		_join_server(sid); return
+	show_app("online")
+
+func _join_server(sid):
+	if not main.net.join_server(sid, join_pw):
+		main.hud.toast("That server is gone"); show_app("online"); return
+	join_sid = ""
+	show_app("online")
+
+func _srv_max():
+	var order = [4, 8, 16, 24, 32, 64]
+	srv_form.max = order[(order.find(int(srv_form.max)) + 1) % order.size()]
+	show_app("online")
+
+func _srv_pvp():
+	srv_form.pvp = not srv_form.pvp
+	show_app("online")
+
+func _create_server():
+	var nm = main.net.clean_text(srv_form.name, 32)
+	if nm.length() < 3:
+		main.hud.toast("Give the server a name"); return
+	if not main.gang.text_ok(nm):
+		main.hud.toast("Pick a different name"); return
+	main.net.host_server({ "name": nm, "motd": srv_form.motd, "pw": srv_form.pw, "max": srv_form.max, "pvp": srv_form.pvp })
+	show_app("online")
+
+func _send_chat_enter(_t):
+	_send_chat()
+
+func _send_chat():
+	if main.net.send_chat(chat_text):
+		chat_text = ""
+	show_app("online")
+
+func _kick(id):
+	main.net.kick(id); show_app("online")
 
 func _go_public():
 	main.net.go_online(main.net.PUBLIC_ROOM); show_app("online")
@@ -486,6 +590,7 @@ func _app_settings():
 	_slider("Field of view (first person)", st.get("fov", 70), 60, 95, 1, "fov")
 	_btn("Invert look Y: " + ("on" if st.get("invertY", false) else "off"), self, "_toggle", ["invertY"])
 	_btn("Camera: " + ("first person" if st.get("fp", false) else "third person"), self, "_toggle", ["fp"])
+	_btn("Ink outlines (cel look): " + ("on" if st.get("outlines", true) else "off"), self, "_outlines")
 	var qn = { "high": "High (shadows, 4 lamp lights)", "medium": "Medium (2 lamp lights)" }
 	_btn("Graphics: " + qn.get(st.get("quality", "low"), "Fast (for old GPUs)"), self, "_quality")
 	if OS.get_name() != "Android": _btn("Full screen: " + ("on" if OS.window_fullscreen else "off"), self, "_fullscreen")
@@ -508,6 +613,9 @@ func _set(v, key):
 	else: G.S["settings"][key] = v
 func _toggle(key):
 	G.S["settings"][key] = not G.S["settings"].get(key, false); show_app("settings")
+func _outlines():
+	G.S["settings"]["outlines"] = not G.S["settings"].get("outlines", true)
+	G.apply_outlines(); show_app("settings")
 func _touch_mode():
 	var order = ["auto", "on", "off"]
 	var m = order[(order.find(str(G.S["settings"].get("touch", "auto"))) + 1) % 3]

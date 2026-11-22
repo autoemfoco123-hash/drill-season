@@ -118,6 +118,7 @@ O jogo salva sozinho a cada 20 segundos e ao sair, em
 | Celular | Tab ou P | D-pad cima |
 | Curativo | B | D-pad baixo |
 | Acenar / dedo do meio | G / T | roda de emotes / D-pad direita |
+| Chat (online) | Y | pelo celular |
 | Mapa | M | Select / View |
 | Pausar | Esc | Start / Menu |
 | Estúdio (jogo de ritmo) | D F J K ou setas | ◀ ▶ X B |
@@ -170,17 +171,26 @@ Tudo do jogo web, mais algumas coisas só daqui:
 - **Emotes:** três danças, hype, palmas, rir, dar de ombros, continência, apontar, mão na cara,
   músculo, sentar, anjo na neve e rezar. Quem está perto reage, e a sua gangue dança junto.
 - **Guerra de bolas de neve:** as pessoas riem, devolvem, fogem ou escorregam; a polícia não acha graça.
-- **Online (Linux, Windows e Mac juntos):** no celular, **Online**:
-  - **Play online · public room**: entra na sala pública; todo mundo que fizer o mesmo aparece.
-  - **Create a private room**: cria uma sala com um código de 5 letras. Mande o código para os
-    amigos; eles digitam em **Join private room**.
-  - Não precisa abrir porta no roteador nem ter alguém hospedando: o jogo se conecta a servidores
-    públicos de mensagens (MQTT) que repassam as posições, tiros, socos e emotes. Ele mantém dois
-    servidores ligados ao mesmo tempo para não cair se um falhar.
+- **Online com servidores (Android, Linux, Windows e Mac juntos):** no celular, **Online**:
+  - **Servers**: a lista de servidores do mundo inteiro, com nome, jogadores/vagas, região e
+    etiquetas (**24h** para servidor dedicado, **pw** para quem tem senha, **no PvP**). Toque num
+    servidor para ver a mensagem do dia, digite a senha se tiver e toque em **Join**.
+  - **Create a server**: o seu próprio servidor, hospedado pelo seu jogo: nome, mensagem do dia,
+    senha (opcional), vagas (4 a 64) e PvP ligado ou desligado. Ele aparece na lista de todo mundo
+    enquanto você joga, e some sozinho se você fechar o jogo ou cair.
+  - Dentro do servidor: a mensagem do dia, o **chat** (tecla **Y** abre direto), a lista de
+    jogadores e, para quem criou, o botão **Kick** (a pessoa fica 10 minutos sem poder voltar).
+  - **Quick play**: a sala pública e as salas privadas com código de 5 letras, como antes.
+  - Não precisa abrir porta no roteador: o jogo se conecta a servidores públicos de mensagens (MQTT)
+    que repassam as posições, tiros, socos, emotes e o chat, e mantém dois deles ligados ao mesmo
+    tempo para não cair se um falhar. É assim que alguém em qualquer lugar do mundo entra no seu
+    servidor.
   - **Same Wi-Fi or direct IP**: o modo antigo, sem internet. Um hospeda (UDP 24680) e os outros
     entram pelo IP ou pela lista de jogos na rede.
   - Dá para convidar gente para a gangue, e quem é da mesma gangue não se fere.
-  - O que passa pelos servidores públicos é público: o seu @nome, o visual e onde você está no mapa.
+  - O que passa pelos servidores públicos é público: o seu @nome, o visual, onde você está no mapa
+    e o chat. A senha de um servidor segura os curiosos, mas não é segurança forte: não use uma
+    senha que você usa em outro lugar.
 - **Interior do carro** em primeira pessoa (V dentro do carro): capô na cor do carro, painel com
   conta-giros e velocímetro de verdade, marcha, volante que gira com as suas mãos, retrovisor e o
   rádio mostrando a estação.
@@ -198,6 +208,20 @@ Tudo do jogo web, mais algumas coisas só daqui:
   mensagens grandes no centro, rodas de armas e de emotes, e um **editor de personagem** em tela
   cheia com prévia 3D (casa → Wardrobe, ou o app Wardrobe no celular). Num jogo novo ele
   abre depois da cena de abertura.
+
+- **Visual em cel shading** (realista, mas não demais): luz em faixas, como num desenho, em tudo
+  (cidade, pessoas, carros, armas), brilho chapado nas partes lisas, contorno de tinta nas pessoas,
+  nos carros e nas armas, e texturas novas da cidade pintadas para esse estilo (tijolo com rejunte,
+  pedra, ripas, galpões, janelas com moldura, cortinas e neve no peitoril, asfalto com trilhas de
+  lama e neve no meio-fio, calçada com sal). O contorno pode ser desligado em Settings → **Ink
+  outlines** se o PC for fraco.
+- **Rostos novos:** pescoço, maxilar, queixo, maçãs do rosto, orelhas, nariz com narinas, olhos com
+  íris e pálpebras, sobrancelhas e boca em duas partes. **Barbas:** cheia, cavanhaque, por fazer,
+  barba de contorno (chin strap) e bigode (Wardrobe → Hair → Beard).
+- **Dedo do meio em todo lugar** (T, ou o botão **FINGER** no celular dentro do carro): em terceira
+  pessoa parado, andando ou correndo; em **primeira pessoa** a mão aparece na frente da câmera; no
+  **carro** em terceira pessoa o braço sai pela janela acima do teto, e no interior em primeira
+  pessoa a mão esquerda solta o volante. Online, os outros veem também.
 
 - **Céu novo** (desenhado por um shader atrás do mundo):
   - degradê do zênite ao horizonte, faixa laranja no pôr do sol e o cinturão rosa do lado oposto;
@@ -237,6 +261,32 @@ Os personagens, crews, marcas e lugares da história são fictícios. A homenage
 O save tem o mesmo formato do web; o progresso importado traz a história, as faixas, o Blok,
 as peças das armas, a gangue e o visual.
 
+## Servidor dedicado (24 horas)
+
+Para ter um servidor sempre ligado, que aparece na lista de todo mundo mesmo com você fora do jogo,
+deixe o próprio jogo rodando em modo servidor num PC ou numa VPS. Não precisa abrir portas: ele
+também se conecta para fora, nos servidores públicos de mensagens.
+
+- **Windows:** no zip do Windows, edite `servidor.bat` (nome, senha, vagas, mensagem, PvP) e dê dois
+  cliques. Deixe a janela aberta.
+- **Linux:** no zip do Linux, edite `servidor.sh` e rode `./servidor.sh`. Numa VPS sem tela, instale
+  antes o display virtual:
+
+```bash
+sudo apt install xvfb
+```
+
+- **À mão** (qualquer sistema):
+
+```bash
+./DrillSeason.x86_64 --audio-driver Dummy --server --name="Meu servidor" --max=24 --password=segredo --motd="Bem-vindo" --pvp=on
+```
+
+Opções: `--name=`, `--max=` (2 a 64), `--password=`, `--motd=` (mensagem do dia), `--pvp=on|off`,
+`--region=` (sigla, ex.: BR) e `--id=`. O id é guardado na primeira vez, então o servidor volta com
+o mesmo lugar na lista quando reinicia. A janela (ou o terminal) mostra quem entrou, quem saiu,
+quem foi barrado (senha errada ou servidor cheio) e o chat.
+
 ## Para desenvolvedores
 
 A pasta `tools/` na raiz do repositório regenera os assets a partir do jogo web:
@@ -255,6 +305,7 @@ DS_SHOTS=/tmp/shots xvfb-run godot3 --path godot --autotest
 sintetiza os sons extras (vento, cidade, partida, gelo, fogo, trovões, o coro e as asas das pombas).
 `tools/make-memorial.py` pinta as texturas do jardim memorial (granito, frontão, arabescos das portas, placas, casca e veias da Poison Tree, palmeiras, grama, asas) e
 `tools/make-sky-noise.py` gera o ruído que o shader do céu usa para nuvens e aurora.
+`tools/make-city.py` pinta as texturas da cidade no estilo cel (fachadas, rua e calçada, em `godot/assets/tex/`).
 
 Para ver só o céu: `DS_SKYTEST=medium godot3 --path . --autotest` (com `DS_SHOTS=pasta`) tira fotos
 ao meio-dia, nublado, pôr do sol, noite com aurora, estrelas, trovoada e amanhecer.
@@ -264,3 +315,9 @@ listener websockets) e aponte o jogo para ele com
 `DS_BROKERS=ws://127.0.0.1:9001/mqtt,tcp://127.0.0.1:1883`.
 
 Ele grava capturas e um `autotest.log`.
+
+Para ver rostos, barbas, o dedo do meio e o visual cel: `DS_LOOKTEST=1`. Para testar servidores,
+com um servidor dedicado rodando (`--server --name="Test Dedicated" --password=...`): `DS_SRVTEST=client`
+(com `DS_PW=` para a senha) acha o servidor, é barrado com a senha errada, entra com a certa, conversa
+e depois cria o "Test Host"; `DS_SRVTEST=joiner` noutro jogo entra nele. `DS_BROKERS=` troca os
+servidores de mensagens por um seu (por exemplo um mosquitto local, `ws://127.0.0.1:9001`).

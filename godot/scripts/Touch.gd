@@ -84,12 +84,13 @@ func buttons():
 		out.append({ "id": "use", "label": "E", "act": "use", "c": Vector2(W - 215, H - 375), "r": 38, "hold": true, "hi": main.hud.help_box.visible })
 	var y = 262.0
 	var row = [["phone", "PHONE", "phone"], ["weapon", "WEAPON", "next_weapon"], ["emote", "EMOTE", "emote"], ["snow", "SNOW", "snowball"], ["cam", "VIEW", "camera"]]
-	if P.car: row = [["phone", "PHONE", "phone"], ["cam", "VIEW", "camera"]]
+	if P.car: row = [["phone", "PHONE", "phone"], ["cam", "VIEW", "camera"], ["flip", "FINGER", "flip"]]
 	for i in range(row.size()):
 		var b = { "id": row[i][0], "label": row[i][1], "act": row[i][2], "c": Vector2(W - 52 - i * 74, y), "r": 30 }
 		if row[i][0] in ["weapon", "emote"]:
 			b["hold"] = true
 			b["wheel"] = true
+		if row[i][0] == "flip": b["hold"] = true
 		out.append(b)
 	return out
 

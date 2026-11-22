@@ -50,6 +50,9 @@ var shake = 0.0
 var recoil = 0.0
 var step_acc = 0.0
 var vm = null           # first-person hands and gun
+var vm_flip = null      # first-person: the left hand giving the finger
+var vm_flip_key = ""
+var flip_vis = 0.0
 var vm_gun = null
 var vm_key = ""
 var emote_name = ""     # a dance or gesture from the emote wheel
@@ -159,6 +162,9 @@ func _input(e):
 		main.phone.open("map")
 	elif e.is_action_pressed("pause"):
 		main.phone.open("settings")
+	elif e is InputEventKey and e.pressed and not e.echo and e.scancode == KEY_Y and main.net.online():
+		# Y: chat (the phone's Online app, with the chat box)
+		main.phone.open("online")
 
 func look(dx, dy):
 	var s = 0.0022 * float(G.S["settings"].get("sens", 1.0)) * (0.6 if aim_t > 0.5 else 1.0)
@@ -192,6 +198,8 @@ func update(dt):
 	if car:
 		pos = Vector3(car.pos.x, 0, car.pos.z); vel = Vector3(car.vel.x, 0, car.vel.y); speed = abs(car.speed); body_yaw = car.yaw
 		human.visible = false; aim_t = 0; aiming = false; sprinting = false
+		var so = G.skin_opts(G.S["skin"])
+		main.vehicles.flip_arm(car, flipping() and not fp_on(), G.hex_color(so.skin), G.hex_color(so.jacket2 if so.top == "varsity" else so.jacket), dt)
 		fire_cd -= dt; switch_t -= dt
 		G.S["stats"]["drive"] = G.S["stats"].get("drive", 0) + speed * dt
 		if G.GAME_T - last_hurt > 8 and G.S["health"] < 60:
@@ -355,6 +363,7 @@ func update_camera(dt):
 		cam.fov = lerp(cam.fov, (float(G.S["settings"].get("fov", 70)) + (6 if sprinting else 0)) / zoom, 1 - exp(-dt * 12))
 		human.visible = false
 		_update_vm(dt, a)
+		_update_flip_vm(dt)
 		return
 	_hide_vm()
 	var fwd3 = Vector3(-sin(cam_yaw) * cos(cam_pitch), sin(cam_pitch), -cos(cam_yaw) * cos(cam_pitch))
@@ -374,6 +383,35 @@ func update_camera(dt):
 
 func _hide_vm():
 	if vm: vm.visible = false
+	if vm_flip: vm_flip.visible = false
+	flip_vis = 0.0
+
+# first person: the left hand comes up into view with the middle finger, walking or not
+func _update_flip_vm(dt):
+	flip_vis = move_toward(flip_vis, 1.0 if flipping() else 0.0, dt * 6.0)
+	var skin = G.hex_color(G.skin_opts(G.S["skin"]).skin)
+	var sleeve = G.hex_color(G.S["skin"].get("topCol", 0x262b33))
+	var key = str(skin) + str(sleeve)
+	if vm_flip == null or key != vm_flip_key:
+		if vm_flip: vm_flip.queue_free()
+		vm_flip = Spatial.new()
+		main.camera.add_child(vm_flip)
+		_vm_part(vm_flip, CylinderMesh.new(), sleeve, Vector3(0, -0.2, 0), Vector3(0.042, 0.3, 0.042))
+		_vm_part(vm_flip, SphereMesh.new(), skin, Vector3(0, -0.02, 0), Vector3(0.048, 0.055, 0.04))
+		# folded fingers, the thumb, and the middle finger standing up
+		for i in range(4):
+			if i == 2: continue
+			_vm_part(vm_flip, SphereMesh.new(), skin, Vector3(-0.027 + i * 0.018, 0.022, 0.02), Vector3(0.011, 0.013, 0.012))
+		_vm_part(vm_flip, SphereMesh.new(), skin, Vector3(-0.04, 0.0, 0.025), Vector3(0.012, 0.022, 0.011), Vector3(0, 0, 0.5))
+		var f = _vm_part(vm_flip, CapsuleMesh.new(), skin, Vector3(0.006, 0.07, 0.012), Vector3(1, 1, 1), Vector3(PI / 2, 0, 0))
+		f.mesh.radius = 0.0135; f.mesh.mid_height = 0.065; f.mesh.radial_segments = 8; f.mesh.rings = 1
+		vm_flip_key = key
+	vm_flip.visible = flip_vis > 0.01
+	if not vm_flip.visible: return
+	var e = flip_vis * flip_vis * (3.0 - 2.0 * flip_vis)
+	var bob = min(1.0, speed / 5.0)
+	vm_flip.translation = Vector3(-0.15 + cos(step_acc * 6) * 0.01 * bob, lerp(-0.46, -0.105, e) + sin(G.REAL_T * 9) * 0.004 + abs(sin(step_acc * 6)) * 0.008 * bob, -0.34)
+	vm_flip.rotation = Vector3(0.12, 0.3, 0.1)
 
 # first person: your hands and the gun (or both fists)
 func _update_vm(dt, a):
@@ -420,6 +458,8 @@ func _vm_part(parent, m, col, p, s, r = Vector3()):
 		m.radius = 1; m.height = 2; m.radial_segments = 10; m.rings = 6
 	elif m is CylinderMesh:
 		m.top_radius = 1; m.bottom_radius = 1; m.height = 1; m.radial_segments = 8
+	elif m is CapsuleMesh:
+		m.radius = 0.0135; m.mid_height = 0.065
 	var mi = MeshInstance.new(); mi.mesh = m; mi.material_override = G.mat(col)
 	mi.translation = p; mi.scale = s; mi.rotation = r
 	parent.add_child(mi)
@@ -769,6 +809,8 @@ func car_press():
 func exit_vehicle(force = false):
 	if not car: return
 	var v = car
+	if v.flip_arm:
+		v.flip_arm.visible = false; v.flip_k = 0.0
 	var l = Vector3(cos(v.yaw), 0, -sin(v.yaw))
 	var ex = v.pos + l * (v.sp.wid / 2 + 0.7)
 	if W.is_blocked(ex.x, ex.z, 0.3) and not force:

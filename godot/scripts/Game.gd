@@ -38,6 +38,15 @@ func _ready():
 		# glyphs the bundled font lacks
 		if D.has("RTYPES") and D["RTYPES"].has("brawler"):
 			D["RTYPES"]["brawler"]["icon"] = "◆"
+		# beards: a style instead of on/off (1 = full beard, as before)
+		if D.has("SKIN"):
+			for fld in D["SKIN"]["SKIN_FIELDS"]:
+				if fld[0] == "beard":
+					fld[1] = "n"
+					if fld.size() < 4:
+						fld.append(0)
+						fld.append(0)
+					fld[2] = 0; fld[3] = 5
 	else:
 		push_error("assets/data.json is missing; run tools/export-godot.js")
 	font_s = _font(14, false)
@@ -101,6 +110,7 @@ func mat(color, unshaded = false):
 	m.albedo_color = color
 	m.flags_unshaded = unshaded
 	m.roughness = 0.85
+	toon(m, true)
 	_mats[key] = m
 	return m
 var _vcmat = null
@@ -109,7 +119,62 @@ func vc_mat():
 		_vcmat = SpatialMaterial.new()
 		_vcmat.vertex_color_use_as_albedo = true
 		_vcmat.roughness = 0.85
+		toon(_vcmat, true)
+		# a soft rim of light around characters, part of the cel look
+		_vcmat.rim_enabled = true; _vcmat.rim = 0.22; _vcmat.rim_tint = 0.35
 	return _vcmat
+
+# ---------- the cel-shaded look ----------
+# Every lit material gets toon lighting: a crisp step from light to shade instead of a smooth
+# fall-off, and highlights only on glossy things (car paint, metal). Characters, cars, guns and
+# your hands also get an ink outline (scripts/outline.shader), which can be switched off in
+# Settings for slow GPUs.
+var _outline = null
+var _inked = []
+func outline_mat():
+	if _outline == null:
+		_outline = ShaderMaterial.new()
+		_outline.shader = load("res://scripts/outline.shader")
+	return _outline
+
+func outlines_on():
+	return bool(S.get("settings", {}).get("outlines", true)) if typeof(S) == TYPE_DICTIONARY else true
+
+func toon(m, ink = false):
+	if not (m is SpatialMaterial) or m.flags_unshaded or m.flags_transparent:
+		return m
+	if not m.has_meta("toon"):
+		m.set_meta("toon", true)
+		var glossy = m.metallic > 0.3 or m.roughness < 0.45
+		m.params_diffuse_mode = SpatialMaterial.DIFFUSE_TOON
+		m.params_specular_mode = SpatialMaterial.SPECULAR_TOON if glossy else SpatialMaterial.SPECULAR_DISABLED
+		m.roughness = 0.3 if glossy else 0.16
+	if ink and not m.has_meta("ink"):
+		m.set_meta("ink", true)
+		_inked.append(weakref(m))
+		if outlines_on(): m.next_pass = outline_mat()
+	return m
+
+func toon_tree(n, ink = false):
+	if n is GeometryInstance:
+		if n.material_override: toon(n.material_override, ink)
+		if n is MeshInstance and n.mesh:
+			for i in range(n.mesh.get_surface_count()):
+				var m = n.get_surface_material(i)
+				if m == null: m = n.mesh.surface_get_material(i)
+				if m: toon(m, ink)
+	for c in n.get_children():
+		toon_tree(c, ink)
+
+func apply_outlines():
+	var on = outlines_on()
+	var keep = []
+	for w in _inked:
+		var m = w.get_ref()
+		if m == null: continue
+		keep.append(w)
+		m.next_pass = outline_mat() if on else null
+	_inked = keep
 
 # ---------- the save ----------
 func default_skin():
@@ -298,7 +363,7 @@ func random_skin(r = null):
 	var pop = [0xc8202a, 0xff8a2a, 0xffc832, 0x2a5aa8, 0x6ab0ff, 0x4f8a3a, 0xff6ab0, 0x5a2a6a]
 	var hc = D["SKIN"]["HAIR_COLS"]
 	return clean_skin({
-		"tone": r.randi_range(0, 5), "hair": _rp(r, O.hair), "hairCol": _rp(r, hc.slice(0, 3)) if r.randf() < 0.8 else _rp(r, hc), "beard": 1 if r.randf() < 0.25 else 0,
+		"tone": r.randi_range(0, 5), "hair": _rp(r, O.hair), "hairCol": _rp(r, hc.slice(0, 3)) if r.randf() < 0.8 else _rp(r, hc), "beard": (r.randi_range(1, 5) if r.randf() < 0.5 else 1) if r.randf() < 0.35 else 0,
 		"head": _rp(r, ["none", "beanie", "beanie", "cap", "hood", "bucket", "durag", "headphones", "beanie"]), "headCol": _col(r, muted, pop), "pom": 1 if r.randf() < 0.4 else 0,
 		"top": _rp(r, ["puffer", "puffer", "parka", "parka", "hoodie", "track", "leather", "varsity"]), "topCol": _col(r, muted, pop), "top2": _col(r, muted, pop),
 		"pants": _rp(r, ["jeans", "jeans", "cargo", "joggers", "ski"]), "pantsCol": _rp(r, muted), "pants2": 0xe8e8ea,

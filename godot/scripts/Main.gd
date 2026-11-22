@@ -38,9 +38,18 @@ var autotest = false
 var lamp_count = 2
 var _save_t = 20.0
 
+var server_mode = false
+
 func _ready():
 	G.main = self
 	randomize()
+	# a dedicated server: no world, no window contents beyond a log (see Server.gd)
+	if "--server" in OS.get_cmdline_args():
+		server_mode = true
+		var srv = load("res://scripts/Server.gd").new()
+		srv.name = "Server"
+		add_child(srv)
+		return
 	W.setup(G.D)
 	autotest = "--autotest" in OS.get_cmdline_args()
 	_build_environment()
@@ -74,6 +83,8 @@ func _ready():
 	for s in [sfx, vehicles, player, peds, police, crews, gang, hud, phone, title, story, cutscene, studio, blok, train, fx, net, wardrobe, cockpit, touch, memorial, sky]:
 		s.setup(self)
 	story.build_npcs()
+	# everything built so far (the garden, the train, props) gets the toon lighting too
+	G.toon_tree(self)
 	title.open()
 	if autotest:
 		var t = load("res://scripts/AutoTest.gd").new()
@@ -96,6 +107,11 @@ func _load_city():
 	city = ps.instance()
 	add_child(city)
 	_prep(city)
+
+const CITY_TEX = { "road": "road", "walk": "walk",
+	"facade_brick_0": "facade_brick_0", "facade_brick_1": "facade_brick_1", "facade_brown_0": "facade_brown_0", "facade_brown_1": "facade_brown_1",
+	"facade_grey_0": "facade_grey_0", "facade_grey_1": "facade_grey_1", "facade_siding_0": "facade_siding_0", "facade_siding_1": "facade_siding_1",
+	"facade_cream_0": "facade_cream_0", "facade_cream_1": "facade_cream_1", "facade_ware_0": "facade_ware_0", "facade_ware_1": "facade_ware_1" }
 
 func _prep(n):
 	if n is MeshInstance and n.mesh:
@@ -125,8 +141,18 @@ func _prep(n):
 				m.metallic = 0.0
 				# old-GPU friendly: soft highlights instead of glare off the snow and asphalt
 				m.metallic_specular = 0.35 if nm == "ice" else 0.2
+				if nm == "ice" and not m.has_meta("toon"):
+					# pale, glassy ice rather than a flat blue disc under the cel lighting
+					m.albedo_color = m.albedo_color.linear_interpolate(Color(0.88, 0.92, 0.96), 0.45)
 				if m.roughness < 0.4 and nm != "ice":
 					m.roughness = 0.7
+				# repainted textures for the cel-shaded look (tools/make-city.py)
+				if CITY_TEX.has(nm):
+					var t = load("res://assets/tex/" + CITY_TEX[nm] + ".png")
+					if t:
+						t.flags = Texture.FLAG_MIPMAPS | Texture.FLAG_FILTER | Texture.FLAG_REPEAT | Texture.FLAG_ANISOTROPIC_FILTER
+						m.albedo_texture = t
+				G.toon(m)
 	for c in n.get_children():
 		_prep(c)
 
@@ -255,6 +281,7 @@ func _by_first(a, b):
 
 # ---------- the frame ----------
 func _process(dt):
+	if server_mode: return
 	dt = min(dt, 0.05)
 	G.REAL_T += dt
 	if G.MODE == "title":
@@ -328,6 +355,7 @@ func exit_to_title():
 	title.open()
 
 func _notification(what):
+	if server_mode: return
 	if what == MainLoop.NOTIFICATION_WM_QUIT_REQUEST:
 		G.save_game()
 	elif what == MainLoop.NOTIFICATION_WM_GO_BACK_REQUEST:

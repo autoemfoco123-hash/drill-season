@@ -1,5 +1,12 @@
 extends Node
-# Online play between copies of the Godot version on Linux, Windows and Mac.
+# Online play between copies of the Godot version on Android, Linux, Windows and Mac.
+#
+# Servers: anyone can create a server (from the phone, or a dedicated one with --server, see
+# Server.gd), and it shows up in the server list of every player in the world. The host
+# announces it on the relay as a retained message (PREFIX + "servers/<id>"): name, players,
+# slots, password or not, PvP, region, message of the day. Joining sends the password hash;
+# the host answers with a welcome (or a kick: wrong password, full, banned). There is chat.
+# Nobody opens ports: hosts and players all connect OUT to the relay below.
 #
 # Two ways to connect, both carrying the same messages:
 #  - Online (internet): every player connects OUT to public MQTT message brokers over a
@@ -42,6 +49,21 @@ var LAN = {}
 var bcast = null
 var invites = []
 var seen_ev = {}
+# servers
+const VERSION = "1.1"
+var servers = {}            # browser: sid -> info
+var browsing = false
+var server = null           # the server we are on: { sid, name, motd, max, pw, pvp, ded }
+var hosting = false
+var host_pw = ""
+var announce_t = 0.0
+var join_pw = ""
+var welcomed = false
+var welcome_t = 0.0
+var rejected = {}           # ids the host turned away (everyone ignores them)
+var kicked = {}             # host: id -> until
+var chat = []               # [{ "n": name, "m": text }]
+var chat_t = 0.0
 const EMOTE_IDS = ["", "dance1", "dance2", "dance3", "hype", "clap", "laugh", "shrug", "salute", "point", "facepalm", "flex", "sit", "snowangel"]
 const CAR_MODELS = ["hatch", "sedan", "suv", "pickup", "coupe", "van", "police", "taxi"]
 
@@ -58,7 +80,9 @@ class Mqtt extends Reference:
 	var client_id = ""
 	var will_topic = ""
 	var will_msg = ""
+	var will_retain = false
 	var sub = ""
+	var subs = []
 	var sent_connect = false
 	var host = ""
 
@@ -121,12 +145,14 @@ class Mqtt extends Reference:
 		sent_connect = true
 		var vh = _str("MQTT")
 		vh.append(4)            # protocol level 3.1.1
-		vh.append(0x02 | 0x04)  # clean session, will flag (QoS 0, not retained)
+		# clean session; a will (QoS 0) if there is one, retained for a host's listing
+		vh.append(0x02 | ((0x04 | (0x20 if will_retain else 0)) if will_topic != "" else 0))
 		vh.append(0); vh.append(45)   # keep alive 45 s
 		var body = vh
 		body.append_array(_str(client_id))
-		body.append_array(_str(will_topic))
-		body.append_array(_str(will_msg))
+		if will_topic != "":
+			body.append_array(_str(will_topic))
+			body.append_array(_str(will_msg))
 		_send(_packet(0x10, body))
 
 	func subscribe(topic):
@@ -135,11 +161,16 @@ class Mqtt extends Reference:
 		body.append(0)
 		_send(_packet(0x82, body))
 
-	func publish(topic, payload):
+	func publish(topic, payload, retain = false):
 		if state != "online": return
 		var body = _str(topic)
 		body.append_array(payload.to_utf8())
-		_send(_packet(0x30, body))
+		_send(_packet(0x31 if retain else 0x30, body))
+
+	func add_sub(topic):
+		if topic in subs: return
+		subs.append(topic)
+		if state == "online": subscribe(topic)
 
 	func poll(dt):
 		if state == "dead": return
@@ -188,7 +219,8 @@ class Mqtt extends Reference:
 			if kind == 2:
 				if body.size() >= 2 and body[1] == 0:
 					state = "online"; ping_t = 20.0
-					subscribe(sub)
+					if sub != "": subscribe(sub)
+					for s in subs: subscribe(s)
 				else:
 					state = "dead"
 			elif kind == 3:
@@ -253,7 +285,7 @@ func clean_room(code):
 	var out = ""
 	for ch in str(code).to_lower():
 		if ch in "abcdefghijklmnopqrstuvwxyz0123456789": out += ch
-	return out.substr(0, 12)
+	return out.substr(0, 20)
 
 func new_room_code():
 	var rng = RandomNumberGenerator.new(); rng.randomize()
@@ -265,12 +297,23 @@ func new_room_code():
 # ---------- online through the brokers ----------
 func go_online(code = PUBLIC_ROOM):
 	leave(true)
+	_connect_room(code)
+
+func _connect_room(code):
+	for l in links: l.close()
+	links.clear()
 	code = clean_room(code)
 	if code == "": code = PUBLIC_ROOM
 	room = code
 	mode = "relay"; status = "connecting"; broker_i = 0; relay_t = 0
 	note = "Connecting to the online relay…"
 	_fill_links()
+
+func _topics():
+	var t = []
+	if mode == "relay": t.append(PREFIX + room + "/#")
+	if browsing or mode == "browse" or hosting: t.append(PREFIX + "servers/+")
+	return t
 
 func _broker_list():
 	var env = OS.get_environment("DS_BROKERS")
@@ -293,9 +336,12 @@ func _fill_links():
 		var m = Mqtt.new()
 		m.url = url; m.owner = self
 		m.client_id = "ds-" + uid + "-" + str(randi() % 9999)
-		m.will_topic = PREFIX + room + "/bye/" + uid
-		m.will_msg = "{}"
-		m.sub = PREFIX + room + "/#"
+		if hosting:
+			# if this game drops, the broker takes the server off the list
+			m.will_topic = PREFIX + "servers/" + server.sid; m.will_msg = ""; m.will_retain = true
+		elif mode == "relay":
+			m.will_topic = PREFIX + room + "/bye/" + uid; m.will_msg = "{}"
+		m.subs = _topics()
 		m.start()
 		links.append(m)
 		alive += 1
@@ -314,14 +360,22 @@ func _relay_poll(dt):
 		relay_t = 3.0
 		_fill_links()
 	if any and status != "online":
-		status = "online"; main.hud.banner("Online", "Room " + room_label()); _send("hi", _profile())
+		status = "online"
+		if mode == "relay":
+			if server == null: main.hud.banner("Online", "Room " + room_label())
+			elif hosting: main.hud.banner(server.name, "Your server is online")
+			_send("hi", _profile())
+			if hosting: announce_t = 0.0
 	elif not any and status == "online":
 		status = "connecting"
 	if any: note = "Connected via " + PoolStringArray(names).join(" + ")
 	elif links.size() == 0: note = "Can't reach the online relay. Check the internet connection."
 
 func _relay_in(topic, payload):
-	if not topic.begins_with(PREFIX + room + "/"): return
+	if topic.begins_with(PREFIX + "servers/"):
+		_server_info(topic.substr((PREFIX + "servers/").length()), payload)
+		return
+	if mode != "relay" or not topic.begins_with(PREFIX + room + "/"): return
 	var parts = topic.substr(PREFIX.length() + room.length() + 1).split("/")
 	if parts.size() != 2: return
 	var kind = parts[0]
@@ -329,6 +383,7 @@ func _relay_in(topic, payload):
 	if from == uid or not from.is_valid_identifier() or from.length() > 24: return
 	if kind == "bye":
 		_remove("r" + from); return
+	if rejected.has("r" + from) and kind != "ev": return
 	if payload.length() > 20000: return
 	var d = parse_json(payload)
 	if typeof(d) != TYPE_DICTIONARY: return
@@ -412,24 +467,35 @@ func _on_peer_gone(id):
 # ---------- leaving ----------
 func leave(quiet = false):
 	for id in R.keys(): _remove(id)
-	if mode == "relay":
+	if mode == "relay" or mode == "browse":
 		for l in links:
-			l.publish(PREFIX + room + "/bye/" + uid, "{}")
+			if hosting:
+				_send("ev", { "t": "closing" })
+				l.publish(PREFIX + "servers/" + server.sid, "", true)
+			if mode == "relay": l.publish(PREFIX + room + "/bye/" + uid, "{}")
 			l.close()
 	links.clear()
 	if peer:
 		peer.close_connection()
 		get_tree().network_peer = null
 	peer = null; bcast = null
-	if status != "offline" and not quiet: main.hud.toast("Left the online game")
+	if status != "offline" and not quiet and mode == "relay": main.hud.toast("Left the online game")
 	status = "offline"; mode = "off"
+	server = null; hosting = false; host_pw = ""; join_pw = ""; welcomed = false
+	rejected.clear(); chat.clear()
 
 # ---------- what players tell each other ----------
 func _profile():
 	var g = G.S.get("gang")
-	return { "name": str(G.S["name"]).substr(0, 18), "skin": G.S["skin"], "gang": [str(g.id), g.name, g.tag, int(g.color)] if typeof(g) == TYPE_DICTIONARY else null }
+	var p = { "name": str(G.S["name"]).substr(0, 18), "skin": G.S["skin"], "gang": [str(g.id), g.name, g.tag, int(g.color)] if typeof(g) == TYPE_DICTIONARY else null }
+	if server != null and not hosting:
+		p["srv"] = server.sid; p["v"] = VERSION
+		if join_pw != "": p["pw"] = pw_hash(join_pw, server.sid)
+	return p
 
 func _on_msg(id, kind, d):
+	# a host only listens to players it has let in (their hello carries the password)
+	if hosting and kind != "hi" and not R.has(id) and not (kind == "ev" and str(d.get("t", "")) == "chat"): return
 	if kind == "hi": _hello(id, d)
 	elif kind == "st": _state(id, d)
 	elif kind == "ev": _event(id, d)
@@ -442,6 +508,7 @@ func _remote(id):
 	return r
 
 func _hello(id, p):
+	if hosting and not R.has(id) and not _admit(id, p): return
 	var r = _remote(id)
 	var first = not r.has_hello
 	r.has_hello = true
@@ -499,8 +566,40 @@ func _event(id, e):
 				main.sfx.shot(str(e.get("k", "k9")) if str(e.get("k", "")) in ["k9", "draft", "plow"] else "k9", va, 0.8)
 				main.sfx.flash(va)
 		return
+	if t == "chat":
+		var m = clean_chat(e.get("m", ""))
+		if m == "" or rejected.has(id): return
+		var nm = r.name if r else "server"
+		_chat_line(nm, m)
+		return
+	var from_host = server != null and id == "r" + server.sid
+	if t == "reject" and from_host:
+		var who = "r" + str(e.get("who", ""))
+		if who != "r" + uid:
+			rejected[who] = true; _remove(who)
+		return
+	if t == "closing" and from_host and not hosting:
+		var nm2 = server.name
+		leave(true)
+		main.hud.banner("Server closed", nm2)
+		return
 	if to != me: return
+	if t == "welcome" and from_host:
+		welcomed = true
+		server.name = clean_text(e.get("name", server.name), 32)
+		server.motd = clean_text(e.get("motd", ""), 120)
+		server.pvp = e.get("pvp", true) == true
+		server.max = int(_num(e.get("max", 16), 2, 64))
+		main.hud.banner(server.name, server.motd if server.motd != "" else "Welcome")
+		main.sfx.play("notif", 0.5)
+		return
+	if t == "kick" and from_host:
+		var why = clean_text(e.get("why", "Kicked"), 60)
+		leave(true)
+		main.hud.banner("Can't stay on this server", why)
+		return
 	if t == "hurt" and r:
+		if server != null and not server.pvp: return
 		if _same_gang(r): return
 		# the most anyone can take off you per second, whatever they send
 		if G.REAL_T - r.dmg_t > 1.0:
@@ -558,6 +657,8 @@ func _same_gang(r):
 func hit_remote(r, dmg, _head, melee):
 	if _same_gang(r):
 		main.hud.toast("Same gang. No friendly fire."); return
+	if server != null and not server.pvp:
+		main.hud.toast("PvP is off on this server"); return
 	main.sfx.blood(r.pos + Vector3(0, 1.3, 0), Vector3())
 	_send("ev", { "t": "hurt", "dmg": dmg, "melee": melee }, id_for_send(r))
 
@@ -577,10 +678,25 @@ func targets():
 # ---------- every frame ----------
 func update(dt):
 	_lan(dt)
-	if mode == "relay": _relay_poll(dt)
+	if mode == "relay" or mode == "browse": _relay_poll(dt)
 	for k in seen_ev.keys():
 		if G.REAL_T - seen_ev[k] > 30: seen_ev.erase(k)
-	if not online(): return
+	for sid in servers.keys():
+		if G.REAL_T - servers[sid].seen > 45: servers.erase(sid)
+	chat_t = max(0.0, chat_t - dt)
+	if not online() or mode == "browse": return
+	if hosting:
+		announce_t -= dt
+		if announce_t <= 0:
+			announce_t = 10.0
+			_announce()
+	elif server != null and not welcomed:
+		welcome_t -= dt
+		if welcome_t <= 0:
+			var nm = server.name
+			leave(true)
+			main.hud.banner("The server didn't answer", nm)
+			return
 	if G.MODE != "title":
 		send_t -= dt
 		if send_t <= 0:
@@ -633,6 +749,8 @@ func _update_remote(r, dt):
 			r.car.yaw += G.ang_diff(r.car.yaw, cy) * k
 			r.car.speed = cs
 			main.vehicles.place(r.car)
+			var so = G.skin_opts(r.skin)
+			main.vehicles.flip_arm(r.car, s.get("flip", false) == true, G.hex_color(so.skin), G.hex_color(so.jacket), dt)
 			r.pos = r.car.pos
 		return
 	if r.car:
@@ -655,6 +773,7 @@ func _update_remote(r, dt):
 func _remove(id):
 	var r = R.get(id)
 	if r == null: return
+	if hosting: announce_t = min(announce_t, 1.0)
 	if r.h: r.h.queue_free()
 	if r.car: main.vehicles.remove(r.car)
 	R.erase(id)
@@ -688,3 +807,126 @@ func my_ips():
 	for a in IP.get_local_addresses():
 		if a.find(":") < 0 and not a.begins_with("127.") and not a.begins_with("169.254"): out.append(a)
 	return out
+
+# ---------- servers ----------
+static func pw_hash(pw, sid):
+	return (str(pw) + ":" + str(sid) + ":drillseason").sha256_text().substr(0, 20)
+
+static func clean_text(v, n):
+	var out = ""
+	for ch in str(v):
+		if ch.ord_at(0) >= 32 and ch != "\\": out += ch
+	return out.strip_edges().substr(0, n)
+
+func clean_chat(v):
+	var m = clean_text(v, 120)
+	return m
+
+func region():
+	var loc = OS.get_locale()
+	var parts = loc.split("_")
+	return (parts[1] if parts.size() > 1 else parts[0]).to_upper().substr(0, 3)
+
+# the server list: start or stop listening for servers (and connect just for that if offline)
+func browse(on):
+	browsing = on
+	if on:
+		if mode == "off":
+			mode = "browse"; status = "connecting"; broker_i = 0; relay_t = 0
+			note = "Looking for servers…"
+			_fill_links()
+		else:
+			for l in links: l.add_sub(PREFIX + "servers/+")
+	elif mode == "browse":
+		for l in links: l.close()
+		links.clear()
+		status = "offline"; mode = "off"
+
+func _server_info(sid, payload):
+	if not sid.is_valid_identifier() or sid.length() > 24: return
+	if payload == "":
+		servers.erase(sid); return
+	if payload.length() > 2000: return
+	var d = parse_json(payload)
+	if typeof(d) != TYPE_DICTIONARY: return
+	if OS.get_unix_time() - int(_num(d.get("t", 0), 0, 4.0e9)) > 120: return   # left behind by a crashed host
+	var rm = clean_room(d.get("room", ""))
+	if rm == "": return
+	servers[sid] = { "sid": sid, "name": clean_text(d.get("n", "Server"), 32), "motd": clean_text(d.get("m", ""), 120), "p": int(_num(d.get("p", 1), 0, 64)),
+		"x": int(_num(d.get("x", 16), 2, 64)), "k": d.get("k", false) == true, "r": clean_text(d.get("r", ""), 3), "d": d.get("d", false) == true,
+		"pvp": d.get("pvp", true) == true, "h": clean_text(d.get("h", ""), 18), "room": rm, "v": clean_text(d.get("v", ""), 8), "seen": G.REAL_T }
+
+func server_list():
+	var out = servers.values()
+	out.sort_custom(self, "_by_players")
+	return out
+
+func _by_players(a, b):
+	if a.d != b.d: return a.d
+	return a.p > b.p
+
+# create a server: this game hosts it on the relay (keep it open; leaving closes the server)
+func host_server(cfg):
+	leave(true)
+	hosting = true
+	host_pw = str(cfg.get("pw", "")).substr(0, 32)
+	server = { "sid": uid, "name": clean_text(cfg.get("name", "Server"), 32), "motd": clean_text(cfg.get("motd", ""), 120), "max": int(clamp(int(cfg.get("max", 16)), 2, 64)),
+		"pw": host_pw != "", "pvp": cfg.get("pvp", true) == true, "ded": false }
+	welcomed = true
+	_connect_room("s" + uid)
+
+func join_server(sid, pw = ""):
+	var info = servers.get(sid)
+	if info == null: return false
+	leave(true)
+	server = { "sid": sid, "name": info.name, "motd": info.motd, "max": info.x, "pw": info.k, "pvp": info.pvp, "ded": info.d }
+	join_pw = str(pw)
+	welcomed = false; welcome_t = 12.0
+	_connect_room(info.room)
+	return true
+
+func _announce():
+	var d = { "n": server.name, "m": server.motd, "p": R.size() + 1, "x": server.max, "k": server.pw, "r": region(), "d": false, "pvp": server.pvp,
+		"h": str(G.S["name"]).substr(0, 18), "room": room, "v": VERSION, "t": OS.get_unix_time() }
+	var payload = JSON.print(d)
+	for l in links: l.publish(PREFIX + "servers/" + server.sid, payload, true)
+
+# the host decides who gets in
+func _admit(id, p):
+	var rid = id.substr(1)
+	var why = ""
+	if kicked.has(id) and kicked[id] > G.REAL_T: why = "You were kicked from this server"
+	elif host_pw != "" and str(p.get("pw", "")) != pw_hash(host_pw, server.sid): why = "Wrong password"
+	elif R.size() + 1 >= server.max: why = "Server full"
+	if why != "":
+		_send("ev", { "t": "kick", "why": why }, rid)
+		_send("ev", { "t": "reject", "who": rid })
+		rejected[id] = true
+		return false
+	rejected.erase(id)
+	_send("ev", { "t": "welcome", "name": server.name, "motd": server.motd, "pvp": server.pvp, "max": server.max }, rid)
+	announce_t = min(announce_t, 1.0)
+	return true
+
+func kick(id):
+	if not hosting or not R.has(id): return
+	var rid = id.substr(1)
+	kicked[id] = G.REAL_T + 600.0
+	_send("ev", { "t": "kick", "why": "Kicked by the host" }, rid)
+	_send("ev", { "t": "reject", "who": rid })
+	rejected[id] = true
+	_remove(id)
+
+func send_chat(text):
+	var m = clean_chat(text)
+	if m == "" or not online(): return false
+	if chat_t > 0: return false
+	chat_t = 1.2
+	_send("ev", { "t": "chat", "m": m })
+	_chat_line(str(G.S["name"]), m)
+	return true
+
+func _chat_line(nm, m):
+	chat.append({ "n": nm, "m": m })
+	while chat.size() > 40: chat.pop_front()
+	main.hud.toast("@%s:  %s" % [nm, m])

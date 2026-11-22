@@ -21,7 +21,14 @@ para o app que você usou. Se o Play Protect avisar que o app é desconhecido, t
 - A cidade inteira aberta: Calder Ave, o parque e a lagoa, o L, a orla do lago, o pátio de trens.
 - História com trabalhos, cutscenes e quatro finais; o estúdio Basement 808 (jogo de ritmo); a
   rede social Blok; a bancada de armas; carros com interior; o trem passando; frio, neve e vento.
-- Online sem abrir portas (sala pública ou privada com código), com controles na tela no celular.
+- **Visual em cel shading**, realista mas não demais: luz em faixas, contorno de tinta nas
+  pessoas, carros e armas, texturas da cidade pintadas para o estilo, rostos com mais detalhe e
+  cinco tipos de barba.
+- **Servidores online para o mundo inteiro:** crie o seu (nome, senha, vagas, mensagem do dia,
+  PvP) ou entre num da lista, com chat e kick. Para um servidor 24 horas, rode o próprio jogo em
+  modo servidor num PC ou VPS (`servidor.bat` / `servidor.sh` nos zips de PC). Não precisa abrir
+  portas. Também há sala pública e sala privada com código. Controles na tela no celular.
+- Dedo do meio em primeira pessoa, andando e dentro do carro (o braço sai pela janela).
 - Um céu que muda com a hora e o tempo: nuvens, pôr do sol, estrelas, aurora e neve com trovoada.
 - **Homenagem a XXXTentacion:** no Calder Park, o jardim memorial com a réplica do mausoléu dele,
   feita a partir de uma foto que a família compartilhou, e a **Poison Tree** ao lado. Preste

@@ -14,17 +14,26 @@ func run(m):
 	if OS.get_environment("DS_JOIN") != "": call_deferred("_join_mode")
 	elif OS.get_environment("DS_SKYTEST") != "": call_deferred("_sky_test")
 	elif OS.get_environment("DS_MEMTEST") != "": call_deferred("_mem_test")
+	elif OS.get_environment("DS_LOOKTEST") != "": call_deferred("_look_test")
+	elif OS.get_environment("DS_SRVTEST") != "": call_deferred("_srv_test")
 	else: call_deferred("_go")
 
 func _wait(s):
 	yield(get_tree().create_timer(s), "timeout")
 
 func _shot(name):
+	# DS_NOHUD: clean frames (for the download page)
+	var hidden = []
+	if OS.get_environment("DS_NOHUD") != "" and main.hud:
+		for c in main.hud.layer.get_children():
+			if c is CanvasItem and c.visible:
+				c.visible = false; hidden.append(c)
 	yield(get_tree(), "idle_frame")
 	yield(get_tree(), "idle_frame")
 	var img = get_viewport().get_texture().get_data()
 	img.flip_y()
 	img.save_png(out.plus_file(name + ".png"))
+	for c in hidden: c.visible = true
 	_log("shot " + name)
 
 func _count(n, acc):
@@ -328,6 +337,172 @@ func _sky_test():
 # the sky through the day, the memorial wall, the mausoleum and the lightning tribute
 func _frame(from, look, fov = 50):
 	main.cutscene.play([{ "dur": 999, "from": from, "look": look, "fov": fov }])
+
+func _wait_for(obj, prop, want, secs):
+	var t0 = G.REAL_T
+	while G.REAL_T - t0 < secs:
+		if obj.get(prop) == want: return
+		yield(get_tree(), "idle_frame")
+	yield(get_tree(), "idle_frame")
+
+func _list_names():
+	var out = []
+	for sv in main.net.server_list(): out.append("%s %d/%d%s%s" % [sv.name, sv.p, sv.x, " 24h" if sv.d else "", " pw" if sv.k else ""])
+	return out
+
+# servers over a local broker (DS_BROKERS): client finds the dedicated server, is turned away
+# with a wrong password, gets in with the right one, chats, then hosts its own; joiner joins it
+func _srv_test():
+	var role = OS.get_environment("DS_SRVTEST")
+	yield(_wait(1.0), "completed")
+	main.title._close(); main.start_game(G.new_state("srv" + role))
+	yield(_wait(1.0), "completed")
+	var net = main.net
+	net.browse(true)
+	var t0 = G.REAL_T
+	var want = "Test Host" if role == "joiner" else "Test Dedicated"
+	var found = null
+	while G.REAL_T - t0 < 40 and found == null:
+		for sv in net.server_list():
+			if sv.name == want: found = sv
+		yield(get_tree(), "idle_frame")
+	_log("%s: servers %s" % [role, str(_list_names())])
+	if found == null:
+		_log("%s: did not find %s" % [role, want]); _quit_log(); return
+	if role == "client":
+		net.join_server(found.sid, "wrong")
+		t0 = G.REAL_T
+		while G.REAL_T - t0 < 20 and net.mode != "off" and not net.welcomed:
+			yield(get_tree(), "idle_frame")
+		_log("wrong password: mode %s welcomed %s" % [net.mode, str(net.welcomed)])
+		net.browse(true)
+		yield(_wait(2.0), "completed")
+		net.join_server(found.sid, OS.get_environment("DS_PW"))
+		t0 = G.REAL_T
+		while G.REAL_T - t0 < 20 and not net.welcomed and net.mode != "off":
+			yield(get_tree(), "idle_frame")
+		_log("right password: welcomed %s on %s motd '%s' pvp %s" % [str(net.welcomed), net.server.name if net.server else "-", net.server.motd if net.server else "", str(net.server.pvp) if net.server else "-"])
+		yield(_wait(1.5), "completed")
+		_log("chat sent: %s" % str(net.send_chat("hello from the client")))
+		yield(_wait(2.0), "completed")
+		main.phone.open("online")
+		yield(_wait(0.6), "completed")
+		yield(_shot("srv1_on_dedicated"), "completed")
+		main.phone.close()
+		net.leave()
+		yield(_wait(1.0), "completed")
+		net.host_server({ "name": "Test Host", "motd": "hosted from the test", "pw": "", "max": 8, "pvp": false })
+		t0 = G.REAL_T
+		while G.REAL_T - t0 < 45 and net.R.size() == 0:
+			yield(get_tree(), "idle_frame")
+		_log("hosting: players %d" % net.R.size())
+		yield(_wait(14.0), "completed")
+		_log("hosting chat: %s" % str(net.chat))
+		main.phone.open("online")
+		yield(_wait(0.6), "completed")
+		yield(_shot("srv2_hosting"), "completed")
+		main.phone.close()
+		net.leave()
+	else:
+		net.join_server(found.sid, "")
+		t0 = G.REAL_T
+		while G.REAL_T - t0 < 20 and not net.welcomed and net.mode != "off":
+			yield(get_tree(), "idle_frame")
+		_log("joiner: welcomed %s motd '%s' pvp %s" % [str(net.welcomed), net.server.motd if net.server else "", str(net.server.pvp) if net.server else "-"])
+		yield(_wait(2.0), "completed")
+		_log("chat sent: %s" % str(net.send_chat("hi host")))
+		yield(_wait(5.0), "completed")
+		_log("joiner sees players %d %s chat %s" % [net.R.size(), str(net.R.keys()), str(net.chat)])
+		main.phone.open("online")
+		yield(_wait(0.6), "completed")
+		yield(_shot("srv3_joiner"), "completed")
+		net.leave()
+	_quit_log()
+
+func _quit_log():
+	var fl = File.new()
+	if fl.open(out.plus_file("autotest.log"), File.WRITE) == OK:
+		fl.store_string(PoolStringArray(log_lines).join("\n")); fl.close()
+	get_tree().quit()
+
+# the look: faces and beards up close, the finger in every view, the cel-shaded street
+func _look_test():
+	yield(_wait(1.0), "completed")
+	main.title._close(); main.start_game(G.new_state("looktest"))
+	yield(_wait(1.5), "completed")
+	_clean_view(true)
+	G.S["settings"]["fp"] = false
+	G.time_offset += (12 * 60 + 30 - G.world_minutes())
+	var P = main.player
+	var spawn = P.pos
+	var spawn_yaw = P.cam_yaw
+	# five faces in a row
+	var base = Vector3(4, 0, -20)
+	var people = []
+	for i in range(6):
+		var sk = G.default_skin()
+		sk["beard"] = i; sk["head"] = ["none", "none", "cap", "none", "beanie", "none"][i]; sk["tone"] = [1, 4, 2, 5, 3, 0][i]
+		sk["hair"] = ["short", "afro", "buzz", "locs", "short", "twists"][i]
+		var h = load("res://scripts/Human.gd").new().build(G.skin_opts(sk))
+		main.add_child(h)
+		h.translation = base + Vector3(i * 0.7 - 1.75, 0, 0)
+		h.rotation.y = 0.0
+		h.animate(0.016, { "speed": 0.0 })
+		people.append(h)
+	P.place(base.x, 0, base.z - 8, 0)
+	_frame(base + Vector3(-1.4, 1.62, 1.5), base + Vector3(-1.4, 1.58, 0), 22)
+	yield(_wait(0.6), "completed")
+	yield(_shot("l1_faces_a"), "completed")
+	main.cutscene.end(); _frame(base + Vector3(1.05, 1.62, 1.5), base + Vector3(1.05, 1.58, 0), 22)
+	yield(_wait(0.4), "completed")
+	yield(_shot("l2_faces_b"), "completed")
+	main.cutscene.end(); _frame(base + Vector3(0, 1.4, 4.5), base + Vector3(0, 1.0, 0), 40)
+	yield(_wait(0.4), "completed")
+	yield(_shot("l3_lineup"), "completed")
+	main.cutscene.end()
+	for h in people: h.queue_free()
+	# the finger in third person while running, seen from behind
+	P.place(4, 0, -30, 0); P.cam_yaw = 0; P.cam_pitch = -0.05
+	Input.action_press("move_f"); Input.action_press("sprint")
+	P.flip_t = 6.0
+	yield(_wait(1.2), "completed")
+	yield(_shot("l4_flip_run_tp"), "completed")
+	Input.action_release("sprint")
+	# first person, walking
+	G.S["settings"]["fp"] = true
+	P.flip_t = 6.0
+	yield(_wait(0.8), "completed")
+	yield(_shot("l5_flip_fp"), "completed")
+	Input.action_release("move_f")
+	# in a car: third person, then the cockpit
+	G.S["settings"]["fp"] = false
+	var v = main.vehicles.spawn("sedan", P.pos.x + 2.4, P.pos.z, 0, { "color": 0x8a1c24, "owned": true })
+	main.vehicles.enter(v)
+	yield(_wait(0.8), "completed")
+	P.flip_t = 6.0
+	P.cam_yaw = v.yaw + PI + 0.5
+	yield(_wait(1.0), "completed")
+	yield(_shot("l6_flip_car_tp"), "completed")
+	G.S["settings"]["fp"] = true
+	P.flip_t = 6.0
+	yield(_wait(1.0), "completed")
+	yield(_shot("l7_flip_cockpit"), "completed")
+	G.S["settings"]["fp"] = false
+	P.exit_vehicle(true)
+	# the street, cel-shaded
+	_clean_view(false)
+	P.place(2.5, 0, -16, 0); P.cam_yaw = 0.4; P.cam_pitch = 0.05
+	yield(_wait(1.0), "completed")
+	yield(_shot("l8_street"), "completed")
+	G.time_offset += (21 * 60 - G.world_minutes())
+	yield(_wait(1.0), "completed")
+	yield(_shot("l9_street_night"), "completed")
+	# where a new game starts (the sidewalk ice is there)
+	G.time_offset += (13 * 60 - G.world_minutes())
+	P.place(spawn.x, 0, spawn.z, spawn_yaw); P.cam_yaw = spawn_yaw; P.cam_pitch = -0.12
+	yield(_wait(1.0), "completed")
+	yield(_shot("l10_spawn"), "completed")
+	get_tree().quit()
 
 # only the tribute: night, pay respects, shots through the cutscene, then quit
 func _mem_test():

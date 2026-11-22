@@ -121,7 +121,9 @@ func open(is_new = false):
 
 func close():
 	root.visible = false
-	if preview: preview.queue_free(); preview = null
+	if preview:
+		preview.queue_free()
+		preview = null
 	if G.MODE == "wardrobe": G.MODE = "play"
 
 func _rebuild_preview():
@@ -190,6 +192,7 @@ func _value_text(key):
 	if f[1] == "b": return "On" if int(v) else "Off"
 	if f[1] == "n":
 		if key == "build": return BUILDS[clamp(int(v), 0, 2)]
+		if key == "beard": return load("res://scripts/Human.gd").BEARDS[clamp(int(v), 0, 5)]
 		return "%d / %d" % [int(v) + 1, int(f[3]) + 1]
 	return ""
 

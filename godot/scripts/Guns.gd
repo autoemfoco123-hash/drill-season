@@ -125,6 +125,7 @@ func build(id, cfg = null):
 		var ch = Spatial.new(); ch.name = "Charm"; ch.translation = info.charm_at
 		var cm = MeshInstance.new(); cm.mesh = info.charm; ch.add_child(cm)
 		out.add_child(ch)
+	G.toon_tree(out, true)
 	return out
 
 func _make(id, cfg):

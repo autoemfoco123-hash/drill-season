@@ -11,6 +11,8 @@ var eye = Vector3()
 var spin = null
 var hands = []
 var arms = []
+var flip_hand = null
+var flip_k = 0.0
 var gauge_vp = null
 var gauge_view = null
 var radio_vp = null
@@ -200,6 +202,12 @@ func build(v):
 		h.material_override = skin; h.translation = Vector3(s3 * 0.185, 0, -0.025); h.scale = Vector3(0.95, 0.95, 1.2)
 		spin.add_child(h); hands.append(h)
 		var a = MeshInstance.new(); a.mesh = _cyl_mesh(); a.material_override = sleeve; g.add_child(a); arms.append(a)
+	# the left hand leaves the wheel to give the finger
+	flip_hand = Spatial.new(); flip_hand.visible = false; g.add_child(flip_hand)
+	var fist = MeshInstance.new(); var fsm = SphereMesh.new(); fsm.radius = 0.045; fsm.height = 0.09; fsm.radial_segments = 10; fsm.rings = 6
+	fist.mesh = fsm; fist.material_override = skin; fist.scale = Vector3(1.0, 1.15, 0.9); flip_hand.add_child(fist)
+	var fing = MeshInstance.new(); var fcm = CapsuleMesh.new(); fcm.radius = 0.014; fcm.mid_height = 0.07; fcm.radial_segments = 8; fcm.rings = 1
+	fing.mesh = fcm; fing.material_override = skin; fing.rotation = Vector3(PI / 2, 0, 0); fing.translation = Vector3(0, 0.085, 0.005); flip_hand.add_child(fing)
 	# pillars, roof, doors, mirrors, seats
 	var ax = W / 2 - 0.09
 	var axT = W / 2 - 0.17
@@ -276,7 +284,16 @@ func update(v, cam, dt):
 	cam.rotation = Vector3(clamp(P.cam_pitch + 0.06, -0.6, 0.5), v.yaw + PI + look, -clamp(lat * 0.0015, -0.03, 0.03))
 	spin.rotation.z = -v.steer * 2.4
 	var sx = [eye.x + 0.2, eye.x - 0.2]
+	flip_k = move_toward(flip_k, 1.0 if P.flipping() else 0.0, dt * 6.0)
+	var fe = flip_k * flip_k * (3.0 - 2.0 * flip_k)
+	hands[0].visible = fe < 0.35
+	flip_hand.visible = fe > 0.01
 	for i in range(2):
 		var hp = root.global_transform.affine_inverse().xform(hands[i].global_transform.origin)
+		if i == 0 and flip_hand.visible:
+			var up = Vector3(eye.x + 0.2, eye.y - 0.1 + sin(G.REAL_T * 9) * 0.006, eye.z + 0.34)
+			flip_hand.translation = hp.linear_interpolate(up, fe)
+			flip_hand.rotation = Vector3(-0.15 * fe, 0, -0.2 * fe)
+			hp = flip_hand.translation
 		_limb(arms[i], hp + Vector3(0, -0.02, -0.04), Vector3(sx[i], eye.y - 0.3, eye.z - 0.02), 0.04)
 	gauge_view.update(); radio_view.update()

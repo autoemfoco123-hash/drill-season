@@ -42,6 +42,8 @@ class Car:
 	var spot = -1
 	var node = null
 	var paint_mat = null
+	var flip_arm = null
+	var flip_k = 0.0
 	var box = {}
 	var cab = {}
 
@@ -92,11 +94,14 @@ func _paint(v, n = null):
 			for i in range(c.mesh.get_surface_count()):
 				var m = c.mesh.surface_get_material(i)
 				if m is SpatialMaterial:
-					m.vertex_color_use_as_albedo = true; m.vertex_color_is_srgb = true; m.metallic = 0.0; m.metallic_specular = 0.35
+					if not m.has_meta("toon"):
+						m.vertex_color_use_as_albedo = true; m.vertex_color_is_srgb = true; m.metallic = 0.0; m.metallic_specular = 0.35
+					G.toon(m, true)
 			if c.name.begins_with("paint"):
 				var pm = SpatialMaterial.new()
 				pm.vertex_color_use_as_albedo = true; pm.vertex_color_is_srgb = true
 				pm.albedo_color = G.hex_color(v.color); pm.roughness = 0.35; pm.metallic = 0.0; pm.metallic_specular = 0.6
+				G.toon(pm, true)
 				c.material_override = pm
 				v.paint_mat = pm
 			c.cast_shadow = GeometryInstance.SHADOW_CASTING_SETTING_OFF
@@ -123,6 +128,59 @@ func place(v):
 	v.cab.x0 = v.pos.x - hx * 0.6; v.cab.x1 = v.pos.x + hx * 0.6; v.cab.z0 = v.pos.z - hz * 0.6; v.cab.z1 = v.pos.z + hz * 0.6
 
 func fwd(v): return Vector3(sin(v.yaw), 0, cos(v.yaw))
+
+# ---------- the driver's arm out of the window, giving the finger (you, or someone online) ----------
+func flip_arm(v, on, skin, sleeve, dt):
+	if v == null or v.dead or v.node == null: return
+	if v.flip_arm == null:
+		if not on: return
+		v.flip_arm = _make_flip_arm(skin, sleeve)
+		v.node.add_child(v.flip_arm)
+	v.flip_k = move_toward(v.flip_k, 1.0 if on else 0.0, dt * 5.0)
+	var a = v.flip_arm
+	a.visible = v.flip_k > 0.01
+	if not a.visible: return
+	var k = v.flip_k * v.flip_k * (3.0 - 2.0 * v.flip_k)
+	var Gm = G.D["CAR_GEOM"].get(v.model, {})
+	var W = float(v.sp.wid)
+	var yWB = float(Gm.get("yWB", 1.0))
+	var eyeY = max(yWB + 0.32, float(Gm.get("roofY", 1.5)) - 0.26)
+	var eyeZ = float(Gm.get("zWB", 0.8)) - 0.95
+	var xw = W / 2.0
+	var wig = sin(G.REAL_T * 9.0) * 0.012
+	# out of the window and up over the roof line, so it shows from behind the car too
+	var S = Vector3(xw - 0.2, eyeY - 0.25, eyeZ + 0.05)
+	var E = Vector3(xw - 0.1, eyeY - 0.45, eyeZ + 0.15).linear_interpolate(Vector3(xw + 0.17, eyeY - 0.06, eyeZ + 0.02), k)
+	var H = Vector3(xw - 0.05, eyeY - 0.5, eyeZ + 0.35).linear_interpolate(Vector3(xw + 0.24, eyeY + 0.4 + wig, eyeZ + 0.04), k)
+	_seg(a.get_node("upper"), S, E, 0.065)
+	_seg(a.get_node("fore"), E, H, 0.056)
+	a.get_node("fist").translation = H
+	var dir = (H - E).normalized()
+	_seg(a.get_node("finger"), H + dir * 0.03, H + dir * 0.17, 0.02)
+
+func _make_flip_arm(skin, sleeve):
+	var a = Spatial.new()
+	a.name = "FlipArm"
+	for p in [["upper", sleeve], ["fore", sleeve], ["finger", skin]]:
+		var cm = CylinderMesh.new(); cm.top_radius = 1; cm.bottom_radius = 1; cm.height = 1; cm.radial_segments = 8; cm.rings = 1
+		var mi = MeshInstance.new(); mi.name = p[0]; mi.mesh = cm; mi.material_override = G.mat(p[1])
+		a.add_child(mi)
+	var sm = SphereMesh.new(); sm.radius = 1; sm.height = 2; sm.radial_segments = 10; sm.rings = 6
+	var f = MeshInstance.new(); f.name = "fist"; f.mesh = sm; f.material_override = G.mat(skin); f.scale = Vector3(0.062, 0.07, 0.055)
+	a.add_child(f)
+	return a
+
+# a unit cylinder stretched from a to b
+func _seg(mi, a, b, r):
+	var d = b - a
+	var L = d.length()
+	if L < 0.001: return
+	var y = d / L
+	var x = y.cross(Vector3(0, 0, 1))
+	if x.length() < 0.1: x = y.cross(Vector3(1, 0, 0))
+	x = x.normalized()
+	var z = x.cross(y)
+	mi.transform = Transform(Basis(x * r, y * L, z * r), (a + b) / 2.0)
 func side(v): return Vector3(cos(v.yaw), 0, -sin(v.yaw))
 
 func physics(v, dt, inp):

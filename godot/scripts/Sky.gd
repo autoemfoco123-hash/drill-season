@@ -95,6 +95,9 @@ func frame():
 	env.background_color = fog
 	env.ambient_light_energy = env.ambient_light_energy * (1.0 - storm * 0.25) + flash * 1.4
 	main.sun.light_energy *= (1.0 - storm * 0.55)
+	# toon lighting puts the full light on every lit face (no cosine fall-off): tone it down
+	main.sun.light_energy *= 0.58
+	env.ambient_light_energy *= 0.8
 	# keep the far plane inside the fog so nothing pops against the sky
 	env.fog_depth_end = min(env.fog_depth_end, main.camera.far * 0.92) * (1.0 - storm * 0.25)
 	# colours

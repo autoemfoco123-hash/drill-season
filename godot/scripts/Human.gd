@@ -133,6 +133,77 @@ func _pivot(parent, pos):
 	return s
 
 # o: the same options as the web game (skin, hair, head, top, jacket, pants, ...)
+# ---------- the face: skull, jaw and chin, ears, nose, eyes, brows, lips, and the beard ----------
+const BEARDS = ["None", "Full beard", "Goatee", "Stubble", "Chin strap", "Mustache"]
+
+func _mixc(a, b, t):
+	var ca = a if typeof(a) == TYPE_COLOR else G.hex_color(a)
+	var cb = b if typeof(b) == TYPE_COLOR else G.hex_color(b)
+	return ca.linear_interpolate(cb, t)
+
+func _face(o, cS, cHair, cH, skimask):
+	var hg = head_g
+	var shade = _mixc(cS, 0x1a0e08, 0.22)
+	# neck, skull, jaw and chin
+	_add(spine, "cyl", [0.056, 0.064, 0.13], cS, Vector3(0, 0.73, 0.005))
+	_add(hg, "sphere", [0.13], cS, Vector3(0, 0.07, -0.006), Vector3(), Vector3(0.93, 1.0, 0.98))
+	_add(hg, "sphere", [0.105], cS, Vector3(0, 0.0, 0.024), Vector3(), Vector3(0.95, 0.82, 1.0))
+	_add(hg, "sphere", [0.048], cS, Vector3(0, -0.056, 0.074), Vector3(), Vector3(1.12, 0.78, 0.9))
+	# cheekbones
+	for s in [-1, 1]:
+		_add(hg, "sphere", [0.04], cS, Vector3(s * 0.06, 0.04, 0.085), Vector3(), Vector3(1.0, 0.7, 0.8))
+	if skimask:
+		_add(hg, "sphere", [0.136], cH, Vector3(0, 0.05, 0.0), Vector3(), Vector3(0.98, 1.12, 1.04))
+		for s in [-1, 1]:
+			_add(hg, "box", [0.05, 0.026, 0.01], cS, Vector3(s * 0.045, 0.08, 0.133))
+			_add(hg, "sphere", [0.011], 0x2a1a10, Vector3(s * 0.045, 0.08, 0.137), Vector3(), Vector3(1, 1, 0.45))
+		_add(hg, "box", [0.05, 0.018, 0.01], cS, Vector3(0, -0.012, 0.137))
+		return
+	# ears
+	for s in [-1, 1]:
+		_add(hg, "sphere", [0.033], cS, Vector3(s * 0.123, 0.052, -0.008), Vector3(0, s * 0.25, 0), Vector3(0.42, 1.0, 0.72))
+		_add(hg, "sphere", [0.016], shade, Vector3(s * 0.127, 0.05, -0.004), Vector3(), Vector3(0.3, 0.9, 0.6))
+	# nose: bridge, tip and the wings of the nostrils
+	_add(hg, "box", [0.022, 0.05, 0.028], cS, Vector3(0, 0.058, 0.118), Vector3(-0.32, 0, 0))
+	_add(hg, "sphere", [0.021], cS, Vector3(0, 0.03, 0.133), Vector3(), Vector3(1.15, 0.95, 1.0))
+	for s in [-1, 1]:
+		_add(hg, "sphere", [0.013], shade, Vector3(s * 0.016, 0.022, 0.126), Vector3(), Vector3(1.0, 0.8, 0.9))
+	# eyes: whites, irises, upper lids; brows
+	for s in [-1, 1]:
+		_add(hg, "sphere", [0.019], 0xe9e4dc, Vector3(s * 0.045, 0.078, 0.108), Vector3(), Vector3(1.2, 0.8, 0.6))
+		_add(hg, "sphere", [0.0105], 0x24160d, Vector3(s * 0.045, 0.077, 0.116), Vector3(), Vector3(1, 1, 0.45))
+		_add(hg, "box", [0.046, 0.009, 0.014], shade, Vector3(s * 0.045, 0.092, 0.112), Vector3(0.25, 0, s * 0.06))
+		_add(hg, "box", [0.054, 0.014, 0.016], cHair, Vector3(s * 0.047, 0.112, 0.114), Vector3(0.15, 0, s * 0.1))
+	# lips
+	var lip = _mixc(cS, 0x5a2420, 0.35)
+	var beard = int(o.get("beard", 0)) if typeof(o.get("beard", 0)) != TYPE_BOOL else (1 if o.get("beard") else 0)
+	if o.get("mask") != null: beard = 0
+	var lz = 0.137 if beard == 1 else 0.126
+	_add(hg, "box", [0.05, 0.011, 0.012], _mixc(lip, 0x000000, 0.25), Vector3(0, -0.011, lz))
+	_add(hg, "box", [0.044, 0.013, 0.012], lip, Vector3(0, -0.024, lz - 0.003))
+	# the beard
+	var bc = cHair
+	if beard == 1 or beard == 3:
+		if beard == 3: bc = _mixc(cS, cHair, 0.55)
+		_add(hg, "sphere", [0.112], bc, Vector3(0, -0.006, 0.026), Vector3(), Vector3(0.96, 0.84, 1.03))
+		_add(hg, "sphere", [0.052], bc, Vector3(0, -0.062, 0.078), Vector3(), Vector3(1.15, 0.85, 0.95))
+		for s in [-1, 1]:
+			_add(hg, "box", [0.018, 0.07, 0.04], bc, Vector3(s * 0.112, 0.045, 0.01), Vector3(0, 0, s * 0.05))
+	if beard == 1 or beard == 2 or beard == 5:
+		_add(hg, "box", [0.062, 0.013, 0.016], cHair, Vector3(0, 0.004, lz + 0.002), Vector3(0, 0, 0))
+		for s in [-1, 1]:
+			_add(hg, "box", [0.012, 0.03, 0.012], cHair, Vector3(s * 0.033, -0.01, lz - 0.002))
+	if beard == 2:
+		_add(hg, "sphere", [0.034], cHair, Vector3(0, -0.06, 0.098), Vector3(), Vector3(1.0, 1.15, 0.85))
+	if beard == 4:
+		for k in range(11):
+			var a = -PI * 0.5 + PI * k / 10.0
+			_add(hg, "box", [0.026, 0.018, 0.022], cHair, Vector3(sin(a) * 0.1, -0.03 - cos(a) * 0.04, 0.03 + cos(a) * 0.075), Vector3(0, a, 0))
+	if o.get("mask") != null:
+		_add(hg, "sphere", [0.138], o["mask"], Vector3(0, 0.03, 0.01), Vector3(), Vector3(0.97, 0.6, 1.03))
+	if o.get("glasses", false):
+		_add(hg, "box", [0.21, 0.048, 0.02], 0x0b0b0d, Vector3(0, 0.085, 0.124))
+
 func build(o):
 	opts = o
 	var top = o.get("top", "parka" if o.get("coat", false) else "puffer")
@@ -180,20 +251,8 @@ func build(o):
 	if o.get("badge", false):
 		_add(spine, "box", [0.06, 0.07, 0.02], cGold, Vector3(0.12, 0.52, 0.2))
 	head_g = _pivot(spine, Vector3(0, 0.78, 0))
-	_add(head_g, "sphere", [0.13], cS, Vector3(0, 0.06, 0), Vector3(), Vector3(0.95, 1.05, 1))
 	var skimask = head == "skimask"
-	if skimask:
-		_add(head_g, "sphere", [0.13], cH, Vector3(0, 0.062, 0), Vector3(), Vector3(1.0, 1.1, 1.05))
-	for s in [-1, 1]:
-		_add(head_g, "sphere", [0.019], cDark, Vector3(s * 0.045, 0.085, 0.128 if skimask else 0.118))
-		if not skimask:
-			_add(head_g, "box", [0.052, 0.013, 0.014], cHair, Vector3(s * 0.047, 0.118, 0.115), Vector3(0, 0, s * 0.08))
-	if o.get("beard", false) and not skimask and o.get("mask") == null:
-		_add(head_g, "box", [0.17, 0.075, 0.07], cHair, Vector3(0, -0.005, 0.07))
-	if o.get("mask") != null:
-		_add(head_g, "sphere", [0.138], o["mask"], Vector3(0, 0.03, 0.01), Vector3(), Vector3(0.97, 0.6, 1.03))
-	if o.get("glasses", false):
-		_add(head_g, "box", [0.21, 0.048, 0.02], cDark, Vector3(0, 0.087, 0.135 if skimask else 0.124))
+	_face(o, cS, cHair, cH, skimask)
 	var hair = o.get("hair", "none")
 	var covers = head in ["beanie", "durag", "skimask", "hood", "bucket"]
 	if hair != "none" and not skimask:
@@ -201,7 +260,7 @@ func build(o):
 			if covers or head in ["cap", "capback"]:
 				_add(head_g, "sphere", [0.19], cHair, Vector3(0, 0.06, -0.02), Vector3(), Vector3(0.9, 0.62, 0.9))
 			else:
-				_add(head_g, "sphere", [0.19], cHair, Vector3(0, 0.13, -0.01))
+				_add(head_g, "sphere", [0.19], cHair, Vector3(0, 0.125, -0.05), Vector3(), Vector3(0.95, 0.86, 0.84))
 		elif not covers:
 			var bz = hair == "buzz"
 			_add(head_g, "hemi", [0.137], cHair, Vector3(0, 0.07, -0.003), Vector3(), Vector3(0.99 if bz else 1.04, 0.96 if bz else 1.08, 0.99 if bz else 1.06))
@@ -271,9 +330,9 @@ func build(o):
 		else: AR = arm
 	_finish()
 	# the middle finger, only shown for the gesture
-	var fm = CapsuleMesh.new(); fm.radius = 0.015; fm.mid_height = 0.072; fm.radial_segments = 6; fm.rings = 1
+	var fm = CapsuleMesh.new(); fm.radius = 0.017; fm.mid_height = 0.085; fm.radial_segments = 6; fm.rings = 1
 	finger = MeshInstance.new(); finger.mesh = fm; finger.material_override = G.mat(G.hex_color(cHand))
-	finger.translation = Vector3(0, -0.09, 0.006); finger.rotation = Vector3(PI / 2, 0, 0); finger.visible = false
+	finger.translation = Vector3(0, -0.1, 0.006); finger.rotation = Vector3(PI / 2, 0, 0); finger.visible = false
 	AL.hand.add_child(finger)
 	gun_slot = Spatial.new(); AR.hand.add_child(gun_slot)
 	# a soft dark spot under the feet
@@ -329,7 +388,8 @@ func animate(dt, pose):
 	if pose.get("wave", false):
 		al = Vector3(-2.6, 0, -0.3 + sin(G.REAL_T * 8) * 0.25); ale = -0.4
 	if pose.get("flip", false):
-		al = Vector3(-1.5 + sin(G.REAL_T * 9) * 0.06, 0, -0.22); ale = -1.3
+		# arm up and out to the side, so the finger shows from behind and while running
+		al = Vector3(-2.5 + sin(G.REAL_T * 9) * 0.06, 0, -0.55); ale = -0.6
 	if pose.get("mug", false):
 		al = Vector3(-0.9, 0, -0.1); ale = -1.4
 	if pose.get("hands", false):
