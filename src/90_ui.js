@@ -517,7 +517,8 @@ function renderApp() {
       <div class="sec">Sound check</div><div class="set-row" style="display:block"><div id="ps-audio" style="font:500 12px/1.4 var(--f-mono);color:var(--ink-2);margin-bottom:8px">${esc(audioInfo())}</div><button class="btn" id="ps-test" style="width:100%">Play test sound</button></div>
       <div class="sec">Camera</div><div class="seg"><button data-fp="0" class="${!st.fp ? 'on' : ''}">Third person<small>over the shoulder</small></button><button data-fp="1" class="${st.fp ? 'on' : ''}">First person<small>V to switch</small></button></div>
       <div class="set-row"><span>Field of view</span><input type="range" id="ps-fov" min="60" max="95" step="1" value="${st.fov || 70}"><output>${Math.round(st.fov || 70)}</output></div>
-      <div class="sec">Graphics</div><div class="seg"><button data-q="high" class="${st.quality !== 'low' ? 'on' : ''}">High<small>shadows · AA</small></button><button data-q="low" class="${st.quality === 'low' ? 'on' : ''}">Fast<small>no shadows</small></button></div>
+      <div class="sec">Graphics</div><div class="seg"><button data-q="high" class="${!LITE_MODE && st.quality !== 'low' ? 'on' : ''}">High<small>shadows · AA</small></button><button data-q="low" class="${!LITE_MODE && st.quality === 'low' ? 'on' : ''}">Fast<small>no shadows</small></button><button data-q="lite" class="${LITE_MODE ? 'on' : ''}">Simple<small>for consoles · old browsers</small></button></div>
+      ${LITE_MODE && PLAT.webgl === false ? '<div class="job-s">This browser has no WebGL, so the game draws with its simple renderer.</div>' : ''}
       <div class="sec">Car radio</div><div class="seg seg-wrap">${STATIONS.map((n, i) => `<button data-r="${i}" class="${st.radio === i ? 'on' : ''}">${n.short}</button>`).join('')}</div>
       <div class="sec">Audio</div><div class="seg"><button data-sc="1" class="${st.score !== false ? 'on' : ''}">Score<small>music on foot</small></button><button data-sc="0" class="${st.score === false ? 'on' : ''}">No score<small>city only</small></button></div>
       <div class="seg"><button data-vo="1" class="${st.voices !== false ? 'on' : ''}">Voices<small>PA · megaphone</small></button><button data-vo="0" class="${st.voices === false ? 'on' : ''}">Mute voices<small>subtitles only</small></button></div>
@@ -525,7 +526,11 @@ function renderApp() {
     const bind = (id2, key, f) => { const el = $(id2); el.oninput = () => { st[key] = +el.value; el.nextElementSibling.textContent = f(+el.value); applyVolumes(); }; };
     bind('ps-sens', 'sens', v => v.toFixed(1)); bind('ps-fov', 'fov', v => Math.round(v));
     body.querySelectorAll('[data-fp]').forEach(b => b.onclick = () => { st.fp = b.dataset.fp === '1'; if (!st.fp) fpHide(); renderApp(); }); bind('ps-vol', 'vol', v => Math.round(v * 100)); bind('ps-music', 'music', v => Math.round(v * 100));
-    body.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { st.quality = b.dataset.q; applyQuality(); renderApp(); });
+    body.querySelectorAll('[data-q]').forEach(b => b.onclick = () => {
+      const q = b.dataset.q, wantLite = q === 'lite';
+      if (wantLite !== LITE_MODE && PLAT.webgl !== false) { try { localStorage.setItem('ds.lite', wantLite ? '1' : '0'); } catch (e) { } if (!wantLite) st.quality = q; saveGame(); location.replace(location.pathname + location.hash); return; }
+      if (!wantLite) { st.quality = q; applyQuality(); } renderApp();
+    });
     body.querySelectorAll('[data-r]').forEach(b => b.onclick = () => { st.radio = +b.dataset.r; radioRefresh(true); renderApp(); });
     body.querySelectorAll('[data-sc]').forEach(b => b.onclick = () => { st.score = b.dataset.sc === '1'; renderApp(); });
     body.querySelectorAll('[data-vo]').forEach(b => b.onclick = () => { st.voices = b.dataset.vo === '1'; if (!st.voices && window.speechSynthesis) speechSynthesis.cancel(); renderApp(); });

@@ -240,6 +240,7 @@ const _focus = new THREE.Vector3();
 function frame(now) {
   requestAnimationFrame(frame);
   let dt = (now - lastFrame) / 1000; lastFrame = now;
+  perfTick(dt);
   if (!(dt > 0)) return; if (dt > 0.05) dt = 0.05;
   REAL_T += dt;
   pollGamepad(dt);
@@ -297,7 +298,7 @@ function frame(now) {
   if (MODE === 'phone' && REAL_T % 1 < dt) phoneClock();
   if (MODE === 'rhythm') { rhUpdate(); drawRhythm(); }
   else if (MODE === 'bench') drawBench(dt);
-  else { if (LITE_MODE) liteRender(dt); else composer.render(dt); phoneAfterRender(); }
+  else { if (LITE_MODE) liteRender(dt); else renderMain(dt); phoneAfterRender(); }
 }
 
 /* ---- boot ---- */

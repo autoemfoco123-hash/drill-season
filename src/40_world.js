@@ -141,7 +141,7 @@ function facadeBox(F, bt, cx, cy, cz, w, h, d, faces, uo) {
   const dims = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
   for (let f = 0; f < 6; f++) for (let i = 0; i < 6; i++) { const k = f * 6 + i; uv.setXY(k, uv.getX(k) * dims[f][0] / 12 + (uo || 0), uv.getY(k) * dims[f][1] / 12); }
   const m = mtx(cx, cy, cz, 1, 1, 1);
-  if (LITE_MODE) { liteFacade(F.style, cx, cy, cz, w, h, d); LITE.mute = true; }
+  if (liteCapturing()) { liteFacade(F.style, cx, cy, cz, w, h, d); LITE.mute = true; }
   for (const f of faces) bt.add(geo, m, 0xffffff, f * 6, 6);
   LITE.mute = false;
 }

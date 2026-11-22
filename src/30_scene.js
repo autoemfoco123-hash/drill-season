@@ -14,6 +14,12 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.domElement.className = 'gl';
 $('app').prepend(renderer.domElement);
 if (LITE_MODE) renderer.domElement.after(LITE.over);
+// if the browser takes the GPU away (Edge on Xbox can, e.g. when you go to the dashboard) and does not give it back, keep playing in software
+let GL_LOST = 0;
+if (!LITE_MODE) {
+  renderer.domElement.addEventListener('webglcontextlost', e => { e.preventDefault(); GL_LOST = performance.now(); setTimeout(() => { if (GL_LOST && performance.now() - GL_LOST > 3500) liteTakeOver('context lost'); }, 4000); });
+  renderer.domElement.addEventListener('webglcontextrestored', () => { GL_LOST = 0; });
+}
 
 const scene = new THREE.Scene();
 const FOG_COL = new THREE.Color(0x0e1b2b);
@@ -252,7 +258,7 @@ class Batch {
       if (ua) this.u.push(ua.getX(i), ua.getY(i)); else this.u.push(0, 0);
       this.c.push(_c3.r, _c3.g, _c3.b);
     }
-    if (LITE_MODE) liteRecord(this, geo, m, _c3);
+    if (liteCapturing()) liteRecord(this, geo, m, _c3);
   }
   build() {
     const g = new THREE.BufferGeometry();
@@ -263,7 +269,7 @@ class Batch {
     g.computeBoundingSphere();
     return g;
   }
-  mesh(mat, cast, receive) { const m = new THREE.Mesh(this.build(), mat); if (LITE_MODE) { liteCommit(this, mat); m.userData.liteSkip = true; } m.matrixAutoUpdate = false; m.updateMatrix(); m.castShadow = cast !== false; m.receiveShadow = receive !== false; scene.add(m); return m; }
+  mesh(mat, cast, receive) { const m = new THREE.Mesh(this.build(), mat); m.userData.liteSkip = true; if (liteCapturing()) liteCommit(this, mat); m.matrixAutoUpdate = false; m.updateMatrix(); m.castShadow = cast !== false; m.receiveShadow = receive !== false; scene.add(m); return m; }
 }
 
 /* ---------- GPU particles (one draw call per system) ---------- */
@@ -495,6 +501,26 @@ const bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight)
 const gradePass = new ShaderPass(GRADE);
 const outputPass = new OutputPass();
 composer.addPass(renderPass); composer.addPass(bloomPass); composer.addPass(gradePass); composer.addPass(outputPass);
+// consoles and phones: the drawing resolution follows the frame rate
+let PR_CUR = PR;
+const PERF = { acc: 0, n: 0, errs: 0 };
+function setRenderScale(pr) { PR_CUR = pr; renderer.setPixelRatio(pr); composer.setPixelRatio(pr); resizeRender(); }
+function perfTick(raw) {
+  if (LITE_MODE || !LOW_POWER || !(raw > 0) || raw > 1) return;
+  PERF.acc += raw; PERF.n++;
+  if (PERF.acc < 2) return;
+  const fps = PERF.n / PERF.acc; PERF.acc = 0; PERF.n = 0;
+  let pr = PR_CUR;
+  if (fps < 26) pr = Math.max(0.4, pr * 0.85); else if (fps > 50) pr = Math.min(PR, pr * 1.08);
+  if (Math.abs(pr - PR_CUR) > 0.005) setRenderScale(pr);
+  // still too slow at the lowest resolution: the glow pass goes first
+  if (pr <= 0.41 && fps < 20 && bloomPass.enabled) bloomPass.enabled = false;
+}
+// a draw that keeps throwing (out of GPU memory and the like) hands over to software
+function renderMain(dt) {
+  try { composer.render(dt); PERF.errs = Math.max(0, PERF.errs - 0.02); }
+  catch (e) { PERF.errs++; console.error('render', e); if (PERF.errs > 3 && liteTakeOver('render errors')) PERF.errs = 0; }
+}
 function resizeRender() {
   renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight);
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
@@ -503,7 +529,7 @@ function resizeRender() {
 function applyQuality() {
   const hi = S.settings.quality !== 'low';
   renderer.shadowMap.enabled = hi; SUN.castShadow = hi;
-  bloomPass.enabled = true; bloomPass.resolution.set(innerWidth / (hi ? 1 : 2), innerHeight / (hi ? 1 : 2));
+  bloomPass.enabled = !(LOW_POWER && PR_CUR <= 0.41); bloomPass.resolution.set(innerWidth / (hi ? 1 : 2), innerHeight / (hi ? 1 : 2));
   scene.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.needsUpdate = true); });
 }
 

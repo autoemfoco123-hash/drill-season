@@ -6,7 +6,10 @@
    are built; people, cars and trains are drawn from their live
    (animated) parts each frame.
    ========================================================= */
-let LITE_MODE = PLAT.webgl === false || /[?&]lite\b/.test(location.search);
+let LITE_PICKED = false; try { LITE_PICKED = localStorage.getItem('ds.lite') === '1'; } catch (e) { }
+let LITE_MODE = PLAT.webgl === false || /[?&]lite\b/.test(location.search) || LITE_PICKED;
+// consoles keep a copy of the city in software form, so a lost graphics context never means a black screen
+const liteCapturing = () => LITE_MODE || IS_CONSOLE;
 const LITE = {
   canvas: null, ctx: null, over: null, octx: null, W: 0, H: 0, img: null, buf: null, depth: null,
   statics: [], grid: new Map(), cell: 16, frame: 0, scale: 1, ms: 12, adaptT: 0, tag: -1, mute: false,
@@ -30,6 +33,18 @@ function makeLiteRenderer() {
     render: noop, compile: noop, dispose: noop, setRenderTarget: noop, getRenderTarget: () => null, clear: noop, setClearColor: noop, getClearColor: c2 => c2, getClearAlpha: () => 1,
     setAnimationLoop: noop, getContext: () => null, resetState: noop, getActiveCubeFace: () => 0, getActiveMipmapLevel: () => 0, initTexture: noop,
   };
+}
+// WebGL gave up (context lost and not back, or the renderer keeps failing): carry on in software
+function liteTakeOver(why) {
+  if (LITE_MODE || !LITE.statics.length) return false;
+  const gl = renderer.domElement;
+  makeLiteRenderer();
+  gl.style.display = 'none'; gl.after(LITE.canvas); LITE.canvas.after(LITE.over);
+  LITE.canvas.addEventListener('mousedown', e => { if (MODE === 'cutscene') skipCutscene(); });
+  LITE_MODE = true;
+  console.warn('switched to the software renderer:', why);
+  if (typeof toast === 'function') toast(null, 'Graphics switched to the simple renderer to keep the game running', '#ffb347');
+  return true;
 }
 // internal resolution: small, scaled up by the browser; adjusts to hold the frame rate
 function liteResize() {
