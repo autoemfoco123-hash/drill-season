@@ -11,5 +11,5 @@ dest_files=[ "res://.import/train_horn.ogg-a3928ef0b76d37a4e63ef5fe6a9330e2.oggs
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

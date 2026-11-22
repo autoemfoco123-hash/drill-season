@@ -19,6 +19,7 @@ var train
 var fx
 var net
 var wardrobe
+var cockpit
 var camera
 var env
 var sun
@@ -63,7 +64,8 @@ func _ready():
 	fx = _system("res://scripts/FX.gd", "FX")
 	net = _system("res://scripts/Net.gd", "Net")
 	wardrobe = _system("res://scripts/Wardrobe.gd", "Wardrobe")
-	for s in [sfx, vehicles, player, peds, police, crews, gang, hud, phone, title, story, cutscene, studio, blok, train, fx, net, wardrobe]:
+	cockpit = _system("res://scripts/Cockpit.gd", "Cockpit")
+	for s in [sfx, vehicles, player, peds, police, crews, gang, hud, phone, title, story, cutscene, studio, blok, train, fx, net, wardrobe, cockpit]:
 		s.setup(self)
 	story.build_npcs()
 	title.open()

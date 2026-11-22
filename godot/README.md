@@ -2,10 +2,22 @@
 
 Versão nativa do Drill Season para PC, feita em **Godot 3 (GLES2)**. Ela roda em placas
 de vídeo antigas, como a Intel HD de primeira geração (Iron Lake / Arrandale / Clarkdale),
-no Linux (Kali, Debian, Ubuntu) e no Windows.
+no Linux (Kali, Debian, Ubuntu), no Windows e no Mac.
 
 A cidade, os carros, as armas, os sons e as quatro rádios são exportados do jogo web. O
 save tem o mesmo formato, então o seu progresso do navegador vem junto.
+
+## Baixar e jogar (Linux, Windows, Mac)
+
+- **Linux:** `DrillSeason-linux.zip`. Descompacte e rode `./DrillSeason.x86_64` (deixe o `.pck` na mesma pasta).
+- **Windows:** `DrillSeason-windows.zip`. Descompacte e abra `DrillSeason.exe`. Se o Windows mostrar
+  "O Windows protegeu o computador", clique em **Mais informações → Executar assim mesmo** (o
+  executável não é assinado).
+- **Mac:** `DrillSeason-mac.zip`. Descompacte e arraste *Drill Season* para Aplicativos. Na primeira
+  vez, clique com o botão direito no app e escolha **Abrir** (o app não é assinado). Se o macOS
+  ainda bloquear, rode no Terminal `xattr -dr com.apple.quarantine "/Applications/Drill Season.app"`.
+
+Todas as versões jogam online juntas.
 
 ## Jogar no Kali Linux
 
@@ -140,11 +152,29 @@ Tudo do jogo web, mais algumas coisas só daqui:
 - **Emotes:** três danças, hype, palmas, rir, dar de ombros, continência, apontar, mão na cara,
   músculo, sentar e anjo na neve. Quem está perto reage, e a sua gangue dança junto.
 - **Guerra de bolas de neve:** as pessoas riem, devolvem, fogem ou escorregam; a polícia não acha graça.
-- **Online:** um jogador hospeda (celular → Online → Host), os outros entram pelo IP ou pela
-  lista de jogos na mesma rede. Todo mundo se vê andando, dirigindo, atirando, socando e
-  dançando; dá para convidar gente para a gangue, e quem é da mesma gangue não se fere. Pela
-  internet, quem hospeda libera a porta UDP 24680 no roteador. O online liga cópias do Godot;
-  o jogo de navegador tem as salas dele.
+- **Online (Linux, Windows e Mac juntos):** no celular, **Online**:
+  - **Play online · public room**: entra na sala pública; todo mundo que fizer o mesmo aparece.
+  - **Create a private room**: cria uma sala com um código de 5 letras. Mande o código para os
+    amigos; eles digitam em **Join private room**.
+  - Não precisa abrir porta no roteador nem ter alguém hospedando: o jogo se conecta a servidores
+    públicos de mensagens (MQTT) que repassam as posições, tiros, socos e emotes. Ele mantém dois
+    servidores ligados ao mesmo tempo para não cair se um falhar.
+  - **Same Wi-Fi or direct IP**: o modo antigo, sem internet. Um hospeda (UDP 24680) e os outros
+    entram pelo IP ou pela lista de jogos na rede.
+  - Dá para convidar gente para a gangue, e quem é da mesma gangue não se fere.
+  - O que passa pelos servidores públicos é público: o seu @nome, o visual e onde você está no mapa.
+- **Interior do carro** em primeira pessoa (V dentro do carro): capô na cor do carro, painel com
+  conta-giros e velocímetro de verdade, marcha, volante que gira com as suas mãos, retrovisor e o
+  rádio mostrando a estação.
+- **Som refeito:**
+  - motor sintetizado ao vivo, com marchas, partida, giro, pipocos no escape;
+  - pneus, neve, derrapagem e vento na carroceria;
+  - por dentro do carro a rua fica abafada;
+  - tiros com eco que muda com a distância dos prédios e cartuchos caindo no chão;
+  - balas passando zunindo; passos diferentes na rua, na calçada e na plataforma de metal;
+  - vento que acompanha as rajadas, a cidade ao fundo, sirenes, cachorros, aviões e o gelo do lago
+    rangendo; fogo crepitando nos barris e vapor nos bueiros;
+  - mixagem com compressor e limitador.
 - **Interface nova:** minimapa arredondado com prédios e marcadores, barras de vida, calor e
   fôlego, dinheiro que rola, estrelas de procurado, caixa de ajuda, feed de notificações,
   mensagens grandes no centro, rodas de armas e de emotes, e um **editor de personagem** em tela
@@ -168,6 +198,11 @@ Teste automático, sem tela:
 DS_SHOTS=/tmp/shots xvfb-run godot3 --path godot --autotest
 ```
 
-`tools/record-beats.js` grava as batidas do estúdio a partir do jogo web.
+`tools/record-beats.js` grava as batidas do estúdio a partir do jogo web, e `tools/make-sfx.py`
+sintetiza os sons extras (vento, cidade, partida, gelo, fogo).
+
+Para testar o online sem internet, rode um servidor MQTT local (por exemplo `mosquitto` com um
+listener websockets) e aponte o jogo para ele com
+`DS_BROKERS=ws://127.0.0.1:9001/mqtt,tcp://127.0.0.1:1883`.
 
 Ele grava capturas e um `autotest.log`.

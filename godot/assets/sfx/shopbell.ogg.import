@@ -11,5 +11,5 @@ dest_files=[ "res://.import/shopbell.ogg-f1332e3d29a6ac154709b16c1aa30aed.oggstr
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

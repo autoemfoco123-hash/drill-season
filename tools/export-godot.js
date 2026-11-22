@@ -126,6 +126,8 @@ const save = (rel, b64) => { const f = path.join(OUT, rel); fs.mkdirSync(path.di
       STYLES, VERSES: Object.fromEntries(Object.entries(VERSES).map(([k, v]) => [k, { name: v.name, desc: typeof v.desc === 'function' ? '' : v.desc, chips: v.chips }])),
       ENDINGS: Object.fromEntries(Object.entries(ENDINGS).map(([k, e]) => [k, { title: e.title, color: e.color, line: typeof e.line === 'function' ? e.line() : e.line }])),
       TRAIN: { CAR_L, TRAIN_CARS, TRAIN_HALF, TRAIN_CYCLE, T1, T2, T3, RUN, list: TRAINS.map(T => ({ x: T.x, dir: T.dir, off: T.off })) },
+      CAR_GEOM: Object.fromEntries(CAR_MODELS.map(m => [m, carGeom(CAR_SPECS[m])])),
+      ENGINE_SPEC, GEARS, FINAL,
     })`);
     fs.mkdirSync(OUT, { recursive: true });
     fs.writeFileSync(path.join(OUT, 'data.json'), data);

@@ -11,5 +11,5 @@ dest_files=[ "res://.import/crash_big_0.ogg-60ff666e556f74ebf71af1329e6f7940.ogg
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

@@ -11,5 +11,5 @@ dest_files=[ "res://.import/brake_hiss.ogg-62a10a22a5bdfab8b1c7225d5a9f17e7.oggs
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

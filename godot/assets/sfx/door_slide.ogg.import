@@ -11,5 +11,5 @@ dest_files=[ "res://.import/door_slide.ogg-1acb634fd79ef5b89dd595beb2878333.oggs
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

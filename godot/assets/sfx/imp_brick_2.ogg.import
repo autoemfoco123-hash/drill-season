@@ -11,5 +11,5 @@ dest_files=[ "res://.import/imp_brick_2.ogg-d56072e580e8cc54ae6cc7794ee4c76e.ogg
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

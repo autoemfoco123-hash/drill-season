@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/shift.ogg-fd75d35c13e64f58dfd2db79b200ae71.oggstr"
+
+[deps]
+
+source_file="res://assets/sfx2/shift.ogg"
+dest_files=[ "res://.import/shift.ogg-fd75d35c13e64f58dfd2db79b200ae71.oggstr" ]
+
+[params]
+
+loop=false
+loop_offset=0

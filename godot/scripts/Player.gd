@@ -267,6 +267,7 @@ func update(dt):
 	var mv = W.move_body(self, vel.x * dt, vel.z * dt, dt)
 	if Input.is_action_just_pressed("jump") and on_ground and not busy and not down and not crouch:
 		vel.y = 6.4; on_ground = false; air_y = pos.y
+	if mv.landed > 1.0: main.sfx.land(pos, mv.landed)
 	if mv.landed > 4.2:
 		hurt((mv.landed - 4.2) * 8, null, true); shake = 0.6
 	speed = Vector2(vel.x, vel.z).length()
@@ -329,11 +330,9 @@ func update_camera(dt):
 			cam_yaw += G.ang_diff(cam_yaw, car.yaw + PI) * (1 - exp(-dt * 2.6))
 			cam_pitch += (-0.16 - cam_pitch) * (1 - exp(-dt * 2))
 		if fp_on():
-			var f = Vector3(sin(car.yaw), 0, cos(car.yaw))
-			var l = Vector3(cos(car.yaw), 0, -sin(car.yaw))
-			cam.translation = car.pos + Vector3(0, max(1.15, car.sp.roofY - 0.28), 0) + f * 0.1 + l * car.sp.wid * 0.21
-			cam.rotation = Vector3(clamp(cam_pitch + 0.06, -0.6, 0.5), cam_yaw, 0)
+			main.cockpit.update(car, cam, dt)
 		else:
+			main.cockpit.hide()
 			var fwd = Vector3(-sin(cam_yaw) * cos(cam_pitch), sin(cam_pitch), -cos(cam_yaw) * cos(cam_pitch))
 			var piv = car.pos + Vector3(0, 1.6, 0)
 			var dist = 7.2 + clamp(abs(car.speed) * 0.06, 0, 2)
@@ -344,6 +343,7 @@ func update_camera(dt):
 		cam.fov = lerp(cam.fov, 64 + clamp(abs(car.speed), 0, 34) * 0.25, 1 - exp(-dt * 3))
 		_hide_vm()
 		return
+	main.cockpit.hide()
 	var eye = 1.06 if crouch else 1.62
 	pivot_y += (pos.y + eye - pivot_y) * (1 - exp(-dt * 14))
 	var a = aim_t
@@ -516,7 +516,7 @@ func try_fire():
 			if res.car: res.car.hp -= float(st.dmg) * 0.3
 	if hit_any:
 		main.hud.hitmarker(head_any); main.sfx.play("imp_flesh", 0.3)
-	main.sfx.shot(G.S["cur"], muzzle, 1.0)
+	main.sfx.shot(G.S["cur"], muzzle, 1.0, GUN.cfg_of(G.S["cur"]).get("muzzle") == "supp")
 	main.sfx.flash(muzzle)
 	var rec = float(st.recoil) * (0.8 if crouch else 1.0)
 	recoil += rec * 0.018; cam_pitch = clamp(cam_pitch + rec * 0.0035, -1.3, 1.1); cam_yaw += (randf() - 0.5) * rec * 0.006

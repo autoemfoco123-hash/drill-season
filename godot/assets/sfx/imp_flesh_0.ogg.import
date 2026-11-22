@@ -11,5 +11,5 @@ dest_files=[ "res://.import/imp_flesh_0.ogg-909881bc5c26f41f1d08dfd945b0127d.ogg
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

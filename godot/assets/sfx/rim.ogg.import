@@ -11,5 +11,5 @@ dest_files=[ "res://.import/rim.ogg-590565276a7d93f99a076a55ab61ff2c.oggstr" ]
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

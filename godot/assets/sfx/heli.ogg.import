@@ -11,5 +11,5 @@ dest_files=[ "res://.import/heli.ogg-50f3ce5c8953633379d87fecffaf9dfc.oggstr" ]
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

@@ -11,5 +11,5 @@ dest_files=[ "res://.import/horn_long.ogg-f6d6eb06e58ea11014eb7a82d6706d2f.oggst
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

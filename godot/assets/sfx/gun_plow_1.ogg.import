@@ -11,5 +11,5 @@ dest_files=[ "res://.import/gun_plow_1.ogg-b6b2710483c3a46074646585268c5567.oggs
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

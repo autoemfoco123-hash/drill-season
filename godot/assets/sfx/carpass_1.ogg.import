@@ -11,5 +11,5 @@ dest_files=[ "res://.import/carpass_1.ogg-a8651f627b5ac3261dc71820df4b1c04.oggst
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

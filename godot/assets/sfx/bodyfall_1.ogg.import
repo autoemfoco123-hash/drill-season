@@ -11,5 +11,5 @@ dest_files=[ "res://.import/bodyfall_1.ogg-276cea9545c7d6bf6a4bbdcf310e17df.oggs
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

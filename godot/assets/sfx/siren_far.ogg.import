@@ -11,5 +11,5 @@ dest_files=[ "res://.import/siren_far.ogg-9a984a3e49ba81d605b9e95f65dc12e1.oggst
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

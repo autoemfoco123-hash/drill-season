@@ -11,5 +11,5 @@ dest_files=[ "res://.import/haptic.ogg-2ab9da36fc4e16dac6f6708b6759120b.oggstr" 
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

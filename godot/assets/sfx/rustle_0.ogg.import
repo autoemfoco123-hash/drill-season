@@ -11,5 +11,5 @@ dest_files=[ "res://.import/rustle_0.ogg-1e6bf6dc7e03fb50de41d93f5c864403.oggstr
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

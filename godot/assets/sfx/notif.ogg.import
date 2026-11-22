@@ -11,5 +11,5 @@ dest_files=[ "res://.import/notif.ogg-9aa8d6bbe3777da47465524a69f50715.oggstr" ]
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

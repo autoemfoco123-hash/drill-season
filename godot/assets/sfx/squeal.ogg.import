@@ -11,5 +11,5 @@ dest_files=[ "res://.import/squeal.ogg-4145d9fefd493cd3e411caab90f5b36a.oggstr" 
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

@@ -11,5 +11,5 @@ dest_files=[ "res://.import/step_slush_1.ogg-eda1fc61accb7eb89e5c0a9a31e49c9d.og
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

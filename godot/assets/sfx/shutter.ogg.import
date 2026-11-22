@@ -11,5 +11,5 @@ dest_files=[ "res://.import/shutter.ogg-429329ddf6417480357c885508b512b7.oggstr"
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

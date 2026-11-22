@@ -48,8 +48,17 @@ func _join_mode():
 	main.player.place(4, 0, -24, 0)
 	var ip = OS.get_environment("DS_JOIN")
 	var t0 = G.REAL_T
-	while G.REAL_T - t0 < 60:
-		if not main.net.online() and main.net.status == "offline": main.net.join(ip)
+	var shot_at = 0.0
+	while G.REAL_T - t0 < 90:
+		if not main.net.online() and main.net.status == "offline":
+			if ip == "relay": main.net.go_online("autotest")
+			else: main.net.join(ip)
+		if main.net.online() and main.net.R.size() > 0 and G.REAL_T - shot_at > 6:
+			# shoot near the other player so they hear it, and try to hit them
+			shot_at = G.REAL_T
+			var r = main.net.R.values()[0]
+			main.net.send_shot(main.player.pos + Vector3(0, 1.4, 0), r.pos + Vector3(0, 1.2, 0))
+			main.net.hit_remote(r, 5, false, false)
 		yield(_wait(2.0), "completed")
 		if main.net.online():
 			main.player.emote("dance2")
@@ -210,14 +219,20 @@ func _tour():
 	main.cutscene.end()
 	_log("busted count %d, mode %s" % [int(S["stats"].get("busted", 0)), G.MODE])
 	# online: host a game
-	var ok = main.net.host()
-	_log("net host: %s %s" % [str(ok), main.net.status])
+	var ok = true
+	if OS.get_environment("DS_BROKERS") != "": main.net.go_online("autotest")
+	else: ok = main.net.host()
+	var tw = G.REAL_T
+	while not main.net.online() and G.REAL_T - tw < 15: yield(get_tree(), "idle_frame")
+	_log("net: %s %s %s (%s)" % [str(ok), main.net.mode, main.net.status, main.net.note])
 	if OS.get_environment("DS_PEER") != "":
 		var t1 = G.REAL_T
 		while main.net.R.size() == 0 and G.REAL_T - t1 < 40: yield(get_tree(), "idle_frame")
 		yield(_wait(2.0), "completed")
+		var hp0 = G.S["health"]
+		yield(_wait(7.0), "completed")
 		var rr = main.net.R.values()
-		_log("net peers: %d %s" % [rr.size(), ("@" + rr[0].name + " at " + str(rr[0].pos)) if rr.size() > 0 else ""])
+		_log("net peers: %d %s · health %d -> %d" % [rr.size(), ("@" + rr[0].name + " at " + str(rr[0].pos) + " emote " + str(rr[0].st.get("em"))) if rr.size() > 0 else "", hp0, G.S["health"]])
 		if rr.size() > 0:
 			P.place(rr[0].pos.x + 3, 0, rr[0].pos.z + 3, PI * 0.75)
 			yield(_wait(1.0), "completed")
@@ -228,6 +243,32 @@ func _tour():
 	P.place(-2.5, 0, -30, 0); P.cam_yaw = 0
 	yield(_wait(1.0), "completed")
 	yield(_shot("26_hud"), "completed")
+
+# records what the game's mixer outputs, for checking the sound offline
+var recs = {}
+var bus_logged = false
+func _rec_start():
+	if OS.get_environment("DS_AUDIO") == "": return
+	if not bus_logged:
+		bus_logged = true
+		for i in range(AudioServer.bus_count):
+			_log("bus %d %s -> %s vol %.1f mute %s effects %d" % [i, AudioServer.get_bus_name(i), AudioServer.get_bus_send(i), AudioServer.get_bus_volume_db(i), str(AudioServer.is_bus_mute(i)), AudioServer.get_bus_effect_count(i)])
+	for b in ["Master", "Guns", "Car", "Amb", "World"]:
+		var i = AudioServer.get_bus_index(b)
+		if i < 0: continue
+		if not recs.has(b):
+			recs[b] = AudioEffectRecord.new()
+			AudioServer.add_bus_effect(i, recs[b])
+		recs[b].set_recording_active(true)
+
+func _rec_stop(name):
+	for b in recs.keys():
+		var r = recs[b]
+		if not r.is_recording_active(): continue
+		r.set_recording_active(false)
+		var smp = r.get_recording()
+		if smp: smp.save_to_wav(out.plus_file(name + ("" if b == "Master" else "_" + b) + ".wav"))
+	_log("recorded " + name)
 
 func _log(t):
 	log_lines.append(t)
@@ -273,13 +314,24 @@ func _go():
 	yield(_shot("02_street_day"), "completed")
 	_diag()
 	# walk forward
+	_rec_start()
 	Input.action_press("move_f")
-	yield(_wait(1.5), "completed")
+	yield(_wait(3.0), "completed")
 	Input.action_release("move_f")
+	_rec_stop("snd_walk")
 	_log("walked to %s" % str(P.pos))
 	# shoot
 	var mag0 = G.S["guns"]["k9"].mag
+	_rec_start()
 	P.fire_cd = 0; P.try_fire()
+	yield(_wait(1.0), "completed")
+	if OS.get_environment("DS_AUDIO") != "":
+		var cam = main.camera.global_transform.origin
+		for pl in main.sfx.p3:
+			if pl.playing: _log("playing %s at %.1f m db %.1f" % [pl.stream.resource_path.get_file(), pl.translation.distance_to(cam), pl.unit_db])
+		for nd in get_tree().get_nodes_in_group("_x"): pass
+	yield(_wait(1.0), "completed")
+	_rec_stop("snd_shot")
 	_log("shot: mag %d -> %d" % [mag0, G.S["guns"]["k9"].mag])
 	yield(_wait(0.3), "completed")
 	# fists on a pedestrian
@@ -318,6 +370,15 @@ func _go():
 	Input.action_release("move_f")
 	_log("car speed %.1f at %s" % [v.speed, str(v.pos)])
 	yield(_shot("06_driving"), "completed")
+	G.S["settings"]["fp"] = true
+	Input.action_press("move_f"); Input.action_press("move_l")
+	_rec_start()
+	yield(_wait(3.0), "completed")
+	_rec_stop("snd_drive")
+	yield(_shot("06b_cockpit"), "completed")
+	_log("engine rpm %d gear %d" % [int(main.sfx.E.rpm), main.sfx.E.gear + 1])
+	Input.action_release("move_f"); Input.action_release("move_l")
+	G.S["settings"]["fp"] = false
 	P.exit_vehicle(true)
 	# a rival crew
 	main.crews.spawn_crew(P.pos + Vector3(0, 0, -14), 2, 1)

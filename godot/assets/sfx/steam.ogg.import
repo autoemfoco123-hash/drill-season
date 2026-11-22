@@ -11,5 +11,5 @@ dest_files=[ "res://.import/steam.ogg-b36f0443b47366268465a8c7c4698f32.oggstr" ]
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

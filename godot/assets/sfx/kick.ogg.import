@@ -11,5 +11,5 @@ dest_files=[ "res://.import/kick.ogg-c4095f0538dd652c936f7147b3d5cdab.oggstr" ]
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

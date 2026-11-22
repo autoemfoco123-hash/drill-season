@@ -11,5 +11,5 @@ dest_files=[ "res://.import/chime.ogg-13c69535c22192150d2291eb2d5dbf57.oggstr" ]
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

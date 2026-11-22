@@ -11,5 +11,5 @@ dest_files=[ "res://.import/chatter_2.ogg-ba6f2085950b88b2e3dfb40cd7def2eb.oggst
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

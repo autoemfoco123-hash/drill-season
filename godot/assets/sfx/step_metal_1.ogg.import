@@ -11,5 +11,5 @@ dest_files=[ "res://.import/step_metal_1.ogg-d9c17bbb73c73e70f8b203bd63bfaa40.og
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

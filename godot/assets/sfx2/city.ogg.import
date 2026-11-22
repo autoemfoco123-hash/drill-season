@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/city.ogg-f52c8bbb3703322811276804a4424b3a.oggstr"
+
+[deps]
+
+source_file="res://assets/sfx2/city.ogg"
+dest_files=[ "res://.import/city.ogg-f52c8bbb3703322811276804a4424b3a.oggstr" ]
+
+[params]
+
+loop=false
+loop_offset=0

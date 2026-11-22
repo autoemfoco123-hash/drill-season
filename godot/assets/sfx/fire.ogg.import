@@ -11,5 +11,5 @@ dest_files=[ "res://.import/fire.ogg-80574b9d107137b812eaa5228e5ab271.oggstr" ]
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

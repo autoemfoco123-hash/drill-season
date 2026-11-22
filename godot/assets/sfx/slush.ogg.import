@@ -11,5 +11,5 @@ dest_files=[ "res://.import/slush.ogg-a99baaf9b2cab3e685da5c76d680f908.oggstr" ]
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

@@ -11,5 +11,5 @@ dest_files=[ "res://.import/step_snow_1.ogg-7293a5c6e9e2a97663e78fe832fc89fd.ogg
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

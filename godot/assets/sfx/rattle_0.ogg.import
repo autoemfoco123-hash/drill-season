@@ -11,5 +11,5 @@ dest_files=[ "res://.import/rattle_0.ogg-d7986a0571f44d9e87ef03786c555b91.oggstr
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

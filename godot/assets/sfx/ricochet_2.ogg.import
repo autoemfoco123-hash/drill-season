@@ -11,5 +11,5 @@ dest_files=[ "res://.import/ricochet_2.ogg-a0b067da7620e2dc8ea7fd8622863c7b.oggs
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

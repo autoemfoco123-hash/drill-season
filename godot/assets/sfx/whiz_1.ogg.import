@@ -11,5 +11,5 @@ dest_files=[ "res://.import/whiz_1.ogg-999785eb0589205e3d4425f7366975c1.oggstr" 
 
 [params]
 
-loop=true
+loop=false
 loop_offset=0

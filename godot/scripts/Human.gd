@@ -461,6 +461,12 @@ func _rag_step(h):
 			var res = W.collide_point(P[i], r)
 			if res[1]:
 				var np = res[0]
+				# a hard landing makes a thud
+				if _it == 0 and (i == 0 or i == 2):
+					var sp = (P[i] - O[i]).length() / h
+					if sp > 3.5 and G.REAL_T - rag.get("thump", -9.0) > 0.35 and G.main and G.main.sfx:
+						rag["thump"] = G.REAL_T
+						G.main.sfx.thump(np, sp)
 				# friction on whatever it lies on
 				var vel = np - O[i]
 				O[i] = np - Vector3(vel.x * 0.55, vel.y, vel.z * 0.55)

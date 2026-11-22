@@ -93,7 +93,12 @@ func _unhandled_input(e):
 	elif e.is_action_pressed("ui_cancel"):
 		_home(); get_tree().set_input_as_handled()
 
-func update(_dt):
+var online_t = 0.0
+func update(dt):
+	if panel.visible and app == "online" and main.net.mode != "off":
+		online_t -= dt
+		if online_t <= 0:
+			online_t = 2.0; show_app("online")
 	if panel.visible and app == "map":
 		var m = body.get_node_or_null("BigMap")
 		if m: m.update()
@@ -283,43 +288,68 @@ func _snap(caption):
 # ---------- Online ----------
 func _app_online():
 	var net = main.net
-	net.lan_listen(true)
-	var st = { "offline": "Playing solo", "hosting": "Hosting · %d online" % (net.R.size() + 1), "joining": "Joining…", "online": "Online · %d players" % (net.R.size() + 1) }[net.status]
-	_lbl(st, G.font_l, Color(0.48, 0.88, 0.65) if net.online() else Color(1, 0.7, 0.28))
-	if net.msg != "": _lbl(net.msg, G.font_xs, Color(0.75, 0.8, 0.88))
-	if net.status == "offline":
-		_btn("Host a game", self, "_host")
-		_sec("Join by IP")
-		ip_edit = LineEdit.new(); ip_edit.placeholder_text = "192.168.0.10"; ip_edit.text = str(G.S["settings"].get("lastIp", "")); ip_edit.add_font_override("font", G.font_m)
+	net.lan_listen(net.mode == "off" or net.mode == "lan_client")
+	var n = net.R.size() + 1
+	var head = "Playing solo"
+	if net.mode == "relay": head = ("Online · room %s · %d here" % [net.room_label(), n]) if net.online() else "Connecting…"
+	elif net.mode == "lan_host": head = "Hosting on this network · %d here" % n
+	elif net.mode == "lan_client": head = ("Joined · %d here" % n) if net.online() else "Joining…"
+	_lbl(head, G.font_l, Color(0.48, 0.88, 0.65) if net.online() else Color(1, 0.7, 0.28))
+	if net.note != "": _lbl(net.note, G.font_xs, Color(0.75, 0.8, 0.88))
+	if net.mode == "off":
+		_sec("Over the internet")
+		_lbl("No ports to open. Anyone on Linux, Windows or Mac in the same room sees you.", G.font_xs, Color(0.62, 0.68, 0.76))
+		_btn("Play online · public room", self, "_go_public")
+		_btn("Create a private room", self, "_go_private")
+		ip_edit = LineEdit.new(); ip_edit.placeholder_text = "room code (from a friend)"; ip_edit.text = str(G.S["settings"].get("lastRoom", "")); ip_edit.add_font_override("font", G.font_m)
 		body.add_child(ip_edit)
-		_btn("Join", self, "_join")
-		_sec("Games nearby (same Wi-Fi)")
-		if net.LAN.size() == 0: _lbl("None found yet. Ask a friend to host, then press Refresh.", G.font_xs, Color(0.62, 0.68, 0.76))
-		for k in net.LAN.keys():
-			var g = net.LAN[k]
-			_btn("@%s · %d playing · %s" % [g.name, g.players, g.ip], self, "_join_lan", [g.ip, g.port])
+		_btn("Join private room", self, "_go_code")
+		_sec("Same Wi-Fi or direct IP")
+		_btn("Host on this network", self, "_host")
+		var lan_ip = LineEdit.new(); lan_ip.name = "LanIp"; lan_ip.placeholder_text = "host IP, e.g. 192.168.0.10"; lan_ip.text = str(G.S["settings"].get("lastIp", "")); lan_ip.add_font_override("font", G.font_m)
+		body.add_child(lan_ip)
+		_btn("Join by IP", self, "_join")
+		if net.LAN.size() > 0:
+			for k in net.LAN.keys():
+				var g = net.LAN[k]
+				_btn("Nearby: @%s · %d playing" % [g.name, g.players], self, "_join_lan", [g.ip, g.port])
 		_btn("Refresh", self, "show_app", ["online"])
 	else:
-		if net.status == "hosting":
+		if net.mode == "relay" and net.room != net.PUBLIC_ROOM:
+			_lbl("Room code:  " + net.room.to_upper(), G.font_xl if net.room.length() <= 6 else G.font_l, Color(1, 0.7, 0.28))
+			_lbl("Send this code to your friends. They open Online, type it and press Join.", G.font_xs, Color(0.75, 0.8, 0.88))
+		if net.mode == "lan_host":
 			_lbl("Your address: " + PoolStringArray(net.my_ips()).join(", ") + "  ·  port %d (UDP)" % net.PORT, G.font_xs, Color(0.85, 0.88, 0.92))
 		_sec("Players")
 		for r in net.R.values():
 			var gt = (" [" + str(r.gang[2]) + "]") if typeof(r.gang) == TYPE_ARRAY else ""
 			var can = typeof(G.S.get("gang")) == TYPE_DICTIONARY and not net._same_gang(r)
 			_btn("@" + r.name + gt + ("  ·  Invite to gang" if can else ""), self, "_invite", [r.id], not can)
-		if net.R.size() == 0: _lbl("Waiting for players…", G.font_xs, Color(0.62, 0.68, 0.76))
+		if net.R.size() == 0: _lbl("Nobody else here yet.", G.font_xs, Color(0.62, 0.68, 0.76))
+		_btn("Refresh", self, "show_app", ["online"])
 		_btn("Leave", self, "_leave_net")
 	if net.invites.size() > 0:
 		_sec("Gang invites")
 		for i in range(net.invites.size()):
 			var inv = net.invites[i]
-			_btn("Join [%s] %s" % [inv.g[2], inv.g[1]], self, "_accept", [i])
-	_lbl("Over the internet the host opens UDP port %d on their router. Online works between copies of this Godot version; the browser version has its own rooms." % net.PORT, G.font_xs, Color(0.5, 0.56, 0.64))
+			_btn("Join [%s] %s" % [str(inv.g[2]).substr(0, 4), str(inv.g[1]).substr(0, 18)], self, "_accept", [i])
+
+func _go_public():
+	main.net.go_online(main.net.PUBLIC_ROOM); show_app("online")
+func _go_private():
+	main.net.go_online(main.net.new_room_code()); show_app("online")
+func _go_code():
+	var code = main.net.clean_room(ip_edit.text if ip_edit else "")
+	if code == "":
+		main.hud.toast("Type the room code first"); return
+	G.S["settings"]["lastRoom"] = code
+	main.net.go_online(code); show_app("online")
 
 func _host():
 	main.net.host(); show_app("online")
 func _join():
-	var ip = ip_edit.text if ip_edit else ""
+	var le = body.get_node_or_null("LanIp")
+	var ip = le.text if le else ""
 	G.S["settings"]["lastIp"] = ip
 	main.net.join(ip); show_app("online")
 func _join_lan(ip, port):
