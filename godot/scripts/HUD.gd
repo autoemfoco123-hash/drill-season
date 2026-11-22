@@ -69,7 +69,7 @@ const C_DIM = Color(0.72, 0.78, 0.86)
 const C_ACCENT = Color(1.0, 0.62, 0.22)
 const C_CASH = Color(0.45, 0.92, 0.55)
 const EMOTES = [["wave", "Wave"], ["flip", "Finger"], ["dance1", "Two-step"], ["dance2", "Arm wave"], ["dance3", "Robot"], ["hype", "Hype"], ["clap", "Clap"], ["laugh", "Laugh"],
-	["shrug", "Shrug"], ["salute", "Salute"], ["point", "Point"], ["facepalm", "Facepalm"], ["flex", "Flex"], ["sit", "Sit"], ["snowangel", "Snow angel"], ["flop", "Flop"]]
+	["shrug", "Shrug"], ["salute", "Salute"], ["point", "Point"], ["facepalm", "Facepalm"], ["flex", "Flex"], ["sit", "Sit"], ["snowangel", "Snow angel"], ["pray", "Pray"], ["flop", "Flop"]]
 const WEAPONS = [["fists", "Fists"], ["k9", "K9"], ["draft", "Draft"], ["plow", "Snowplow"], ["snowball", "Snowball"]]
 
 static func _sb(col, r = 10, pad = 10):
@@ -705,7 +705,7 @@ func _close_wheel(pick):
 		elif em == "flip":
 			P.flip_t = max(P.flip_t, 2.4); main.peds.flip_react(P.pos)
 		elif em == "flop": P.flop()
-		elif em in ["salute", "point", "facepalm", "shrug"]: P.emote(em, 2.2)
+		elif em in ["salute", "point", "facepalm", "shrug", "pray"]: P.emote(em, 3.0 if em == "pray" else 2.2)
 		elif em == "laugh": P.emote(em, 3.0)
 		else: P.emote(em)
 

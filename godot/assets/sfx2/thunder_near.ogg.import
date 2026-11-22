@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/thunder_near.ogg-6518b947067f25a0ce59ea99c9ef6d4e.oggstr"
+
+[deps]
+
+source_file="res://assets/sfx2/thunder_near.ogg"
+dest_files=[ "res://.import/thunder_near.ogg-6518b947067f25a0ce59ea99c9ef6d4e.oggstr" ]
+
+[params]
+
+loop=false
+loop_offset=0

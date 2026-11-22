@@ -12,6 +12,7 @@ func run(m):
 	if out == "": out = OS.get_user_data_dir().plus_file("shots")
 	Directory.new().make_dir_recursive(out)
 	if OS.get_environment("DS_JOIN") != "": call_deferred("_join_mode")
+	elif OS.get_environment("DS_SKYTEST") != "": call_deferred("_sky_test")
 	else: call_deferred("_go")
 
 func _wait(s):
@@ -285,6 +286,92 @@ func _tour():
 # records what the game's mixer outputs, for checking the sound offline
 var recs = {}
 var bus_logged = false
+func _clean_view(on):
+	for f in main.gang.FOL:
+		if f.h: f.h.visible = not on
+	for c in main.hud.layer.get_children():
+		if c is CanvasItem: c.visible = not on
+	G.S["settings"]["fp"] = on
+
+# sky only: several times of day and weathers, no HUD, then quit
+func _sky_test():
+	yield(_wait(1.0), "completed")
+	main.title._close(); main.start_game(G.new_state("skytest"))
+	yield(_wait(1.5), "completed")
+	_clean_view(true)
+	if OS.get_environment("DS_SKYTEST") == "medium": main.set_quality("medium")
+	var P = main.player
+	var S = main.sky
+	var shots = [["s1_noon_clear", 12 * 60 + 30, 0.35, 0.0, 0.0, 185, 0, PI, 0.35],
+		["s2_noon_cloudy", 12 * 60 + 30, 0.75, 0.0, 0.0, 185, 0, PI, 0.35],
+		["s3_dusk", 16 * 60 + 40, 0.45, 0.0, 0.0, 185, 0, -1, 0.12],
+		["s4_night_north", 23 * 60, 0.3, 0.0, 1.0, 185, 0, 0.0, 0.08],
+		["s5_night_up", 23 * 60, 0.25, 0.0, 0.0, 185, 0, -2.4, 0.75],
+		["s6_storm", 22 * 60, 0.9, 1.0, 0.0, 185, 0, 0.6, 0.25],
+		["s7_dawn", 7 * 60 + 20, 0.5, 0.0, 0.0, 185, 0, -1, 0.12]]
+	for s in shots:
+		G.time_offset += (s[1] - G.world_minutes())
+		S.override = { "cover": s[2], "storm": s[3], "aurora": s[4] }
+		S.cover = s[2]; S.storm = s[3]; S.aurora = s[4]
+		var yaw = s[7]
+		if yaw == -1: yaw = -deg2rad(main.sun_angles(G.world_minutes())[1])
+		P.place(s[5], 0, s[6], yaw); P.cam_pitch = s[8]
+		yield(_wait(0.8), "completed")
+		if s[3] > 0.5:
+			S.strike("")
+			P.cam_yaw = -S.flash_az
+			yield(_wait(0.06), "completed")
+		yield(_shot(s[0]), "completed")
+	get_tree().quit()
+
+# the sky through the day, the memorial wall, the mausoleum and the lightning tribute
+func _memorial_test():
+	var P = main.player
+	var M = main.memorial
+	_clean_view(true)
+	G.time_offset += (13 * 60 - G.world_minutes())
+	P.place(M.MC.x + 9.0, 0, M.MC.z + 2.6, 0); P.cam_yaw = PI / 2 - 0.28; P.cam_pitch = 0.1
+	yield(_wait(1.2), "completed")
+	yield(_shot("28_mausoleum_day"), "completed")
+	P.cam_pitch = 0.45
+	yield(_wait(0.4), "completed")
+	yield(_shot("29_sky_day"), "completed")
+	G.time_offset += (16 * 60 + 38 - G.world_minutes())
+	P.place(150, 0, 0, 0); P.cam_yaw = -deg2rad(main.sun_angles(G.world_minutes())[1]); P.cam_pitch = 0.18
+	yield(_wait(1.0), "completed")
+	yield(_shot("30_sky_dusk"), "completed")
+	G.time_offset += (23 * 60 - G.world_minutes())
+	P.cam_yaw = 0.2; P.cam_pitch = 0.55
+	yield(_wait(1.0), "completed")
+	yield(_shot("31_sky_night"), "completed")
+	# pay respects at the mausoleum: the storm gathers, lightning strikes, the light appears
+	P.place(M.G_SPOT.x, 0, M.G_SPOT.z, 0)
+	yield(_wait(0.3), "completed")
+	M.pay_respects("garden")
+	_log("respects: storm summoned, candles %d" % int(G.S["flags"].get("candles", 0)))
+	yield(_wait(1.0), "completed")
+	P.place(M.MC.x + 6.5, 0, M.MC.z - 1.8, 0); P.cam_yaw = 1.69; P.cam_pitch = 0.16
+	var t0 = G.REAL_T
+	while M.fx.size() == 0 and G.REAL_T - t0 < 15:
+		yield(get_tree(), "idle_frame")
+	_log("tribute after %.1f s, storm %.2f, strikes %d" % [G.REAL_T - t0, main.sky.storm, main.sky.strikes])
+	yield(get_tree(), "idle_frame")
+	yield(_shot("33_strike"), "completed")
+	yield(_wait(2.6), "completed")
+	yield(_shot("34_doors_open"), "completed")
+	yield(_wait(3.0), "completed")
+	yield(_shot("35_figure_of_light"), "completed")
+	yield(_wait(4.0), "completed")
+	yield(_shot("36_doves"), "completed")
+	# a far strike over the city
+	main.sky.strike("")
+	P.cam_yaw = -main.sky.flash_az; P.cam_pitch = 0.3
+	yield(_wait(0.05), "completed")
+	yield(_shot("37_far_bolt"), "completed")
+	main.sky.summon_until = -1
+	yield(_wait(1.0), "completed")
+	_clean_view(false)
+
 func _rec_start():
 	if OS.get_environment("DS_AUDIO") == "": return
 	if not bus_logged:
@@ -427,6 +514,7 @@ func _go():
 	yield(_wait(1.5), "completed")
 	yield(_shot("07_night"), "completed")
 	_diag()
+	yield(_memorial_test(), "completed")
 	# phone
 	main.phone.open("gang")
 	yield(_wait(0.6), "completed")

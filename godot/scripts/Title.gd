@@ -26,7 +26,8 @@ func open():
 	var v = VBoxContainer.new(); box.add_child(v)
 	var eb = Label.new(); eb.text = "CALDER PARK · CHICAGO"; eb.add_font_override("font", G.font_s); eb.add_color_override("font_color", Color(1, 0.7, 0.28)); v.add_child(eb)
 	var t = Label.new(); t.text = "DRILL\nSEASON"; t.add_font_override("font", G.font_xl); t.add_color_override("font_color", Color(1, 0.7, 0.28)); v.add_child(t)
-	var d = Label.new(); d.text = "Make your name in the snow. Every character, crew, brand and place here is fictional."; d.autowrap = true; d.add_font_override("font", G.font_s); d.add_color_override("font_color", Color(0.75, 0.8, 0.86)); v.add_child(d)
+	var d = Label.new(); d.text = "Make your name in the snow. The story's characters, crews, brands and places are fictional."; d.autowrap = true; d.add_font_override("font", G.font_s); d.add_color_override("font_color", Color(0.75, 0.8, 0.86)); v.add_child(d)
+	var ded = Label.new(); ded.text = "In memory of King Von (1994–2020) and XXXTentacion (1998–2018). Long live."; ded.autowrap = true; ded.add_font_override("font", G.font_m); ded.add_color_override("font_color", Color(1, 0.86, 0.45)); v.add_child(ded)
 	var save = G.load_save()
 	var first = null
 	if save:

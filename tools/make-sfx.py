@@ -2,7 +2,9 @@
 """Synthesizes the Godot version's extra ambience and car sounds into godot/assets/sfx2/*.ogg:
 wind (seamless loop), city (distant city bed, seamless loop), starter (engine start),
 creak_0..2 (lake ice), shift (gear change clunk), whoosh_car (a car passing close),
-crackle (fire barrel loop). Needs numpy and ffmpeg. Usage: python3 tools/make-sfx.py"""
+crackle (fire barrel loop), thunder_near / thunder_far (thundersnow), heaven (the soft choir
+swell when lightning lights up the memorial wall), wings (doves taking off).
+Needs numpy and ffmpeg. Usage: python3 tools/make-sfx.py [name ...]"""
 import numpy as np, subprocess, os, wave, sys
 
 SR = 44100
@@ -186,6 +188,61 @@ def crackle():
     x = seamless(norm(roar, 0.4) + pops, 1.0)
     write('crackle', norm(x, 0.8))
 
+# ---- thunder: a close strike cracks then rolls; a far one only rolls ----
+def thunder(name, near):
+    n = SR * (7 if near else 6)
+    t = np.arange(n) / SR
+    rumble = lp_fast(brown(n), 140 if near else 90)
+    roll = smooth_noise(n, 3.2) ** 2 * 0.8 + 0.2
+    shape = np.minimum(1, t / (0.05 if near else 0.6)) * np.exp(-t / (2.4 if near else 1.9))
+    x = norm(rumble, 1) * roll * shape
+    if near:
+        crack = band(rng.standard_normal(n), 2400, 0.6) * np.exp(-t / 0.09) * 1.4
+        crack += lp_fast(rng.standard_normal(n), 900) * np.exp(-t / 0.35) * 1.2
+        x = x * 0.9 + norm(crack, 0.9)
+    x = reverb(x, 3.2, 0.4)
+    side = reverb(x, 2.6, 0.5)
+    write(name, norm(x, 0.9), norm(side, 0.9))
+
+def thunders():
+    thunder('thunder_near', True)
+    thunder('thunder_far', False)
+
+# ---- heaven: a slow choir-like swell (sine stacks with vibrato) in D major ----
+def heaven():
+    n = SR * 9
+    t = np.arange(n) / SR
+    x = np.zeros(n)
+    for f, a in [(146.83, 0.5), (220.0, 0.42), (293.66, 0.4), (369.99, 0.32), (440.0, 0.3), (587.33, 0.16)]:
+        vib = 1 + 0.004 * np.sin(2 * np.pi * (4.6 + rng.random()) * t + rng.random() * 6)
+        ph = 2 * np.pi * np.cumsum(f * vib) / SR
+        voice = np.sin(ph) + 0.22 * np.sin(2 * ph) + 0.08 * np.sin(3 * ph)
+        x += voice * a
+    breath = band(rng.standard_normal(n), 1800, 0.8) * 0.05
+    shape = np.minimum(1, t / 2.6) ** 2 * np.clip((9 - t) / 3.5, 0, 1)
+    x = (x + breath) * shape
+    write('heaven', norm(reverb(x, 4.0, 0.55), 0.75), norm(reverb(x, 3.4, 0.6), 0.75))
+
+# ---- wings: doves taking off, a burst of soft flaps ----
+def wings():
+    n = int(SR * 2.4)
+    t = np.arange(n) / SR
+    x = np.zeros(n)
+    for k in range(5):
+        start = rng.random() * 0.4
+        rate = 9 + rng.random() * 4
+        for i in range(int((2.2 - start) * rate)):
+            p = int((start + i / rate) * SR)
+            m = min(n - p, int(0.07 * SR))
+            if m <= 0: break
+            flap = band(rng.standard_normal(m), 700 + rng.random() * 500, 0.7) * np.hanning(m)
+            x[p:p + m] += flap * (0.9 - i / (2.2 * rate)) * (0.6 + rng.random() * 0.4)
+    write('wings', norm(reverb(x * np.exp(-t / 1.6), 1.2, 0.25), 0.7))
+
+ALL = [wind, city, starter, creaks, shift, pass_by, crackle, thunders, heaven, wings]
+
 if __name__ == '__main__':
-    for f in [wind, city, starter, creaks, shift, pass_by, crackle]:
-        f()
+    pick = sys.argv[1:]
+    for f in ALL:
+        if not pick or f.__name__ in pick:
+            f()

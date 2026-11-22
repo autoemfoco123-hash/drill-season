@@ -21,6 +21,8 @@ var net
 var wardrobe
 var cockpit
 var touch
+var memorial
+var sky
 var camera
 var env
 var sun
@@ -67,7 +69,9 @@ func _ready():
 	wardrobe = _system("res://scripts/Wardrobe.gd", "Wardrobe")
 	cockpit = _system("res://scripts/Cockpit.gd", "Cockpit")
 	touch = _system("res://scripts/Touch.gd", "Touch")
-	for s in [sfx, vehicles, player, peds, police, crews, gang, hud, phone, title, story, cutscene, studio, blok, train, fx, net, wardrobe, cockpit, touch]:
+	memorial = _system("res://scripts/Memorial.gd", "Memorial")
+	sky = _system("res://scripts/Sky.gd", "Sky")
+	for s in [sfx, vehicles, player, peds, police, crews, gang, hud, phone, title, story, cutscene, studio, blok, train, fx, net, wardrobe, cockpit, touch, memorial, sky]:
 		s.setup(self)
 	story.build_npcs()
 	title.open()
@@ -167,6 +171,7 @@ func set_quality(q):
 	lamp_count = 4 if q == "high" else (2 if q == "medium" else 0)
 	camera.far = 240 if q == "high" else (190 if q == "medium" else 160)
 	if fx: fx.set_quality(q)
+	if sky: sky.set_quality(q)
 
 # ---------- day and night on the shared clock (same curve as the web game) ----------
 func _smooth(a, b, x):
@@ -243,6 +248,7 @@ func update_day_night(focus):
 		for o in lamp_lights:
 			o.light_energy = 0
 			o.visible = false
+	if sky: sky.frame()
 
 func _by_first(a, b):
 	return a[0] < b[0]
@@ -258,6 +264,7 @@ func _process(dt):
 		story.update(dt)
 		train.update(dt)
 		fx.update(dt)
+		memorial.update(dt)
 		update_day_night(camera.global_transform.origin)
 		net.update(dt)
 		return
@@ -281,6 +288,7 @@ func _process(dt):
 	studio.update(dt)
 	wardrobe.update(dt)
 	touch.update(dt)
+	memorial.update(dt)
 	net.update(dt)
 	update_day_night(player.pos)
 	sfx.update(dt)

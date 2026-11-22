@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/thunder_far.ogg-bd601261493556ba0b6dc17bf299a9ca.oggstr"
+
+[deps]
+
+source_file="res://assets/sfx2/thunder_far.ogg"
+dest_files=[ "res://.import/thunder_far.ogg-bd601261493556ba0b6dc17bf299a9ca.oggstr" ]
+
+[params]
+
+loop=false
+loop_offset=0

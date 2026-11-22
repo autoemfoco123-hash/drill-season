@@ -597,6 +597,7 @@ func interact_label(it):
 		"reyes": return "Talk to " + C.reyes.name if job_available("reyes") else null
 		"coach": return "Talk to " + C.coach.name
 		"benny": return "Talk to " + C.benny.name
+		"garden": return main.memorial.label("garden")
 	return null
 
 func interact(it):
@@ -610,6 +611,7 @@ func interact(it):
 		"home": home_menu()
 		"video": start_video()
 		"reyes": reyes_menu()
+		"garden": main.memorial.pay_respects("garden")
 		"coach", "benny":
 			say_cast(it.id, G.pick(npc_lines(it.id)))
 			if it.id == "benny": NPCS.benny.wave_t = 2.5

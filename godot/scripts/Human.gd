@@ -535,7 +535,7 @@ func ragdoll_stop():
 
 
 # ---------- emotes (dances and gestures), layered over the normal pose ----------
-const EMOTES = ["dance1", "dance2", "dance3", "hype", "clap", "laugh", "shrug", "salute", "point", "facepalm", "flex", "sit", "snowangel"]
+const EMOTES = ["dance1", "dance2", "dance3", "hype", "clap", "laugh", "shrug", "salute", "point", "facepalm", "flex", "sit", "snowangel", "pray", "ascend"]
 
 func _emote(em, t):
 	var k = clamp(t / 0.25, 0.0, 1.0)     # ease in over a quarter second
@@ -607,6 +607,16 @@ func _emote(em, t):
 		_rot(AL.sh, -0.7 * k, 0, 0); _rot(AL.elbow, -0.5 * k, 0, 0)
 		_rot(AR.sh, -0.7 * k, 0, 0); _rot(AR.elbow, -0.5 * k, 0, 0)
 		_rot(spine, 0.15 * k, 0, 0)
+	elif em == "pray":
+		_rot(AL.sh, -0.8 * k, 0, 0.45 * k); _rot(AL.elbow, -1.9 * k, 0, 0)
+		_rot(AR.sh, -0.8 * k, 0, -0.45 * k); _rot(AR.elbow, -1.9 * k, 0, 0)
+		_rot(head_g, 0.42 * k, 0, 0); _rot(spine, 0.08 * k, 0, 0)
+	elif em == "ascend":
+		var br = 0.06 * sin(t * 1.6)
+		_rot(AL.sh, -0.2 * k, 0, -(1.0 + br) * k); _rot(AL.elbow, -0.25 * k, 0, 0)
+		_rot(AR.sh, -0.2 * k, 0, (1.0 + br) * k); _rot(AR.elbow, -0.25 * k, 0, 0)
+		_rot(head_g, -0.32 * k, 0, 0); _rot(spine, -0.08 * k, 0, 0)
+		_rot(L.knee, 0.15, 0, 0); _rot(R.knee, 0.25, 0, 0)
 	elif em == "snowangel":
 		var fa = 0.5 + 0.5 * sin(t * 3.2)
 		_rot(AL.sh, 0, 0, -(0.3 + 1.6 * fa)); _rot(AL.elbow, -0.1, 0, 0)
