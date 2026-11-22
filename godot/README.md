@@ -203,6 +203,18 @@ Tudo do jogo web, mais algumas coisas só daqui:
   - vento que acompanha as rajadas, a cidade ao fundo, sirenes, cachorros, aviões e o gelo do lago
     rangendo; fogo crepitando nos barris e vapor nos bueiros;
   - mixagem com compressor e limitador.
+- **Celular novo**, no estilo de um flagship moderno (tipo um "Pro Max"): borda de alumínio na cor
+  que você escolher (Glacier, Silver, Black ou Burgundy, em Settings → **Phone colour**), borda
+  preta fina, a ilha da câmera pequena, barra de status com a hora do jogo, sinal, Wi-Fi e bateria
+  (a de verdade, no celular ou notebook). Ele sobe da parte de baixo da tela. Tela inicial com
+  papel de parede, widgets de vidro (clima no Calder Park e o próximo trem do L), grade de ícones,
+  dock e o selo de mensagens não lidas. Os apps têm títulos grandes, listas agrupadas com linhas
+  finas, chaves liga/desliga, controles deslizantes com valor, balões de conversa nas mensagens e
+  cartões no Blok e em Jobs. Toque na barrinha de baixo para voltar ao início, ou fora do celular
+  para guardar.
+- **Editor de personagem minimalista:** o personagem num foco de luz suave, à direita; à esquerda,
+  as seções numa coluna fina, linhas finas com o nome pequeno em cima do valor e ‹ › para trocar,
+  bolinhas de cor pequenas e um botão Save branco.
 - **Interface nova:** minimapa arredondado com prédios e marcadores, barras de vida, calor e
   fôlego, dinheiro que rola, estrelas de procurado, caixa de ajuda, feed de notificações,
   mensagens grandes no centro, rodas de armas e de emotes, e um **editor de personagem** em tela
@@ -306,6 +318,7 @@ sintetiza os sons extras (vento, cidade, partida, gelo, fogo, trovões, o coro e
 `tools/make-memorial.py` pinta as texturas do jardim memorial (granito, frontão, arabescos das portas, placas, casca e veias da Poison Tree, palmeiras, grama, asas) e
 `tools/make-sky-noise.py` gera o ruído que o shader do céu usa para nuvens e aurora.
 `tools/make-city.py` pinta as texturas da cidade no estilo cel (fachadas, rua e calçada, em `godot/assets/tex/`).
+`tools/make-ui.py` desenha o celular (borda, ilha, sombra), o papel de parede, os ícones dos apps e o fundo do editor de personagem (em `godot/assets/ui/`). O celular e o editor usam a fonte Inter (licença SIL OFL, em `godot/fonts/`).
 
 Para ver só o céu: `DS_SKYTEST=medium godot3 --path . --autotest` (com `DS_SHOTS=pasta`) tira fotos
 ao meio-dia, nublado, pôr do sol, noite com aurora, estrelas, trovoada e amanhecer.
@@ -316,7 +329,7 @@ listener websockets) e aponte o jogo para ele com
 
 Ele grava capturas e um `autotest.log`.
 
-Para ver rostos, barbas, o dedo do meio e o visual cel: `DS_LOOKTEST=1`. Para testar servidores,
+Para ver rostos, barbas, o dedo do meio e o visual cel: `DS_LOOKTEST=1`. Para ver o editor de personagem e todas as telas do celular: `DS_UITEST=1`. Para testar servidores,
 com um servidor dedicado rodando (`--server --name="Test Dedicated" --password=...`): `DS_SRVTEST=client`
 (com `DS_PW=` para a senha) acha o servidor, é barrado com a senha errada, entra com a certa, conversa
 e depois cria o "Test Host"; `DS_SRVTEST=joiner` noutro jogo entra nele. `DS_BROKERS=` troca os

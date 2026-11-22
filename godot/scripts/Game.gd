@@ -60,6 +60,21 @@ func _ready():
 	_setup_input()
 	S = new_state("")
 
+# Inter, for the phone and the wardrobe (thin, modern); DejaVu fills in symbols Inter lacks.
+# w: "l" light, "r" regular, "m" medium, "s" semibold, "b" bold
+var _ifonts = {}
+func ifont(size, w = "r"):
+	var k = w + str(size)
+	if _ifonts.has(k): return _ifonts[k]
+	var names = { "l": "Light", "r": "Regular", "m": "Medium", "s": "SemiBold", "b": "Bold" }
+	var f = DynamicFont.new()
+	f.font_data = load("res://fonts/Inter-%s.ttf" % names.get(w, "Regular"))
+	f.size = size
+	f.use_filter = true
+	f.add_fallback(load("res://fonts/DejaVuSans-Bold.ttf" if w in ["s", "b"] else "res://fonts/DejaVuSans.ttf"))
+	_ifonts[k] = f
+	return f
+
 func _font(size, bold, outline = 0):
 	var f = DynamicFont.new()
 	f.font_data = load("res://fonts/DejaVuSans-Bold.ttf" if bold else "res://fonts/DejaVuSans.ttf")

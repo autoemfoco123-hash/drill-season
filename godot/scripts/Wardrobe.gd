@@ -1,7 +1,8 @@
 extends Node
-# The character creator: a full-screen wardrobe with categories on the left, a ◀ value ▶ row
-# for each option, colour swatches, and a lit 3D preview that turns (drag, or Q / E).
-# Mouse, keyboard (arrows) and controller (D-pad / stick, A, B) all work.
+# The character creator, minimal: the character stands in a soft spotlight on the right; on the
+# left, a slim list of sections and thin rows (a small label over the value, ‹ › to change),
+# small colour dots, and a white Save pill. Turn the character by dragging or with Q / E.
+# Mouse, touch, keyboard (arrows) and controller (D-pad / stick, A, B, LB / RB) all work.
 
 var main
 var layer
@@ -14,12 +15,16 @@ var before = {}
 var cat = 1
 var rows = []
 var list
-var cat_bar
+var cat_box
 var title_l
 var rot = 0.4
 var drag = false
 var from_new = false
 var focus_row = 0
+
+const DIM = Color(0.56, 0.56, 0.6)
+const LINE = Color(1, 1, 1, 0.08)
+const ACC = Color(1, 0.62, 0.22)
 
 const CATS = [
 	["Presets", []],
@@ -45,65 +50,104 @@ class Row extends Button:
 		elif e.is_action_pressed("ui_right"):
 			wd.step(key, 1); accept_event()
 
+class Chev extends Control:
+	var dir = 1
+	var col = Color(1, 1, 1, 0.55)
+	func _draw():
+		var c = rect_size / 2
+		var w = rect_size.x * 0.25
+		var h = rect_size.y * 0.32
+		draw_polyline(PoolVector2Array([c + Vector2(-dir * w, -h), c + Vector2(dir * w, 0), c + Vector2(-dir * w, h)]), col, 1.6, true)
+
+func _sb(col, r, ml = 0, mt = 0):
+	var sb = StyleBoxFlat.new(); sb.bg_color = col; sb.set_corner_radius_all(r); sb.anti_aliasing = true
+	sb.content_margin_left = ml; sb.content_margin_right = ml; sb.content_margin_top = mt; sb.content_margin_bottom = mt
+	return sb
+
+func _text(parent, t, font, col, pos = null):
+	var l = Label.new(); l.text = t; l.add_font_override("font", font); l.add_color_override("font_color", col)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if pos != null: l.rect_position = pos
+	parent.add_child(l)
+	return l
+
 func setup(m):
 	main = m
 	layer = CanvasLayer.new(); layer.layer = 7; add_child(layer)
 	root = Control.new(); root.anchor_right = 1; root.anchor_bottom = 1; root.visible = false
 	layer.add_child(root)
-	# backdrop
-	var bg = TextureRect.new(); bg.anchor_right = 1; bg.anchor_bottom = 1; bg.expand = true
-	var gt = GradientTexture.new(); var g = Gradient.new()
-	g.set_color(0, Color(0.03, 0.035, 0.05)); g.set_color(1, Color(0.16, 0.12, 0.1)); gt.gradient = g; bg.texture = gt
+	# backdrop: a soft spotlight on dark grey
+	var bg = TextureRect.new(); bg.anchor_right = 1; bg.anchor_bottom = 1; bg.expand = true; bg.stretch_mode = TextureRect.STRETCH_SCALE
+	bg.texture = load("res://assets/ui/wardrobe_bg.png")
 	root.add_child(bg)
 	# the 3D preview fills the right side
-	var vc = ViewportContainer.new(); vc.stretch = true; vc.anchor_left = 0.36; vc.anchor_right = 1; vc.anchor_bottom = 1
+	var vc = ViewportContainer.new(); vc.stretch = true; vc.anchor_left = 0.3; vc.anchor_right = 1; vc.anchor_bottom = 1
 	vc.connect("gui_input", self, "_preview_input")
 	root.add_child(vc)
-	vp = Viewport.new(); vp.own_world = true; vp.transparent_bg = true; vp.msaa = Viewport.MSAA_DISABLED; vp.size = Vector2(820, 720)
+	vp = Viewport.new(); vp.own_world = true; vp.transparent_bg = true; vp.msaa = Viewport.MSAA_DISABLED; vp.size = Vector2(896, 720)
 	vc.add_child(vp)
-	var cam = Camera.new(); cam.fov = 32; cam.translation = Vector3(0, 1.1, 5.2); vp.add_child(cam); cam.look_at(Vector3(0, 0.95, 0), Vector3.UP); cam.current = true
-	for L in [[Vector3(2, 3, 3), Color(1, 0.86, 0.72), 1.3], [Vector3(-3, 1.5, 2), Color(0.6, 0.72, 1), 0.7], [Vector3(0, 2.5, -3), Color(1, 0.6, 0.3), 1.1]]:
+	var cam = Camera.new(); cam.fov = 30; cam.translation = Vector3(0, 1.05, 5.4); vp.add_child(cam); cam.look_at(Vector3(0, 0.92, 0), Vector3.UP); cam.current = true
+	# soft enough for the cel lighting (each light adds a full band): a warm key, a cool fill, a rim
+	for L in [[Vector3(2, 3, 3), Color(1, 0.95, 0.88), 0.62], [Vector3(-3, 1.5, 2), Color(0.72, 0.8, 1), 0.2], [Vector3(0, 2.5, -3), Color(1, 1, 1), 0.42]]:
 		var dl = DirectionalLight.new(); dl.light_color = L[1]; dl.light_energy = L[2]; vp.add_child(dl); dl.look_at_from_position(L[0], Vector3(0, 1, 0), Vector3.UP)
-	var env = Environment.new(); env.background_mode = Environment.BG_CLEAR_COLOR; env.ambient_light_color = Color(0.5, 0.55, 0.65); env.ambient_light_energy = 0.7
+	var env = Environment.new(); env.background_mode = Environment.BG_CLEAR_COLOR; env.ambient_light_color = Color(0.5, 0.52, 0.58); env.ambient_light_energy = 0.42
 	var we = WorldEnvironment.new(); we.environment = env; vp.add_child(we)
-	var disc = MeshInstance.new(); var dm = CylinderMesh.new(); dm.top_radius = 1.1; dm.bottom_radius = 1.1; dm.height = 0.04; dm.radial_segments = 40; disc.mesh = dm
-	var dmat = SpatialMaterial.new(); dmat.albedo_color = Color(0.1, 0.11, 0.14); dmat.roughness = 0.4; disc.material_override = dmat; disc.translation.y = -0.02
-	vp.add_child(disc)
-	var ring = MeshInstance.new(); var rm = CylinderMesh.new(); rm.top_radius = 1.16; rm.bottom_radius = 1.16; rm.height = 0.02; rm.radial_segments = 40; ring.mesh = rm
-	var rmat = SpatialMaterial.new(); rmat.flags_unshaded = true; rmat.albedo_color = Color(1, 0.6, 0.22); ring.material_override = rmat; ring.translation.y = -0.03
-	vp.add_child(ring)
+	# a soft round shadow on the floor instead of a stage
+	var fl = MeshInstance.new(); var qm = QuadMesh.new(); qm.size = Vector2(1.9, 1.9); fl.mesh = qm
+	var fm = SpatialMaterial.new(); fm.flags_unshaded = true; fm.flags_transparent = true; fm.albedo_texture = load("res://assets/ui/floor_shadow.png")
+	fm.albedo_color = Color(0, 0, 0, 0.9); fl.material_override = fm
+	fl.rotation_degrees = Vector3(-90, 0, 0); fl.translation.y = 0.004
+	vp.add_child(fl)
 	holder = Spatial.new(); vp.add_child(holder)
-	# left panel
-	var panel = PanelContainer.new()
-	var sb = StyleBoxFlat.new(); sb.bg_color = Color(0.02, 0.025, 0.04, 0.88)
-	sb.content_margin_left = 34; sb.content_margin_right = 28; sb.content_margin_top = 30; sb.content_margin_bottom = 24
-	panel.add_stylebox_override("panel", sb)
-	panel.anchor_right = 0.36; panel.anchor_bottom = 1
-	root.add_child(panel)
-	var v = VBoxContainer.new(); v.add_constant_override("separation", 8); panel.add_child(v)
-	var eb = Label.new(); eb.text = "CALDER PARK · WARDROBE"; eb.add_font_override("font", G.font_xs); eb.add_color_override("font_color", Color(1, 0.62, 0.22)); v.add_child(eb)
-	title_l = Label.new(); title_l.add_font_override("font", G.font_big); title_l.text = "CHARACTER"; v.add_child(title_l)
-	cat_bar = HBoxContainer.new(); v.add_child(cat_bar)
-	var sep = HSeparator.new(); v.add_child(sep)
-	var sc = ScrollContainer.new(); sc.size_flags_vertical = Control.SIZE_EXPAND_FILL; sc.scroll_horizontal_enabled = false; v.add_child(sc)
-	list = VBoxContainer.new(); list.size_flags_horizontal = Control.SIZE_EXPAND_FILL; list.add_constant_override("separation", 6); sc.add_child(list)
-	var foot = HBoxContainer.new(); v.add_child(foot)
-	for b in [["Randomize", "randomize"], ["Cancel", "cancel"], ["Save", "save"]]:
-		var bt = Button.new(); bt.text = b[0]; bt.add_font_override("font", G.font_m); bt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		bt.connect("pressed", self, b[1]); foot.add_child(bt)
-		if b[1] == "save": _style_btn(bt, true)
-		else: _style_btn(bt, false)
-	var hint = Label.new(); hint.text = "◀ ▶ change  ·  Q / E or drag to turn  ·  Tab next section  ·  Enter save  ·  Esc cancel"
-	hint.autowrap = true; hint.add_font_override("font", G.font_xs); hint.add_color_override("font_color", Color(0.62, 0.68, 0.76)); v.add_child(hint)
+	# left: eyebrow, name, sections, rows
+	var ui = Control.new(); ui.anchor_bottom = 1; ui.margin_left = 0; ui.margin_right = 560; ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(ui)
+	var eyebrow = G.ifont(11, "m").duplicate(); eyebrow.extra_spacing_char = 3
+	_text(ui, "WARDROBE", eyebrow, DIM, Vector2(56, 52))
+	title_l = _text(ui, "CHARACTER", G.ifont(34, "l"), Color(1, 1, 1), Vector2(54, 70))
+	cat_box = VBoxContainer.new(); cat_box.rect_position = Vector2(56, 152); cat_box.rect_size = Vector2(130, 300); cat_box.add_constant_override("separation", 2)
+	ui.add_child(cat_box)
+	var sc = ScrollContainer.new(); sc.rect_position = Vector2(206, 146); sc.rect_size = Vector2(330, 0); sc.scroll_horizontal_enabled = false
+	sc.anchor_bottom = 1; sc.margin_bottom = -118
+	var sbg = StyleBoxEmpty.new(); sbg.content_margin_left = 1; sbg.content_margin_right = 1
+	var vs = sc.get_v_scrollbar()
+	vs.add_stylebox_override("scroll", sbg); vs.add_stylebox_override("scroll_focus", sbg)
+	var gr = _sb(Color(1, 1, 1, 0.18), 2); gr.content_margin_left = 1; gr.content_margin_right = 1
+	vs.add_stylebox_override("grabber", gr); vs.add_stylebox_override("grabber_highlight", gr); vs.add_stylebox_override("grabber_pressed", gr)
+	ui.add_child(sc)
+	list = VBoxContainer.new(); list.size_flags_horizontal = Control.SIZE_EXPAND_FILL; list.add_constant_override("separation", 0); sc.add_child(list)
+	# bottom: Save (a white pill), Cancel, Randomize, and a one-line hint
+	var foot = HBoxContainer.new(); foot.anchor_top = 1; foot.anchor_bottom = 1; foot.margin_left = 56; foot.margin_top = -98; foot.margin_bottom = -58; foot.margin_right = 520
+	foot.add_constant_override("separation", 22)
+	ui.add_child(foot)
+	for b in [["Save", "save"], ["Cancel", "cancel"], ["Randomize", "randomize"]]:
+		var bt = Button.new(); bt.text = b[0]; bt.connect("pressed", self, b[1]); foot.add_child(bt)
+		_style_btn(bt, b[1] == "save")
+	var hint = _text(ui, "‹ › change   ·   Q E or drag to turn   ·   Tab section   ·   Enter save   ·   Esc cancel", G.ifont(11, "r"), Color(1, 1, 1, 0.32))
+	hint.anchor_top = 1; hint.anchor_bottom = 1; hint.margin_left = 56; hint.margin_top = -40; hint.margin_bottom = -24
 
 func _style_btn(b, primary):
-	var n = StyleBoxFlat.new(); n.bg_color = Color(1, 0.62, 0.22) if primary else Color(0.1, 0.12, 0.16); n.set_corner_radius_all(6)
-	n.content_margin_top = 8; n.content_margin_bottom = 8; n.content_margin_left = 12; n.content_margin_right = 12
-	var f = n.duplicate(); f.bg_color = Color(1, 1, 1); f.border_color = Color(1, 0.62, 0.22); f.set_border_width_all(2)
-	for st in ["normal", "disabled"]: b.add_stylebox_override(st, n)
-	for st in ["hover", "focus", "pressed"]: b.add_stylebox_override(st, f)
-	b.add_color_override("font_color", Color(0.05, 0.05, 0.07) if primary else Color(1, 1, 1))
-	b.add_color_override("font_color_hover", Color(0.05, 0.05, 0.07)); b.add_color_override("font_color_focus", Color(0.05, 0.05, 0.07))
+	b.focus_mode = Control.FOCUS_ALL
+	if primary:
+		b.rect_min_size = Vector2(118, 40)
+		b.add_stylebox_override("normal", _sb(Color(1, 1, 1), 20, 22, 8))
+		b.add_stylebox_override("hover", _sb(Color(0.88, 0.88, 0.9), 20, 22, 8))
+		b.add_stylebox_override("pressed", _sb(Color(0.78, 0.78, 0.8), 20, 22, 8))
+		var f = _sb(Color(1, 1, 1), 20, 22, 8); f.border_color = ACC; f.set_border_width_all(2)
+		b.add_stylebox_override("focus", f)
+		b.add_font_override("font", G.ifont(14, "s"))
+		for c in ["font_color", "font_color_hover", "font_color_pressed", "font_color_focus"]:
+			b.add_color_override(c, Color(0.04, 0.04, 0.05))
+	else:
+		var e = StyleBoxEmpty.new(); e.content_margin_left = 2; e.content_margin_right = 2
+		for st in ["normal", "hover", "pressed", "disabled"]: b.add_stylebox_override(st, e)
+		var f2 = StyleBoxFlat.new(); f2.draw_center = false; f2.border_width_bottom = 1; f2.border_color = ACC
+		f2.content_margin_left = 2; f2.content_margin_right = 2
+		b.add_stylebox_override("focus", f2)
+		b.add_font_override("font", G.ifont(14, "m"))
+		b.add_color_override("font_color", Color(1, 1, 1, 0.6))
+		for c in ["font_color_hover", "font_color_pressed", "font_color_focus"]:
+			b.add_color_override(c, Color(1, 1, 1))
 
 func open(is_new = false):
 	if root.visible: return
@@ -132,13 +176,22 @@ func _rebuild_preview():
 	holder.add_child(preview)
 
 func _render():
-	for c in cat_bar.get_children(): c.queue_free()
+	for c in cat_box.get_children():
+		cat_box.remove_child(c); c.queue_free()
 	for i in range(CATS.size()):
-		var b = Button.new(); b.text = CATS[i][0]; b.flat = i != cat; b.add_font_override("font", G.font_xs)
-		b.focus_mode = Control.FOCUS_NONE
-		b.add_color_override("font_color", Color(1, 0.62, 0.22) if i == cat else Color(0.75, 0.8, 0.88))
+		var on = i == cat
+		var b = Button.new(); b.text = CATS[i][0]; b.flat = true; b.align = Button.ALIGN_LEFT
+		b.focus_mode = Control.FOCUS_NONE; b.rect_min_size = Vector2(0, 30)
+		var e = StyleBoxEmpty.new(); e.content_margin_left = 18
+		for st in ["normal", "hover", "pressed", "focus"]: b.add_stylebox_override(st, e)
+		b.add_font_override("font", G.ifont(14, "m" if on else "r"))
+		b.add_color_override("font_color", Color(1, 1, 1) if on else Color(1, 1, 1, 0.42))
+		b.add_color_override("font_color_hover", Color(1, 1, 1))
 		b.connect("pressed", self, "_set_cat", [i])
-		cat_bar.add_child(b)
+		if on:
+			var mark = ColorRect.new(); mark.color = ACC; mark.rect_position = Vector2(0, 14); mark.rect_size = Vector2(10, 1.5)
+			mark.mouse_filter = Control.MOUSE_FILTER_IGNORE; b.add_child(mark)
+		cat_box.add_child(b)
 	for c in list.get_children():
 		list.remove_child(c)
 		c.queue_free()
@@ -146,9 +199,9 @@ func _render():
 	if CATS[cat][0] == "Presets":
 		var P = G.D["SKIN"]["PRESETS"]
 		for i in range(P.size()):
-			var b2 = _row_button(P[i][0], "", null)
+			var b2 = _row_button("", P[i][0], null)
 			b2.connect("pressed", self, "_preset", [i])
-		var r = _row_button("Random look", "", null)
+		var r = _row_button("", "Random look", null)
 		r.connect("pressed", self, "randomize")
 	else:
 		for key in CATS[cat][1]:
@@ -156,23 +209,29 @@ func _render():
 	if rows.size() > 0:
 		rows[clamp(focus_row, 0, rows.size() - 1)].grab_focus()
 
+# a thin row: a small grey label over the value, ‹ › on the right, a hairline under it
 func _row_button(label, value, key):
 	var b = Row.new(); b.wd = self; b.key = key
-	b.text = label
-	b.align = Button.ALIGN_LEFT; b.add_font_override("font", G.font_m); b.clip_text = true
-	if value != "":
-		# the value sits on the right of the row: ◀ value ▶
-		var vl = Label.new(); vl.text = "◀   %s   ▶" % value; vl.add_font_override("font", G.font_m); vl.align = Label.ALIGN_RIGHT
-		vl.anchor_right = 1; vl.anchor_bottom = 1; vl.margin_right = -14; vl.valign = Label.VALIGN_CENTER; vl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		vl.add_color_override("font_color", Color(1, 0.62, 0.22))
-		b.add_child(vl)
-	var n = StyleBoxFlat.new(); n.bg_color = Color(0.07, 0.08, 0.11); n.set_corner_radius_all(4)
-	n.content_margin_left = 14; n.content_margin_right = 14; n.content_margin_top = 9; n.content_margin_bottom = 9
-	var f = n.duplicate(); f.bg_color = Color(0.96, 0.97, 1.0)
-	b.add_stylebox_override("normal", n)
-	for st in ["hover", "focus", "pressed"]:
-		b.add_stylebox_override(st, f)
-	b.add_color_override("font_color", Color(1, 1, 1)); b.add_color_override("font_color_hover", Color(0.05, 0.05, 0.07)); b.add_color_override("font_color_focus", Color(0.05, 0.05, 0.07))
+	b.rect_min_size = Vector2(0, 56 if label != "" else 46)
+	var e = StyleBoxEmpty.new()
+	var hi = _sb(Color(1, 1, 1, 0.055), 10)
+	b.add_stylebox_override("normal", e); b.add_stylebox_override("disabled", e)
+	for st in ["hover", "focus", "pressed"]: b.add_stylebox_override(st, hi)
+	var y = 8
+	if label != "":
+		_text(b, label.to_upper(), G.ifont(10, "m"), DIM, Vector2(12, y))
+		y += 16
+	var vl = _text(b, value, G.ifont(17, "r") if label != "" else G.ifont(16, "r"), Color(1, 1, 1), Vector2(12, y if label != "" else 12))
+	vl.name = "Value"
+	if key != null:
+		for d in [-1, 1]:
+			var ch = Chev.new(); ch.dir = d; ch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			ch.anchor_left = 1; ch.anchor_right = 1; ch.anchor_top = 0.5; ch.anchor_bottom = 0.5
+			ch.margin_left = -58 if d < 0 else -30; ch.margin_right = ch.margin_left + 18; ch.margin_top = -9; ch.margin_bottom = 9
+			b.add_child(ch)
+	var ln = ColorRect.new(); ln.color = LINE; ln.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ln.anchor_top = 1; ln.anchor_bottom = 1; ln.anchor_right = 1; ln.margin_top = -1; ln.margin_left = 12; ln.margin_right = -8
+	b.add_child(ln)
 	b.connect("focus_entered", self, "_focus", [rows.size()])
 	list.add_child(b)
 	rows.append(b)
@@ -200,18 +259,23 @@ func _field_row(key):
 	var f = _field(key)
 	if f == null: return
 	if f[1] == "c":
-		var lab = Label.new(); lab.text = NAMES.get(key, key); lab.add_font_override("font", G.font_s); lab.add_color_override("font_color", Color(0.75, 0.8, 0.88)); list.add_child(lab)
-		var grid = GridContainer.new(); grid.columns = 9; list.add_child(grid)
+		var box = VBoxContainer.new(); box.add_constant_override("separation", 8)
+		var pad = MarginContainer.new(); pad.add_constant_override("margin_left", 12); pad.add_constant_override("margin_top", 10); pad.add_constant_override("margin_bottom", 12)
+		pad.add_child(box); list.add_child(pad)
+		var lab = Label.new(); lab.text = NAMES.get(key, key).to_upper(); lab.add_font_override("font", G.ifont(10, "m")); lab.add_color_override("font_color", DIM); box.add_child(lab)
+		var grid = GridContainer.new(); grid.columns = 9; grid.add_constant_override("hseparation", 9); grid.add_constant_override("vseparation", 9); box.add_child(grid)
 		var cols = G.D["SKIN"]["HAIR_COLS"] if key == "hairCol" else G.D["SKIN"]["SWATCHES"]
 		for c in cols:
-			var b = Button.new(); b.rect_min_size = Vector2(36, 30)
+			var b = Button.new(); b.rect_min_size = Vector2(24, 24)
 			var on = int(edit.get(key, 0)) == int(c)
-			var n = StyleBoxFlat.new(); n.bg_color = G.hex_color(c); n.set_corner_radius_all(15)
-			n.set_border_width_all(3 if on else 1); n.border_color = Color(1, 0.62, 0.22) if on else Color(0, 0, 0, 0.5)
-			var fo = n.duplicate(); fo.set_border_width_all(3); fo.border_color = Color(1, 1, 1)
+			var n = _sb(G.hex_color(c), 12)
+			n.set_border_width_all(2 if on else 1); n.border_color = Color(1, 1, 1) if on else Color(1, 1, 1, 0.14)
+			var fo = n.duplicate(); fo.set_border_width_all(2); fo.border_color = ACC
 			b.add_stylebox_override("normal", n); b.add_stylebox_override("hover", fo); b.add_stylebox_override("focus", fo); b.add_stylebox_override("pressed", fo)
 			b.connect("pressed", self, "_set_color", [key, c])
 			grid.add_child(b)
+		var ln = ColorRect.new(); ln.color = LINE; ln.rect_min_size = Vector2(0, 1); ln.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var lm = MarginContainer.new(); lm.add_constant_override("margin_left", 12); lm.add_constant_override("margin_right", 8); lm.add_child(ln); list.add_child(lm)
 		return
 	var row = _row_button(NAMES.get(key, key), _value_text(key), key)
 	row.connect("pressed", self, "step", [key, 1])

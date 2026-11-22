@@ -16,6 +16,7 @@ func run(m):
 	elif OS.get_environment("DS_MEMTEST") != "": call_deferred("_mem_test")
 	elif OS.get_environment("DS_LOOKTEST") != "": call_deferred("_look_test")
 	elif OS.get_environment("DS_SRVTEST") != "": call_deferred("_srv_test")
+	elif OS.get_environment("DS_UITEST") != "": call_deferred("_ui_test")
 	else: call_deferred("_go")
 
 func _wait(s):
@@ -759,4 +760,56 @@ func _go():
 	var f = File.new()
 	if f.open(out.plus_file("autotest.log"), File.WRITE) == OK:
 		f.store_string(PoolStringArray(log_lines).join("\n")); f.close()
+	get_tree().quit()
+
+# the wardrobe and every phone screen, then quit
+func _ui_test():
+	yield(_wait(1.0), "completed")
+	main.title._close(); main.start_game(G.new_state("uitest"))
+	yield(_wait(1.5), "completed")
+	G.time_offset += (16 * 60 + 20 - G.world_minutes())
+	var P = main.player
+	P.place(2.5, 0, -16, 0); P.cam_yaw = 0.4; P.cam_pitch = 0.02
+	G.S["threads"]["benny"] = [{ "text": "yo the booth is open tonight" }, { "text": "Ostrava Snowplow on the bench now. loud tho. real loud" }]
+	G.S["threads"]["kiara"] = [{ "text": "saw that post. proud of u for walking away" }]
+	G.S["threads"]["coach"] = [{ "text": "Heard you walked away tonight. That is the hardest thing to do." }]
+	G.S["unread"]["benny"] = 2; G.S["unread"]["kiara"] = 1
+	main.wardrobe.open()
+	yield(_wait(0.8), "completed")
+	main.wardrobe._set_cat(2)
+	yield(_wait(0.5), "completed")
+	yield(_shot("u01_wardrobe_hair"), "completed")
+	main.wardrobe._set_cat(4)
+	yield(_wait(0.4), "completed")
+	yield(_shot("u02_wardrobe_top"), "completed")
+	main.wardrobe._set_cat(0)
+	yield(_wait(0.4), "completed")
+	yield(_shot("u03_wardrobe_presets"), "completed")
+	main.wardrobe.cancel()
+	yield(_wait(0.3), "completed")
+	main.phone.open()
+	yield(_wait(0.15), "completed")
+	yield(_shot("u04_phone_opening"), "completed")
+	yield(_wait(0.6), "completed")
+	yield(_shot("u05_home"), "completed")
+	var i = 6
+	for a in ["msgs", "jobs", "blok", "map", "camera", "online", "gang", "garage", "settings", "pad", "stats"]:
+		main.phone.show_app(a)
+		yield(_wait(0.45), "completed")
+		yield(_shot("u%02d_%s" % [i, a]), "completed")
+		i += 1
+	main.phone.show_app("msgs")
+	main.phone._open_thread("benny")
+	yield(_wait(0.45), "completed")
+	yield(_shot("u%02d_thread" % i), "completed")
+	i += 1
+	for k in ["silver", "black", "burgundy", "glacier"]:
+		G.S["settings"]["phoneCol"] = k
+		main.phone._tint(); main.phone._home()
+		yield(_wait(0.35), "completed")
+		yield(_shot("u%02d_home_%s" % [i, k]), "completed")
+		i += 1
+	main.phone.close()
+	yield(_wait(0.5), "completed")
+	_log("phone visible after close: %s" % str(main.phone.panel.visible))
 	get_tree().quit()

@@ -29,6 +29,8 @@ para o app que você usou. Se o Play Protect avisar que o app é desconhecido, t
   modo servidor num PC ou VPS (`servidor.bat` / `servidor.sh` nos zips de PC). Não precisa abrir
   portas. Também há sala pública e sala privada com código. Controles na tela no celular.
 - Dedo do meio em primeira pessoa, andando e dentro do carro (o braço sai pela janela).
+- **Celular no estilo de um flagship moderno** (borda de alumínio em 4 cores, ilha pequena, widgets,
+  dock, apps com listas agrupadas) e um **editor de personagem minimalista**.
 - Um céu que muda com a hora e o tempo: nuvens, pôr do sol, estrelas, aurora e neve com trovoada.
 - **Homenagem a XXXTentacion:** no Calder Park, o jardim memorial com a réplica do mausoléu dele,
   feita a partir de uma foto que a família compartilhou, e a **Poison Tree** ao lado. Preste
@@ -46,6 +48,7 @@ Os personagens, crews, marcas e lugares da história são fictícios.
   carros, os dados e os sons do Godot (`./build.sh` e depois `node tools/export-godot.js`). Não é
   publicado.
 - `tools/`: as ferramentas de exportação, os sons sintetizados (`make-sfx.py`), as texturas do
-  jardim memorial (`make-memorial.py`) e o ruído do céu (`make-sky-noise.py`).
+  jardim memorial (`make-memorial.py`), o ruído do céu (`make-sky-noise.py`), as texturas da cidade
+  (`make-city.py`) e o celular e o editor de personagem (`make-ui.py`).
 - `index.html` e `shots/`: a página de download para Android.
 - `downloads/DrillSeason.apk`: o APK publicado.
