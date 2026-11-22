@@ -17,7 +17,25 @@ save tem o mesmo formato, então o seu progresso do navegador vem junto.
   vez, clique com o botão direito no app e escolha **Abrir** (o app não é assinado). Se o macOS
   ainda bloquear, rode no Terminal `xattr -dr com.apple.quarantine "/Applications/Drill Season.app"`.
 
-Todas as versões jogam online juntas.
+- **Android:** `DrillSeason.apk`. Copie para o celular e abra o arquivo. O Android vai pedir para
+  permitir instalar apps desta fonte; permita só para o app que você usou para abrir o APK.
+  Requer Android 4.4 ou mais novo, com processador ARM (praticamente todos os celulares).
+
+Todas as versões (Linux, Windows, Mac e Android) jogam online juntas.
+
+### No celular
+
+- Controles na tela: o **joystick** aparece onde o polegar esquerdo encostar (empurre até a
+  borda para correr); **arraste à direita** para olhar; botões de tiro, mira (toque liga/desliga),
+  pulo, agachar, recarregar, carro e **E** (acende quando há algo para usar).
+- Na fileira de cima: celular, **arma** (toque troca, segure e deslize para a roda), **emote**
+  (segure e deslize), bola de neve e primeira/terceira pessoa.
+- No carro os botões viram acelerar, frear, derrapar (freio de mão), buzina, rádio e sair.
+- O botão **voltar** do Android fecha o que estiver aberto, ou abre o celular do jogo.
+- Em **Settings** dá para ligar/desligar os controles na tela e ajustar a velocidade da câmera.
+  Controle Bluetooth também funciona.
+- No Android 11 ou mais novo, importar o save do jogo web pela pasta Downloads pode não funcionar
+  (o sistema restringe o acesso a arquivos).
 
 ## Jogar no Kali Linux
 

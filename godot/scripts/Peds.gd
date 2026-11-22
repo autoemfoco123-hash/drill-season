@@ -382,7 +382,8 @@ func snowball_hit(who, v):
 
 func _throw_back(who, delay):
 	yield(get_tree().create_timer(delay), "timeout")
-	if not is_instance_valid(who.h) or who.is_down(): return
+	if not is_instance_valid(who.h): return
+	if who.is_down() if who.has_method("is_down") else who.state == "down": return
 	var P = main.player
 	var from = who.pos + Vector3(0, 1.7, 0)
 	var to = P.pos + Vector3(0, 1.3, 0)

@@ -20,6 +20,7 @@ var fx
 var net
 var wardrobe
 var cockpit
+var touch
 var camera
 var env
 var sun
@@ -65,7 +66,8 @@ func _ready():
 	net = _system("res://scripts/Net.gd", "Net")
 	wardrobe = _system("res://scripts/Wardrobe.gd", "Wardrobe")
 	cockpit = _system("res://scripts/Cockpit.gd", "Cockpit")
-	for s in [sfx, vehicles, player, peds, police, crews, gang, hud, phone, title, story, cutscene, studio, blok, train, fx, net, wardrobe, cockpit]:
+	touch = _system("res://scripts/Touch.gd", "Touch")
+	for s in [sfx, vehicles, player, peds, police, crews, gang, hud, phone, title, story, cutscene, studio, blok, train, fx, net, wardrobe, cockpit, touch]:
 		s.setup(self)
 	story.build_npcs()
 	title.open()
@@ -278,6 +280,7 @@ func _process(dt):
 	blok.update(dt)
 	studio.update(dt)
 	wardrobe.update(dt)
+	touch.update(dt)
 	net.update(dt)
 	update_day_night(player.pos)
 	sfx.update(dt)
@@ -319,3 +322,21 @@ func exit_to_title():
 func _notification(what):
 	if what == MainLoop.NOTIFICATION_WM_QUIT_REQUEST:
 		G.save_game()
+	elif what == MainLoop.NOTIFICATION_WM_GO_BACK_REQUEST:
+		_back()
+	elif what == MainLoop.NOTIFICATION_APP_PAUSED or what == MainLoop.NOTIFICATION_WM_FOCUS_OUT:
+		if G.MODE != "title": G.save_game()
+
+# Android's back button: close whatever is open, otherwise open the phone
+func _back():
+	if cutscene.on: cutscene.end()
+	elif wardrobe.root.visible: wardrobe.cancel()
+	elif studio.root.visible:
+		if studio.bench: studio.close_bench()
+		else: studio._abort()
+	elif hud.menu_box: hud.close_menu()
+	elif phone.panel.visible:
+		if phone.app != "": phone._home()
+		else: phone.close()
+	elif G.MODE == "play": phone.open()
+	elif G.MODE == "title": get_tree().quit()

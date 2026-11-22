@@ -14,6 +14,7 @@ config/name="Drill Season"
 config/description="A winter Chicago drill-life game. Every character, crew, brand and place is fictional."
 run/main_scene="res://scenes/Main.tscn"
 config/icon="res://icon.png"
+config/quit_on_go_back=false
 
 [autoload]
 
@@ -25,6 +26,9 @@ GUN="*res://scripts/Guns.gd"
 
 window/size/width=1280
 window/size/height=720
+window/handheld/orientation="sensor_landscape"
+window/stretch/mode="2d"
+window/stretch/aspect="expand"
 
 [physics]
 

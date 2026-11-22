@@ -488,7 +488,10 @@ func _app_settings():
 	_btn("Camera: " + ("first person" if st.get("fp", false) else "third person"), self, "_toggle", ["fp"])
 	var qn = { "high": "High (shadows, 4 lamp lights)", "medium": "Medium (2 lamp lights)" }
 	_btn("Graphics: " + qn.get(st.get("quality", "low"), "Fast (for old GPUs)"), self, "_quality")
-	_btn("Full screen: " + ("on" if OS.window_fullscreen else "off"), self, "_fullscreen")
+	if OS.get_name() != "Android": _btn("Full screen: " + ("on" if OS.window_fullscreen else "off"), self, "_fullscreen")
+	var tm = str(st.get("touch", "auto"))
+	_btn("On-screen controls: " + { "auto": "auto", "on": "on", "off": "off" }.get(tm, "auto"), self, "_touch_mode")
+	if main.touch.enabled: _slider("Touch look speed", st.get("touchSens", 1.0), 0.3, 3.0, 0.05, "touchSens")
 	_sec("Progress")
 	_lbl("Bring your progress from the web game: on the web, open the phone, then Settings, then Export my progress. The file lands in Downloads.", G.font_s, Color(0.66, 0.72, 0.78))
 	_btn("Import web progress", self, "_import")
@@ -505,6 +508,11 @@ func _set(v, key):
 	else: G.S["settings"][key] = v
 func _toggle(key):
 	G.S["settings"][key] = not G.S["settings"].get(key, false); show_app("settings")
+func _touch_mode():
+	var order = ["auto", "on", "off"]
+	var m = order[(order.find(str(G.S["settings"].get("touch", "auto"))) + 1) % 3]
+	main.touch.set_mode(m); show_app("settings")
+
 func _quality():
 	var order = ["low", "medium", "high"]
 	var q = order[(order.find(G.S["settings"].get("quality", "low")) + 1) % 3]

@@ -72,10 +72,48 @@ func _face_ped(P, dist):
 	return p
 
 # every feature added after the first port, with screenshots
+func _touch(idx, pos, pressed):
+	var e = InputEventScreenTouch.new(); e.index = idx; e.position = pos; e.pressed = pressed
+	Input.parse_input_event(e)
+
+func _drag(idx, pos, rel):
+	var e = InputEventScreenDrag.new(); e.index = idx; e.position = pos; e.relative = rel
+	Input.parse_input_event(e)
+
+# phones: drive the on-screen controls with fake fingers
+func _touch_test():
+	var P = main.player
+	_log("touch controls on: %s" % str(main.touch.enabled))
+	P.place(-2.5, 0, -30, 0); P.cam_yaw = 0
+	yield(_wait(0.5), "completed")
+	var p0 = P.pos
+	_touch(0, Vector2(160, 560), true)
+	for i in range(10):
+		_drag(0, Vector2(160, 560 - i * 9), Vector2(0, -9))
+		yield(get_tree(), "idle_frame")
+	_touch(1, Vector2(800, 360), true)
+	for i in range(10):
+		_drag(1, Vector2(800 + i * 6, 360), Vector2(6, 0))
+		yield(get_tree(), "idle_frame")
+	yield(_wait(1.2), "completed")
+	yield(_shot("27_touch"), "completed")
+	var b = null
+	for x in main.touch.buttons():
+		if x.id == "fire": b = x
+	var mag0 = G.S["guns"][G.S["cur"]].mag
+	_touch(2, b.c, true)
+	yield(_wait(0.25), "completed")
+	_touch(2, b.c, false)
+	_touch(1, Vector2(860, 360), false)
+	_touch(0, Vector2(160, 470), false)
+	yield(_wait(0.3), "completed")
+	_log("touch: moved %.1f m, yaw %.2f, mag %d -> %d, sprint %s" % [P.pos.distance_to(p0), P.cam_yaw, mag0, G.S["guns"][G.S["cur"]].mag, str(Input.is_action_pressed("sprint"))])
+
 func _tour():
 	yield(get_tree(), "idle_frame")
 	var P = main.player
 	var S = G.S
+	if main.touch.enabled: yield(_touch_test(), "completed")
 	main.crews.clear(); main.police.clear()
 	G.time_offset += (12 * 60 - G.world_minutes())
 	P.place(-2.5, 0, -30, 0); P.cam_yaw = 0; P.cam_pitch = -0.1

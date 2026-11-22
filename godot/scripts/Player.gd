@@ -120,7 +120,7 @@ func _input(e):
 		return
 	if e is InputEventMouseMotion and Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED and not main.hud.wheel_open():
 		look(e.relative.x, e.relative.y)
-	if e is InputEventMouseButton and e.pressed and Input.get_mouse_mode() != Input.MOUSE_MODE_CAPTURED:
+	if e is InputEventMouseButton and e.pressed and Input.get_mouse_mode() != Input.MOUSE_MODE_CAPTURED and not main.touch.enabled:
 		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 	if e.is_action_pressed("camera"):
 		G.S["settings"]["fp"] = not fp_on()

@@ -32,7 +32,7 @@ Play it at **https://autoemfoco123-hash.github.io/drill-season/** once GitHub Pa
 
 ### PC (Godot)
 
-`godot/` is a native version made with Godot 3 (GLES2). It runs on old graphics chips such as first-generation Intel HD (Iron Lake), on Linux and Windows.
+`godot/` is a native version made with Godot 3 (GLES2) for Linux, Windows, Mac and Android. It runs on old graphics chips such as first-generation Intel HD (Iron Lake), and has on-screen touch controls on phones.
 
 - It has the same city, cars, guns, sounds and radio stations, which are exported from the web build by `tools/export-godot.js` and `tools/record-radio.js`.
 - It uses the same save format. To move your progress, open the phone in the web game and go to **Settings → Export my progress**. That downloads `drill-season-save.json`. Then click **Import progress from the web game** in the Godot version.

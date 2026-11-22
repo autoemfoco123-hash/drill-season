@@ -413,6 +413,23 @@ func _lab(font, col, ax, ay, l, t, r, b, align = Label.ALIGN_LEFT):
 	root.add_child(lb)
 	return lb
 
+var touch = false
+# phones: the joystick lives bottom-left, so the map moves to the top-left corner
+func set_touch_layout(on):
+	touch = on
+	if on:
+		_anchor(minimap, 0, 0, 18, 18, 238, 158)
+		_anchor(bars, 0, 0, 18, 164, 238, 172)
+		_anchor(feed, 0, 0, 252, 70, 600, 330)
+		feed.alignment = BoxContainer.ALIGN_BEGIN
+		help_box.margin_left = 252; help_box.margin_top = 18
+	else:
+		_anchor(minimap, 0, 1, 22, -196, 262, -36)
+		_anchor(bars, 0, 1, 22, -30, 262, -22)
+		_anchor(feed, 0, 1, 22, -470, 372, -206)
+		feed.alignment = BoxContainer.ALIGN_END
+		help_box.margin_left = 22; help_box.margin_top = 22
+
 func show():
 	root.visible = true
 func hide():
@@ -530,7 +547,7 @@ func _prompt():
 		var what = "Get in your " if v.owned else ("Carjack the " if v.driver == "ai" else ("Locked · " if v.locked else "Break into the "))
 		return "%s %s%s" % [_key("F", "Y"), what, v.sp.name]
 	if P.emote_name != "": return "Move to stop the emote"
-	if Input.get_mouse_mode() != Input.MOUSE_MODE_CAPTURED and Input.get_connected_joypads().size() == 0 and fmod(G.REAL_T, 8) < 5:
+	if not touch and Input.get_mouse_mode() != Input.MOUSE_MODE_CAPTURED and Input.get_connected_joypads().size() == 0 and fmod(G.REAL_T, 8) < 5:
 		return "Click to control the camera"
 	return ""
 
@@ -654,7 +671,7 @@ func _wheel_input(dt):
 			wheel_sel = int(round(fposmod(a, TAU) / (TAU / items.size()))) % items.size()
 
 func _input(e):
-	if wheel_kind != "" and e is InputEventMouseMotion:
+	if wheel_kind != "" and e is InputEventMouseMotion and not touch:
 		wheel_vec += e.relative
 		if wheel_vec.length() > 120: wheel_vec = wheel_vec.normalized() * 120
 		get_tree().set_input_as_handled()
