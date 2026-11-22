@@ -1,37 +1,21 @@
 #!/usr/bin/env bash
-# Builds the single-file game from src/.
-#   index.html          standalone page (GitHub Pages or any static host; peer-to-peer multiplayer)
-#   dist/artifact.html  Claude artifact format (multiplayer through the artifact runtime)
+# The game is the Godot version (godot/). src/ holds the original web prototype that the
+# Godot export tool reads to regenerate the city, cars, data and sounds:
+#
+#   ./build.sh                      -> dist/artifact.html (local only, git-ignored)
+#   node tools/export-godot.js      -> godot/assets/...
+#
+# It is not published anywhere. The site (index.html) is the Android download page.
 set -euo pipefail
 cd "$(dirname "$0")"
 PARTS=$(cat src/parts.txt)
-body() {
+mkdir -p dist
+{
   cat src/05_preflight.html
   cat src/00_head.html
   echo '<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>'
   echo '<script type="module">'
   for p in $PARTS; do cat "src/$p"; echo; done
   echo '</script>'
-}
-mkdir -p dist
-body > dist/artifact.html
-{
-  printf '<!doctype html>\n<html lang="en">\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n'
-  # peer-to-peer transport for multiplayer outside claude.ai (Trystero, MIT; see vendor/LICENSES.txt)
-  printf '<script>\n'; cat vendor/trystero-nostr.js; printf '\n</script>\n'
-  # browsers without import maps or modern JavaScript (the PS4 browser) load this instead
-  printf '<script>window.DS_LEGACY_SRC = "drill-season-legacy.js";</script>\n'
-  body
-  printf '</html>\n'
-} > index.html
-echo "built index.html and dist/artifact.html"
-# compatibility build: the same game as one classic script, three.js included, lowered to ES2017
-if [ -x node_modules/.bin/esbuild ]; then
-  mkdir -p build
-  { for p in $PARTS; do cat "src/$p"; echo; done; } > build/legacy-entry.js
-  node_modules/.bin/esbuild build/legacy-entry.js --bundle --format=iife --target=es2017,safari11 --minify --legal-comments=none \
-    --banner:js='window.__dsIsLegacyBundle=true;' --outfile=drill-season-legacy.js --log-level=warning
-  echo "built drill-season-legacy.js ($(( $(stat -c %s drill-season-legacy.js) / 1024 )) KB)"
-else
-  echo "skipped drill-season-legacy.js (run npm install for esbuild)"
-fi
+} > dist/artifact.html
+echo "built dist/artifact.html (for tools/export-godot.js)"

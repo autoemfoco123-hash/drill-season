@@ -42,6 +42,7 @@ func play(list, obj = null, method = "", args = []):
 	on = true; shots = list; i = -1
 	end_obj = obj; end_m = method; end_args = args
 	G.MODE = "cutscene"
+	main.player._hide_vm()
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	main.phone.close(); main.hud.close_menu()
 	layer.visible = true

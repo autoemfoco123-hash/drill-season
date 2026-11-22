@@ -13,6 +13,7 @@ func run(m):
 	Directory.new().make_dir_recursive(out)
 	if OS.get_environment("DS_JOIN") != "": call_deferred("_join_mode")
 	elif OS.get_environment("DS_SKYTEST") != "": call_deferred("_sky_test")
+	elif OS.get_environment("DS_MEMTEST") != "": call_deferred("_mem_test")
 	else: call_deferred("_go")
 
 func _wait(s):
@@ -325,16 +326,60 @@ func _sky_test():
 	get_tree().quit()
 
 # the sky through the day, the memorial wall, the mausoleum and the lightning tribute
+func _frame(from, look, fov = 50):
+	main.cutscene.play([{ "dur": 999, "from": from, "look": look, "fov": fov }])
+
+# only the tribute: night, pay respects, shots through the cutscene, then quit
+func _mem_test():
+	yield(_wait(1.0), "completed")
+	main.title._close(); main.start_game(G.new_state("memtest"))
+	yield(_wait(1.5), "completed")
+	_clean_view(true)
+	G.S["settings"]["fp"] = false
+	var M = main.memorial
+	G.time_offset += (22 * 60 - G.world_minutes())
+	main.player.place(M.G_SPOT.x, 0, M.G_SPOT.z, 0)
+	yield(_wait(0.5), "completed")
+	M.pay_respects("garden")
+	while M.fx.size() == 0:
+		yield(get_tree(), "idle_frame")
+	var e = M.fx[0]
+	var k = 0
+	for at in [0.3, 2.2, 3.6, 4.8, 6.0, 7.4, 8.8, 10.2, 11.6]:
+		while e.t < at:
+			yield(get_tree(), "idle_frame")
+		var f = e.figure
+		_log("t %.1f fig %s wing_a %.2f wing_rot %s piv %s vis %s cut %s" % [e.t, str(f.root.translation - M.MC), f.wing_mat.albedo_color.a, str(f.wings[0][0].rotation), str(f.wings[0][0].global_transform.origin - M.MC), str(f.wings[0][0].is_visible_in_tree()), str(main.cutscene.on)])
+		yield(_shot("m%d_t%d" % [k, int(at * 10)]), "completed")
+		k += 1
+	var fl = File.new()
+	if fl.open(out.plus_file("autotest.log"), File.WRITE) == OK:
+		fl.store_string(PoolStringArray(log_lines).join("\n")); fl.close()
+	get_tree().quit()
+
+# the sky through the day, the memorial garden by day and night, and the lightning tribute
 func _memorial_test():
 	var P = main.player
 	var M = main.memorial
 	_clean_view(true)
+	G.S["settings"]["fp"] = false
 	G.time_offset += (13 * 60 - G.world_minutes())
-	P.place(M.MC.x + 9.0, 0, M.MC.z + 2.6, 0); P.cam_yaw = PI / 2 - 0.28; P.cam_pitch = 0.1
+	P.place(M.MC.x + 12.5, 0, M.MC.z + 6.5, 0)
+	_frame(M.L(8.4, 1.75, 2.9), M.L(0.8, 2.1, 0.4), 56)
 	yield(_wait(1.2), "completed")
-	yield(_shot("28_mausoleum_day"), "completed")
-	P.cam_pitch = 0.45
-	yield(_wait(0.4), "completed")
+	yield(_shot("28_garden_day"), "completed")
+	main.cutscene.end(); _frame(M.L(5.6, 1.45, 0.9), M.L(1.6, 2.4, 0.0), 46)
+	yield(_wait(0.5), "completed")
+	yield(_shot("28b_facade"), "completed")
+	main.cutscene.end(); _frame(M.L(4.6, 1.3, 1.2), M.L(0.45, 2.3, 3.95), 50)
+	yield(_wait(0.5), "completed")
+	yield(_shot("28c_poison_tree"), "completed")
+	main.cutscene.end(); _frame(M.L(3.2, 0.9, -0.4), M.L(1.7, 0.8, -1.5), 48)
+	yield(_wait(0.5), "completed")
+	yield(_shot("28d_roses"), "completed")
+	main.cutscene.end()
+	P.place(M.MC.x + 9.0, 0, M.MC.z + 2.6, 0); P.cam_yaw = PI / 2 - 0.28; P.cam_pitch = 0.45
+	yield(_wait(0.6), "completed")
 	yield(_shot("29_sky_day"), "completed")
 	G.time_offset += (16 * 60 + 38 - G.world_minutes())
 	P.place(150, 0, 0, 0); P.cam_yaw = -deg2rad(main.sun_angles(G.world_minutes())[1]); P.cam_pitch = 0.18
@@ -344,30 +389,43 @@ func _memorial_test():
 	P.cam_yaw = 0.2; P.cam_pitch = 0.55
 	yield(_wait(1.0), "completed")
 	yield(_shot("31_sky_night"), "completed")
-	# pay respects at the mausoleum: the storm gathers, lightning strikes, the light appears
+	P.place(M.MC.x + 12.5, 0, M.MC.z + 6.5, 0)
+	_frame(M.L(8.4, 1.75, 2.9), M.L(0.8, 2.1, 0.6), 56)
+	yield(_wait(1.2), "completed")
+	yield(_shot("32_garden_night"), "completed")
+	main.cutscene.end(); _frame(M.L(4.4, 1.1, 1.6), M.L(0.45, 2.2, 3.95), 52)
+	yield(_wait(0.6), "completed")
+	yield(_shot("32b_poison_tree_night"), "completed")
+	main.cutscene.end()
+	# pay respects at the mausoleum: the storm gathers, lightning strikes, the camera takes over
 	P.place(M.G_SPOT.x, 0, M.G_SPOT.z, 0)
 	yield(_wait(0.3), "completed")
 	M.pay_respects("garden")
 	_log("respects: storm summoned, candles %d" % int(G.S["flags"].get("candles", 0)))
-	yield(_wait(1.0), "completed")
-	P.place(M.MC.x + 6.5, 0, M.MC.z - 1.8, 0); P.cam_yaw = 1.69; P.cam_pitch = 0.16
 	var t0 = G.REAL_T
 	while M.fx.size() == 0 and G.REAL_T - t0 < 15:
 		yield(get_tree(), "idle_frame")
-	_log("tribute after %.1f s, storm %.2f, strikes %d" % [G.REAL_T - t0, main.sky.storm, main.sky.strikes])
-	yield(get_tree(), "idle_frame")
+	_log("tribute after %.1f s, storm %.2f, strikes %d, cutscene %s" % [G.REAL_T - t0, main.sky.storm, main.sky.strikes, str(main.cutscene.on)])
+	yield(_wait(0.15), "completed")
 	yield(_shot("33_strike"), "completed")
-	yield(_wait(2.6), "completed")
+	yield(_wait(1.9), "completed")
 	yield(_shot("34_doors_open"), "completed")
-	yield(_wait(3.0), "completed")
-	yield(_shot("35_figure_of_light"), "completed")
-	yield(_wait(4.0), "completed")
-	yield(_shot("36_doves"), "completed")
+	yield(_wait(1.6), "completed")
+	yield(_shot("35_coming_out"), "completed")
+	yield(_wait(2.0), "completed")
+	yield(_shot("36_wings"), "completed")
+	yield(_wait(2.6), "completed")
+	yield(_shot("37_ascend"), "completed")
+	yield(_wait(1.8), "completed")
+	yield(_shot("38_doves"), "completed")
+	yield(_wait(2.5), "completed")
+	_log("after tribute: cutscene %s mode %s" % [str(main.cutscene.on), G.MODE])
 	# a far strike over the city
+	P.place(M.MC.x + 6.5, 0, M.MC.z - 1.8, 0)
 	main.sky.strike("")
 	P.cam_yaw = -main.sky.flash_az; P.cam_pitch = 0.3
 	yield(_wait(0.05), "completed")
-	yield(_shot("37_far_bolt"), "completed")
+	yield(_shot("39_far_bolt"), "completed")
 	main.sky.summon_until = -1
 	yield(_wait(1.0), "completed")
 	_clean_view(false)

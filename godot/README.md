@@ -208,17 +208,28 @@ Tudo do jogo web, mais algumas coisas só daqui:
   - o tempo muda com o dia (céu limpo, nuvens, nublado) e em algumas noites cai **neve com trovoada**:
     raios no céu, clarões nas nuvens e trovões que chegam atrasados conforme a distância.
   Tudo segue o relógio compartilhado, então todo mundo online vê o mesmo céu.
-- **Homenagem a King Von e XXXTentacion:**
-  - **Jardim memorial** no Calder Park, a oeste do pavilhão: uma réplica do mausoléu do XXXTentacion,
-    feita a partir da foto que a família compartilhou. Granito cinza, frontão com
-    "XXXTENTACION / JAHSEH D. ONFROY", colunas, portas de bronze com arabescos, degrau de granito,
-    canteiro vermelho, gramado, palmeiras, cascatas de rosas vermelhas nos cavaletes e rosas pretas e
-    prateadas, velas no degrau. Lá dentro, uma placa com o nome e as datas.
-  - Preste homenagem no mausoléu (**E**) e acenda uma vela: o céu fecha, cai um raio no frontão, as portas se abrem,
-    a luz sai lá de dentro e uma **figura de luz** aparece, vem até o degrau, abre asas de anjo
-    sob uma auréola, sobe e vira pombas brancas. É uma figura de luz, sem rosto: não é a imagem de
-    uma pessoa real.
-  - As pessoas que passam param para rezar; o jardim aparece no mapa do celular.
+- **Homenagem a XXXTentacion e King Von:**
+  - **Jardim memorial** no Calder Park, a oeste do pavilhão: a réplica do mausoléu do XXXTentacion,
+    feita a partir da foto que a família compartilhou. Granito cinza em placas, base em dois níveis
+    com degraus, colunas jônicas caneladas com volutas, entablamento com dentículos e cornija, o
+    frontão com "XXXTENTACION / JAHSEH D. ONFROY" gravado, e portas de bronze com arabescos sobre
+    vidro escuro e puxadores dourados. Lá dentro, a placa de granito preto com o nome e as datas,
+    vasos de rosas e uma luz eterna.
+  - Em volta, como na foto: canteiro vermelho, gramado, palmeiras imperiais, cascatas de rosas
+    vermelhas nos cavaletes (uma com faixa "LONG LIVE"), rosas pretas e prateadas, um buquê no vaso
+    branco, pétalas e velas no degrau. Cerca de ferro com pilares de granito, lanternas e um arco
+    com o nome dele no portão.
+  - **Poison Tree** ao lado do mausoléu, num canteiro redondo de granito preto: uma árvore seca e
+    retorcida, com raízes, frutos envenenados e veias violetas que brilham à noite, e uma placa
+    "POISON TREE" com a árvore gravada em dourado.
+  - Preste homenagem (**E** no degrau): o personagem reza, o céu fecha em segundos e cai um raio no
+    frontão. A câmera assume (Espaço pula): as portas se abrem, a luz sai do túmulo e uma **figura
+    de luz** aparece lá dentro, vem até o degrau, abre asas de penas sob uma auréola dourada com
+    faíscas girando em volta, sobe para a tempestade entre pétalas de rosa e vira pombas brancas.
+    A Poison Tree acende a cada raio. É uma figura de luz, sem rosto: não é a imagem de uma pessoa
+    real.
+  - Em noites de neve com trovoada, um raio pode cair no mausoléu sozinho quando você está perto.
+    As pessoas que passam param para rezar; o jardim aparece no mapa do celular.
   - Na tela inicial: "In memory of King Von (1994–2020) and XXXTentacion (1998–2018). Long live."
 
 Os personagens, crews, marcas e lugares da história são fictícios. A homenagem é a artistas reais.
@@ -242,7 +253,7 @@ DS_SHOTS=/tmp/shots xvfb-run godot3 --path godot --autotest
 
 `tools/record-beats.js` grava as batidas do estúdio a partir do jogo web, e `tools/make-sfx.py`
 sintetiza os sons extras (vento, cidade, partida, gelo, fogo, trovões, o coro e as asas das pombas).
-`tools/make-memorial.py` pinta as texturas do mausoléu (frontão, portas, granito, placa) e
+`tools/make-memorial.py` pinta as texturas do jardim memorial (granito, frontão, arabescos das portas, placas, casca e veias da Poison Tree, palmeiras, grama, asas) e
 `tools/make-sky-noise.py` gera o ruído que o shader do céu usa para nuvens e aurora.
 
 Para ver só o céu: `DS_SKYTEST=medium godot3 --path . --autotest` (com `DS_SHOTS=pasta`) tira fotos

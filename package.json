@@ -1,12 +1,11 @@
 {
   "name": "drill-season",
   "private": true,
-  "description": "Build tools only. The game itself is plain HTML; see build.sh.",
+  "description": "Tools only: builds the web prototype page that tools/export-godot.js reads to regenerate the Godot assets. The game is in godot/.",
   "scripts": {
     "build": "./build.sh"
   },
   "devDependencies": {
-    "esbuild": "0.24.2",
     "three": "0.160.0"
   }
 }
