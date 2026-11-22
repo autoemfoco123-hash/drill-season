@@ -9887,16 +9887,30 @@ function renderApp() {
     $('ps-test').onclick = () => { soundTest(); setTimeout(() => { const el = $('ps-audio'); if (el) el.textContent = audioInfo(); }, 400); };
   }
 }
-/* the whole save as a file, for the Godot version (Settings → Import progress there) */
-function exportProgress() {
+/* the whole save as a file, for the Godot version (Settings → Import progress there).
+   Inside claude.ai the page cannot start downloads itself, so it asks the viewer through
+   the downloads capability; anywhere else it uses a plain download link. */
+async function exportProgress() {
   saveGame();
+  const json = JSON.stringify(S, null, 1), name = 'drill-season-save.json';
+  const done = () => toast(null, 'Progress exported: ' + name + '. Import it in the Godot version.', '#4cd98a');
+  const C = window.claude;
+  if (C && typeof C.use === 'function' && !NET.p2p) {
+    let dl = null;
+    try { dl = await C.use('downloads'); } catch (e) { dl = null; }
+    if (dl) {
+      try { await dl.save({ filename: name, data: json }); done(); }
+      catch (e) { if (e && e.code !== 'declined') toast(null, 'Could not save the file here', '#ff6b5a'); }
+      return;
+    }
+  }
   try {
-    const blob = new Blob([JSON.stringify(S, null, 1)], { type: 'application/json' });
+    const blob = new Blob([json], { type: 'application/json' });
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob); a.download = 'drill-season-save.json';
+    a.href = URL.createObjectURL(blob); a.download = name;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    toast(null, 'Progress exported: drill-season-save.json. Import it in the Godot version.', '#4cd98a');
+    done();
   } catch (e) { toast(null, 'This browser cannot save files', '#ff6b5a'); }
 }
 const ago = ms => { const s = Math.max(0, (Date.now() - ms) / 1000); return s < 60 ? 'now' : s < 3600 ? Math.floor(s / 60) + 'm' : s < 86400 ? Math.floor(s / 3600) + 'h' : Math.floor(s / 86400) + 'd'; };
