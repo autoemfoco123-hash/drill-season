@@ -11,7 +11,7 @@ save tem o mesmo formato, então o seu progresso do navegador vem junto.
 
 ### Opção 1: executável pronto
 
-Baixe `DrillSeason-linux.zip` na página de *Releases* do repositório, descompacte e rode:
+Se você tem o `DrillSeason-linux.zip`, descompacte e rode:
 
 ```bash
 chmod +x DrillSeason.x86_64
@@ -22,6 +22,12 @@ chmod +x DrillSeason.x86_64
 ```
 
 O `.pck` precisa ficar na mesma pasta que o executável.
+
+Para gerar o zip você mesmo:
+
+1. Abra o projeto no editor (veja a Opção 2).
+2. Vá em **Projeto → Exportar → Linux/X11**.
+3. Na primeira vez o editor oferece baixar os *export templates* do Godot 3.5.2.
 
 ### Opção 2: abrir o projeto no Godot
 
