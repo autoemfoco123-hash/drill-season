@@ -1,5 +1,7 @@
 extends Node
-# The title screen: your character under the L, a username, Continue, import from the web game.
+# The title screen, in the wardrobe's style: your character turning under the L on the right;
+# on the left over a soft dark scrim, a letter-spaced eyebrow, a light title, a thin username
+# field, a white pill for the main action and quiet text buttons for the rest.
 
 var main
 var layer
@@ -10,38 +12,67 @@ var spot = Vector3(62.4, 0, -29.4)
 var human = null
 var ang = 0.62
 
+const DIM = Color(1, 1, 1, 0.56)
+
 func setup(m):
 	main = m
 	layer = CanvasLayer.new(); layer.layer = 6; add_child(layer)
-	box = PanelContainer.new()
-	var sb = StyleBoxFlat.new(); sb.bg_color = Color(0.03, 0.04, 0.06, 0.82); sb.set_corner_radius_all(18)
-	sb.content_margin_left = 30; sb.content_margin_right = 30; sb.content_margin_top = 26; sb.content_margin_bottom = 26
-	box.add_stylebox_override("panel", sb)
-	box.anchor_top = 0.5; box.anchor_bottom = 0.5; box.margin_left = 40; box.margin_right = 470; box.margin_top = -280; box.margin_bottom = 280
+	box = Control.new(); box.anchor_right = 1; box.anchor_bottom = 1; box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(box)
+
+func _sb(col, r, mx = 0, my = 0):
+	var sb = StyleBoxFlat.new(); sb.bg_color = col; sb.set_corner_radius_all(r); sb.anti_aliasing = true
+	sb.content_margin_left = mx; sb.content_margin_right = mx; sb.content_margin_top = my; sb.content_margin_bottom = my
+	return sb
+
+func _label(parent, text, font, col):
+	var l = Label.new(); l.text = text; l.add_font_override("font", font); l.add_color_override("font_color", col)
+	parent.add_child(l)
+	return l
 
 func open():
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	for c in box.get_children(): c.queue_free()
-	var v = VBoxContainer.new(); box.add_child(v)
-	var eb = Label.new(); eb.text = "CALDER PARK · CHICAGO"; eb.add_font_override("font", G.font_s); eb.add_color_override("font_color", Color(1, 0.7, 0.28)); v.add_child(eb)
-	var t = Label.new(); t.text = "DRILL\nSEASON"; t.add_font_override("font", G.font_xl); t.add_color_override("font_color", Color(1, 0.7, 0.28)); v.add_child(t)
-	var d = Label.new(); d.text = "Make your name in the snow. The story's characters, crews, brands and places are fictional."; d.autowrap = true; d.add_font_override("font", G.font_s); d.add_color_override("font_color", Color(0.75, 0.8, 0.86)); v.add_child(d)
-	var ded = Label.new(); ded.text = "In memory of King Von (1994–2020) and XXXTentacion (1998–2018). Long live."; ded.autowrap = true; ded.add_font_override("font", G.font_m); ded.add_color_override("font_color", Color(1, 0.86, 0.45)); v.add_child(ded)
+	var scrim = TextureRect.new(); scrim.expand = true; scrim.anchor_right = 0.62; scrim.anchor_bottom = 1; scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var gt = GradientTexture.new(); var gr = Gradient.new(); gr.set_color(0, Color(0.02, 0.02, 0.03, 0.9)); gr.set_color(1, Color(0.02, 0.02, 0.03, 0)); gr.add_point(0.55, Color(0.02, 0.02, 0.03, 0.62)); gt.gradient = gr
+	scrim.texture = gt; box.add_child(scrim)
+	var v = VBoxContainer.new(); v.rect_position = Vector2(64, 0); v.rect_size = Vector2(400, 0); v.add_constant_override("separation", 0)
+	v.anchor_top = 0.5; v.anchor_bottom = 0.5; v.margin_top = -290; v.margin_bottom = 290; v.margin_left = 64; v.margin_right = 464
+	v.alignment = BoxContainer.ALIGN_CENTER
+	box.add_child(v)
+	_label(v, "CALDER PARK · CHICAGO", G.ifont_sp(11, "m", 3), DIM)
+	_label(v, "Drill\nSeason", G.ifont(62, "l"), Color(1, 1, 1))
+	var d = _label(v, "Make your name in the snow. The story's characters, crews, brands and places are fictional.", G.ifont(13, "r"), DIM); d.autowrap = true; d.rect_min_size = Vector2(380, 0)
+	_gap(v, 10)
+	var ded = _label(v, "In memory of King Von (1994–2020) and XXXTentacion (1998–2018). Long live.", G.ifont(13, "m"), Color(1, 0.84, 0.55)); ded.autowrap = true; ded.rect_min_size = Vector2(380, 0)
+	_gap(v, 26)
 	var save = G.load_save()
 	var first = null
 	if save:
-		first = _btn(v, "Continue @%s · %s" % [save["name"], G.fmt_money(save["cash"])], "_continue", [save])
-	name_edit = LineEdit.new(); name_edit.placeholder_text = "@yourname"; name_edit.max_length = 16; name_edit.add_font_override("font", G.font_m)
+		first = _pill(v, "Continue  @%s" % save["name"], "_continue", [save])
+		var cs = _label(v, "%s · Day %d" % [G.fmt_money(save["cash"]), int(save.get("day", 1))], G.ifont(12, "r"), DIM)
+		cs.rect_min_size = Vector2(0, 26); cs.valign = Label.VALIGN_CENTER
+		_gap(v, 14)
+	_label(v, "NEW CHARACTER", G.ifont_sp(10, "m", 2), DIM)
+	name_edit = LineEdit.new(); name_edit.placeholder_text = "@yourname"; name_edit.max_length = 16; name_edit.add_font_override("font", G.ifont(20, "l"))
+	var ne = StyleBoxFlat.new(); ne.draw_center = false; ne.border_width_bottom = 1; ne.border_color = Color(1, 1, 1, 0.22); ne.content_margin_top = 8; ne.content_margin_bottom = 8
+	var nf = ne.duplicate(); nf.border_color = Color(1, 0.62, 0.22)
+	name_edit.add_stylebox_override("normal", ne); name_edit.add_stylebox_override("focus", nf)
+	name_edit.add_color_override("font_color", Color(1, 1, 1)); name_edit.add_color_override("cursor_color", Color(1, 0.62, 0.22))
+	name_edit.rect_min_size = Vector2(300, 0); name_edit.size_flags_horizontal = 0
 	v.add_child(name_edit)
-	var play = _btn(v, "New game", "_new", [])
+	name_edit.connect("text_entered", self, "_entered")
+	_gap(v, 14)
+	var play
+	if save: play = _text_btn(v, "New game", "_new", [])
+	else: play = _pill(v, "New game", "_new", [])
 	if first == null: first = play
 	var web = G.find_web_save()
-	_btn(v, "Import progress from the web game" + (" (found)" if web != "" else ""), "_import", [])
-	_btn(v, "Quit", "_quit", [])
-	info = Label.new(); info.autowrap = true; info.add_font_override("font", G.font_s); info.add_color_override("font_color", Color(0.66, 0.72, 0.78))
-	info.text = "Keyboard and mouse, or any controller. Tab opens your phone."
-	v.add_child(info)
+	_text_btn(v, "Import progress from the web game" + (" · found" if web != "" else ""), "_import", [])
+	_text_btn(v, "Quit", "_quit", [])
+	_gap(v, 18)
+	info = _label(v, "Keyboard and mouse, or any controller. Tab opens your phone.", G.ifont(11, "r"), Color(1, 1, 1, 0.36))
+	info.autowrap = true; info.rect_min_size = Vector2(380, 0)
 	box.visible = true
 	first.grab_focus()
 	if human: human.queue_free()
@@ -51,11 +82,39 @@ func open():
 	human.translation = spot
 	G.MODE = "title"
 
-func _btn(parent, text, method, args):
-	var b = Button.new(); b.text = text; b.add_font_override("font", G.font_m)
+func _gap(v, h):
+	var g = Control.new(); g.rect_min_size = Vector2(0, h); g.mouse_filter = Control.MOUSE_FILTER_IGNORE; v.add_child(g)
+
+# the main action: a white pill
+func _pill(parent, text, method, args):
+	var b = Button.new(); b.text = text; b.size_flags_horizontal = 0; b.rect_min_size = Vector2(200, 44)
+	b.add_font_override("font", G.ifont(15, "s"))
+	b.add_stylebox_override("normal", _sb(Color(1, 1, 1), 22, 26, 10))
+	b.add_stylebox_override("hover", _sb(Color(0.88, 0.88, 0.9), 22, 26, 10))
+	b.add_stylebox_override("pressed", _sb(Color(0.78, 0.78, 0.8), 22, 26, 10))
+	var f = _sb(Color(1, 1, 1), 22, 26, 10); f.border_color = Color(1, 0.62, 0.22); f.set_border_width_all(2)
+	b.add_stylebox_override("focus", f)
+	for c in ["font_color", "font_color_hover", "font_color_pressed", "font_color_focus"]: b.add_color_override(c, Color(0.04, 0.04, 0.05))
 	b.connect("pressed", self, method, args)
 	parent.add_child(b)
 	return b
+
+# everything else: quiet text that lights up
+func _text_btn(parent, text, method, args):
+	var b = Button.new(); b.text = text; b.size_flags_horizontal = 0; b.align = Button.ALIGN_LEFT; b.rect_min_size = Vector2(0, 38)
+	b.add_font_override("font", G.ifont(15, "m"))
+	var e = StyleBoxEmpty.new(); e.content_margin_left = 2; e.content_margin_right = 2
+	for st in ["normal", "hover", "pressed", "disabled"]: b.add_stylebox_override(st, e)
+	var f = StyleBoxFlat.new(); f.draw_center = false; f.border_width_bottom = 1; f.border_color = Color(1, 0.62, 0.22); f.content_margin_left = 2; f.content_margin_right = 2
+	b.add_stylebox_override("focus", f)
+	b.add_color_override("font_color", Color(1, 1, 1, 0.62))
+	for c in ["font_color_hover", "font_color_pressed", "font_color_focus"]: b.add_color_override(c, Color(1, 1, 1))
+	b.connect("pressed", self, method, args)
+	parent.add_child(b)
+	return b
+
+func _entered(_t):
+	_new()
 
 func _clean(s):
 	var out = ""

@@ -192,25 +192,29 @@ func _strength(a, s):
 	else: Input.action_release(a)
 
 # ---------- drawing ----------
+func _disc(c, ctr, r, fill, line):
+	var sb = StyleBoxFlat.new(); sb.bg_color = fill; sb.set_corner_radius_all(int(r)); sb.anti_aliasing = true
+	sb.border_color = line; sb.set_border_width_all(1 if line.a > 0 else 0)
+	c.draw_style_box(sb, Rect2(ctr - Vector2(r, r), Vector2(r, r) * 2))
+
 func _draw_on(c):
 	if not (G.MODE == "play" and not main.hud.menu_box): return
-	var f = G.font_xs
+	# glass circles with a hairline, white when pressed (the wardrobe / phone look)
+	var f = G.ifont_sp(10, "s", 1)
 	for b in buttons():
 		var pressed = false
 		for k in fingers.keys():
 			if fingers[k].get("btn") == b.id: pressed = true
 		if b.id == "aim" and aim_on: pressed = true
-		var fill = Color(1, 0.62, 0.22, 0.55) if pressed else (Color(1, 1, 1, 0.22) if b.get("hi", false) else Color(0.05, 0.06, 0.09, 0.38))
-		c.draw_circle(b.c, b.r, fill)
-		c.draw_arc(b.c, b.r, 0, TAU, 40, Color(1, 1, 1, 0.55), 2.0)
+		var fill = Color(1, 1, 1, 0.9) if pressed else (Color(1, 1, 1, 0.26) if b.get("hi", false) else Color(0.03, 0.03, 0.04, 0.34))
+		_disc(c, b.c, b.r, fill, Color(1, 1, 1, 0.22))
 		var tw = f.get_string_size(b.label).x
-		c.draw_string(f, b.c + Vector2(-tw / 2, 5), b.label, Color(1, 1, 1, 0.92))
+		c.draw_string(f, b.c + Vector2(-tw / 2, 4), b.label, Color(0.04, 0.04, 0.05) if pressed else Color(1, 1, 1, 0.94))
 	if stick_finger >= 0:
-		c.draw_circle(stick_center, STICK_R, Color(0.05, 0.06, 0.09, 0.3))
-		c.draw_arc(stick_center, STICK_R, 0, TAU, 48, Color(1, 1, 1, 0.45), 2.0)
-		c.draw_circle(stick_center + stick_vec * STICK_R, 30, Color(1, 1, 1, 0.5))
+		_disc(c, stick_center, STICK_R, Color(0.03, 0.03, 0.04, 0.26), Color(1, 1, 1, 0.2))
+		_disc(c, stick_center + stick_vec * STICK_R, 30, Color(1, 1, 1, 0.75), Color(1, 1, 1, 0))
 	else:
 		var s = _size()
 		var hint = Vector2(150, s.y - 150)
-		c.draw_arc(hint, STICK_R, 0, TAU, 48, Color(1, 1, 1, 0.16), 2.0)
+		c.draw_arc(hint, STICK_R, 0, TAU, 64, Color(1, 1, 1, 0.14), 1.2, true)
 		c.draw_string(f, hint + Vector2(-f.get_string_size("MOVE").x / 2, 5), "MOVE", Color(1, 1, 1, 0.3))

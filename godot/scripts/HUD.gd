@@ -8,6 +8,8 @@ extends Node
 #  - centre: big messages, subtitles, the current objective, crosshair and hit marker
 #  - weapon wheel (hold Q / LB) and emote wheel (hold Z / D-pad left)
 #  - menus for the places you walk into, the endings screen, fades
+# Styled like the wardrobe and the phone: Inter, dark glass cards with a hairline border,
+# thin rounded bars, letter-spaced small caps, light big titles.
 
 var main
 var layer
@@ -33,6 +35,10 @@ var lbl_area
 var lbl_clock
 var lbl_speed
 var lbl_radio
+var tr_card
+var br_card
+var car_card
+var help_key
 var big_title
 var big_sub
 var big_band
@@ -63,18 +69,24 @@ var wheel_vec = Vector2()
 var wheel_sel = -1
 var last_emote = "dance1"
 
-const C_BG = Color(0.03, 0.04, 0.07, 0.72)
-const C_TEXT = Color(0.96, 0.97, 1.0)
-const C_DIM = Color(0.72, 0.78, 0.86)
+const C_BG = Color(0.03, 0.03, 0.04, 0.36)
+const C_TEXT = Color(0.97, 0.97, 0.98)
+const C_DIM = Color(1, 1, 1, 0.58)
 const C_ACCENT = Color(1.0, 0.62, 0.22)
-const C_CASH = Color(0.45, 0.92, 0.55)
+const C_CASH = Color(0.6, 0.95, 0.66)
 const EMOTES = [["wave", "Wave"], ["flip", "Finger"], ["dance1", "Two-step"], ["dance2", "Arm wave"], ["dance3", "Robot"], ["hype", "Hype"], ["clap", "Clap"], ["laugh", "Laugh"],
 	["shrug", "Shrug"], ["salute", "Salute"], ["point", "Point"], ["facepalm", "Facepalm"], ["flex", "Flex"], ["sit", "Sit"], ["snowangel", "Snow angel"], ["pray", "Pray"], ["flop", "Flop"]]
 const WEAPONS = [["fists", "Fists"], ["k9", "K9"], ["draft", "Draft"], ["plow", "Snowplow"], ["snowball", "Snowball"]]
 
 static func _sb(col, r = 10, pad = 10):
-	var sb = StyleBoxFlat.new(); sb.bg_color = col; sb.set_corner_radius_all(r)
+	var sb = StyleBoxFlat.new(); sb.bg_color = col; sb.set_corner_radius_all(r); sb.anti_aliasing = true
 	sb.content_margin_left = pad; sb.content_margin_right = pad; sb.content_margin_top = pad * 0.6; sb.content_margin_bottom = pad * 0.6
+	return sb
+
+# dark glass with a hairline border (iOS-style material)
+static func _glass(r = 16, pad = 12, a = 0.42):
+	var sb = _sb(Color(0.03, 0.03, 0.04, a), r, pad)
+	sb.border_color = Color(1, 1, 1, 0.1); sb.set_border_width_all(1)
 	return sb
 
 # ---------- the map ----------
@@ -94,7 +106,7 @@ class MiniMap extends Control:
 		var yaw = P.cam_yaw
 		var c = cos(yaw)
 		var s = sin(yaw)
-		draw_rect(Rect2(Vector2(), sz), Color(0.07, 0.09, 0.12, 0.9))
+		draw_rect(Rect2(Vector2(), sz), Color(0.09, 0.1, 0.12, 0.82))
 		var half = max(sz.x, sz.y) / zoom * 0.9
 		# lake and pond
 		var lx = float(G.D["LAKE_X"])
@@ -146,8 +158,8 @@ class MiniMap extends Control:
 		if abs(npt.x - ctr.x) > 0.01: t = min(t, ((sz.x - 12 if npt.x > ctr.x else 12) - ctr.x) / (npt.x - ctr.x))
 		if abs(npt.y - ctr.y) > 0.01: t = min(t, ((sz.y - 12 if npt.y > ctr.y else 12) - ctr.y) / (npt.y - ctr.y))
 		var np2 = ctr + (npt - ctr) * t
-		draw_circle(np2, 9, Color(0.05, 0.06, 0.08, 0.9))
-		draw_string(G.font_xs, np2 + Vector2(-4, 5), "N", Color(1, 1, 1))
+		draw_circle(np2, 9, Color(0.04, 0.04, 0.05, 0.85))
+		draw_string(G.ifont(10, "b"), np2 + Vector2(-3.5, 4), "N", Color(1, 1, 1))
 		# you
 		draw_colored_polygon(PoolVector2Array([ctr + Vector2(0, -9), ctr + Vector2(-6, 6), ctr + Vector2(0, 3), ctr + Vector2(6, 6)]), Color(1, 1, 1))
 		draw_polyline(PoolVector2Array([ctr + Vector2(0, -9), ctr + Vector2(-6, 6), ctr + Vector2(0, 3), ctr + Vector2(6, 6), ctr + Vector2(0, -9)]), Color(0, 0, 0, 0.8), 1.2)
@@ -165,9 +177,9 @@ class MiniMap extends Control:
 
 class MapFrame extends Control:
 	func _draw():
-		var sb = StyleBoxFlat.new(); sb.draw_center = false; sb.set_corner_radius_all(12); sb.set_border_width_all(3); sb.border_color = Color(0.02, 0.03, 0.05, 0.95)
-		sb.corner_detail = 6
-		draw_style_box(sb, Rect2(Vector2(-1, -1), rect_size + Vector2(2, 2)))
+		var sb = StyleBoxFlat.new(); sb.draw_center = false; sb.set_corner_radius_all(18); sb.set_border_width_all(1); sb.border_color = Color(1, 1, 1, 0.16)
+		sb.anti_aliasing = true; sb.corner_detail = 10
+		draw_style_box(sb, Rect2(Vector2(), rect_size))
 
 # three thin bars under the map
 class Bars extends Control:
@@ -176,15 +188,19 @@ class Bars extends Control:
 		var P = G.main.player
 		var w = rect_size.x
 		var gap = 4.0
-		var vals = [[clamp(float(S["health"]) / 100.0, 0, 1), Color(0.36, 0.86, 0.45) if S["health"] >= 30 else Color(1, 0.3, 0.25)], [clamp(float(S.get("warmth", 100)) / 100.0, 0, 1), Color(0.45, 0.8, 1.0)], [clamp(P.stamina / 100.0, 0, 1), Color(1, 0.82, 0.3)]]
+		var vals = [[clamp(float(S["health"]) / 100.0, 0, 1), Color(0.2, 0.84, 0.4) if S["health"] >= 30 else Color(1, 0.27, 0.23)], [clamp(float(S.get("warmth", 100)) / 100.0, 0, 1), Color(0.35, 0.72, 1.0)], [clamp(P.stamina / 100.0, 0, 1), Color(1, 0.8, 0.2)]]
 		var widths = [w * 0.5 - gap, w * 0.3 - gap, w * 0.2]
 		var x = 0.0
+		var h = rect_size.y
 		for i in range(3):
 			var bw = widths[i]
-			draw_rect(Rect2(x, 0, bw, rect_size.y), Color(0, 0, 0, 0.6))
+			var bg = StyleBoxFlat.new(); bg.bg_color = Color(0, 0, 0, 0.35); bg.set_corner_radius_all(int(h / 2)); bg.anti_aliasing = true
+			draw_style_box(bg, Rect2(x, 0, bw, h))
 			var col = vals[i][1]
 			if i == 0 and S["health"] < 30 and int(G.REAL_T * 3) % 2 == 0: col = col.lightened(0.3)
-			draw_rect(Rect2(x + 1, 1, (bw - 2) * vals[i][0], rect_size.y - 2), col)
+			if vals[i][0] > 0.01:
+				var fg = StyleBoxFlat.new(); fg.bg_color = col; fg.set_corner_radius_all(int(h / 2)); fg.anti_aliasing = true
+				draw_style_box(fg, Rect2(x, 0, max(h, bw * vals[i][0]), h))
 			x += bw + gap
 
 class Stars extends Control:
@@ -192,19 +208,18 @@ class Stars extends Control:
 		var lv = G.main.police.level
 		var flash = G.main.police.hostile and int(G.REAL_T * 4) % 2 == 0
 		for i in range(5):
-			var c = Vector2(rect_size.x - 14 - i * 28, rect_size.y / 2)
+			var c = Vector2(9 + i * 19, rect_size.y / 2)
 			var pts = PoolVector2Array()
 			for k in range(10):
 				var a = -PI / 2 + k * PI / 5
-				var r = 11.0 if k % 2 == 0 else 4.6
+				var r = 8.0 if k % 2 == 0 else 3.4
 				pts.append(c + Vector2(cos(a), sin(a)) * r)
-			var on = (4 - i) < lv
+			var on = i < lv
 			var outline = PoolVector2Array(pts); outline.append(pts[0])
 			if on:
 				draw_colored_polygon(pts, Color(1, 1, 1) if not flash else Color(0.7, 0.8, 1))
-				draw_polyline(outline, Color(0, 0, 0, 0.8), 1.5)
 			elif lv > 0:
-				draw_polyline(outline, Color(1, 1, 1, 0.35), 1.5)
+				draw_polyline(outline, Color(1, 1, 1, 0.32), 1.2, true)
 
 class Meter extends Control:
 	var label = ""
@@ -212,10 +227,17 @@ class Meter extends Control:
 	var value = 0.0
 	var tier = ""
 	func _draw():
-		draw_string(G.font_xs, Vector2(rect_size.x - 210, 12), label, col)
-		draw_rect(Rect2(rect_size.x - 150, 5, 150, 6), Color(0, 0, 0, 0.55))
-		draw_rect(Rect2(rect_size.x - 150, 5, 150 * clamp(value / 100.0, 0, 1), 6), col)
-		draw_string(G.font_xs, Vector2(rect_size.x - 150, 26), tier, Color(1, 1, 1, 0.7))
+		var w = rect_size.x
+		var f = G.ifont_sp(10, "s", 2)
+		draw_string(f, Vector2(0, 10), label, Color(1, 1, 1, 0.55))
+		var tw = f.get_string_size(tier).x
+		draw_string(f, Vector2(w - tw, 10), tier, col)
+		var bg = StyleBoxFlat.new(); bg.bg_color = Color(1, 1, 1, 0.14); bg.set_corner_radius_all(2); bg.anti_aliasing = true
+		draw_style_box(bg, Rect2(0, 16, w, 4))
+		var v = clamp(value / 100.0, 0, 1)
+		if v > 0.01:
+			var fg = StyleBoxFlat.new(); fg.bg_color = col; fg.set_corner_radius_all(2); fg.anti_aliasing = true
+			draw_style_box(fg, Rect2(0, 16, max(4.0, w * v), 4))
 
 class WeaponIcon extends Control:
 	var kind = "k9"
@@ -250,7 +272,7 @@ class Wheel extends Control:
 		var items = hud.EMOTES if kind == "emote" else hud.WEAPONS
 		var ctr = rect_size / 2
 		var R = min(rect_size.x, rect_size.y) * (0.32 if kind == "emote" else 0.27)
-		draw_circle(ctr, R + 70, Color(0, 0, 0, 0.35))
+		draw_circle(ctr, R + 70, Color(0, 0, 0, 0.22))
 		var n = items.size()
 		for i in range(n):
 			var a0 = -PI / 2 + (i - 0.5) * TAU / n
@@ -264,7 +286,7 @@ class Wheel extends Control:
 				var a2 = lerp(a1 - 0.02, a0 + 0.02, k / 8.0)
 				pts.append(ctr + Vector2(cos(a2), sin(a2)) * (R - 40))
 			var ok = hud._wheel_ok(kind, items[i][0])
-			draw_colored_polygon(pts, Color(1, 0.62, 0.22, 0.85) if sel else (Color(0.08, 0.1, 0.14, 0.86) if ok else Color(0.08, 0.1, 0.14, 0.45)))
+			draw_colored_polygon(pts, Color(1, 1, 1, 0.92) if sel else (Color(0.05, 0.05, 0.06, 0.66) if ok else Color(0.05, 0.05, 0.06, 0.32)))
 			var am = (a0 + a1) / 2
 			var p = ctr + Vector2(cos(am), sin(am)) * (R + 10)
 			var f = G.font_xs if kind == "emote" else G.font_m
@@ -278,7 +300,7 @@ class Wheel extends Control:
 		var title = "EMOTES" if kind == "emote" else "WEAPONS"
 		var name = items[hud.wheel_sel][1] if hud.wheel_sel >= 0 else title
 		var nw = G.font_l.get_string_size(name).x
-		draw_circle(ctr, R - 46, Color(0.03, 0.04, 0.06, 0.92))
+		draw_circle(ctr, R - 46, Color(0.03, 0.03, 0.04, 0.82))
 		draw_string(G.font_l, ctr - Vector2(nw / 2, -8), name, Color(1, 1, 1))
 
 # name tags over people's heads
@@ -342,49 +364,62 @@ void fragment() {
 	# bottom left: map, bars, feed
 	minimap = MiniMap.new(); minimap.main = main; minimap.rect_clip_content = true
 	_anchor(minimap, 0, 1, 22, -196, 262, -36)
+	var mm = ShaderMaterial.new(); mm.shader = load("res://scripts/round_local.shader"); mm.set_shader_param("radius", 18.0)
+	minimap.material = mm
 	root.add_child(minimap)
 	var frame = MapFrame.new(); frame.mouse_filter = Control.MOUSE_FILTER_IGNORE; frame.anchor_right = 1; frame.anchor_bottom = 1
 	minimap.add_child(frame)
-	bars = Bars.new(); _anchor(bars, 0, 1, 22, -30, 262, -22); root.add_child(bars)
+	bars = Bars.new(); _anchor(bars, 0, 1, 22, -28, 262, -23); root.add_child(bars)
 	feed = VBoxContainer.new(); feed.alignment = BoxContainer.ALIGN_END
 	_anchor(feed, 0, 1, 22, -470, 372, -206); root.add_child(feed)
 	# top left: help box
-	help_box = PanelContainer.new(); help_box.add_stylebox_override("panel", _sb(Color(0.02, 0.03, 0.05, 0.82), 8, 14))
-	help_box.margin_left = 22; help_box.margin_top = 22; help_box.rect_min_size = Vector2(260, 0)
-	help_lbl = Label.new(); help_lbl.add_font_override("font", G.font_m); help_lbl.autowrap = true; help_lbl.rect_min_size = Vector2(240, 0)
-	help_box.add_child(help_lbl); help_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	help_box = PanelContainer.new(); help_box.add_stylebox_override("panel", _glass(14, 12, 0.42))
+	help_box.margin_left = 22; help_box.margin_top = 22
+	var hrow = HBoxContainer.new(); hrow.add_constant_override("separation", 10); help_box.add_child(hrow)
+	help_key = Label.new(); help_key.add_font_override("font", G.ifont(12, "b")); help_key.add_color_override("font_color", Color(0.05, 0.05, 0.06))
+	var ks = _sb(Color(1, 1, 1, 0.95), 6, 7); ks.content_margin_top = 2; ks.content_margin_bottom = 2
+	help_key.add_stylebox_override("normal", ks); help_key.valign = Label.VALIGN_CENTER; help_key.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	hrow.add_child(help_key)
+	help_lbl = Label.new(); help_lbl.add_font_override("font", G.ifont(15, "m")); help_lbl.valign = Label.VALIGN_CENTER
+	hrow.add_child(help_lbl); help_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(help_box)
-	# top right: weapon, cash, stars, meters
-	weapon_icon = WeaponIcon.new(); _anchor(weapon_icon, 1, 0, -150, 18, -22, 58); root.add_child(weapon_icon)
-	lbl_weapon = _lab(G.font_xs, C_DIM, 1, 0, -330, 22, -160, 40, Label.ALIGN_RIGHT)
-	lbl_ammo = _lab(G.font_hud, C_TEXT, 1, 0, -330, 36, -160, 60, Label.ALIGN_RIGHT)
-	lbl_cash = _lab(G.font_cash, C_CASH, 1, 0, -420, 62, -22, 106, Label.ALIGN_RIGHT)
-	lbl_cash_delta = _lab(G.font_hud, C_CASH, 1, 0, -420, 104, -22, 126, Label.ALIGN_RIGHT)
-	stars = Stars.new(); _anchor(stars, 1, 0, -170, 128, -22, 154); root.add_child(stars)
-	meter_buzz = Meter.new(); meter_buzz.label = "BUZZ"; meter_buzz.col = Color(1, 0.72, 0.3); _anchor(meter_buzz, 1, 0, -240, 160, -22, 190); root.add_child(meter_buzz)
-	meter_heat = Meter.new(); meter_heat.label = "HEAT"; meter_heat.col = Color(1, 0.36, 0.3); _anchor(meter_heat, 1, 0, -240, 192, -22, 222); root.add_child(meter_heat)
-	# bottom right: street, area, clock; speed and radio in a car
-	lbl_speed = _lab(G.font_cash, C_TEXT, 1, 1, -420, -150, -24, -110, Label.ALIGN_RIGHT)
-	lbl_radio = _lab(G.font_xs, C_ACCENT, 1, 1, -420, -112, -24, -96, Label.ALIGN_RIGHT)
-	lbl_street = _lab(G.font_hud, C_TEXT, 1, 1, -520, -82, -24, -58, Label.ALIGN_RIGHT)
-	lbl_area = _lab(G.font_xs, C_DIM, 1, 1, -520, -58, -24, -42, Label.ALIGN_RIGHT)
-	lbl_clock = _lab(G.font_xs, C_DIM, 1, 1, -520, -40, -24, -24, Label.ALIGN_RIGHT)
+	# top right, on one glass card: weapon and ammo, a hairline, cash and wanted stars, Buzz and Heat
+	tr_card = Panel.new(); tr_card.add_stylebox_override("panel", _glass(18)); _anchor(tr_card, 1, 0, -254, 16, -16, 190); root.add_child(tr_card)
+	weapon_icon = WeaponIcon.new(); _anchor(weapon_icon, 1, 0, -250, 22, -150, 62); root.add_child(weapon_icon)
+	lbl_weapon = _lab(G.ifont_sp(10, "s", 2), C_DIM, 1, 0, -200, 27, -32, 41, Label.ALIGN_RIGHT)
+	lbl_ammo = _lab(G.ifont(18, "s"), C_TEXT, 1, 0, -200, 40, -32, 63, Label.ALIGN_RIGHT)
+	var hl = ColorRect.new(); hl.color = Color(1, 1, 1, 0.1); _anchor(hl, 1, 0, -238, 70, -32, 71); root.add_child(hl)
+	lbl_cash = _lab(G.ifont(28, "m"), C_CASH, 1, 0, -238, 74, -32, 108, Label.ALIGN_RIGHT)
+	stars = Stars.new(); _anchor(stars, 1, 0, -240, 82, -140, 102); root.add_child(stars)
+	lbl_cash_delta = _lab(G.ifont(12, "s"), C_CASH, 1, 0, -238, 106, -32, 121, Label.ALIGN_RIGHT)
+	meter_buzz = Meter.new(); meter_buzz.label = "BUZZ"; meter_buzz.col = Color(1, 0.72, 0.3); _anchor(meter_buzz, 1, 0, -238, 124, -32, 146); root.add_child(meter_buzz)
+	meter_heat = Meter.new(); meter_heat.label = "HEAT"; meter_heat.col = Color(1, 0.42, 0.36); _anchor(meter_heat, 1, 0, -238, 152, -32, 174); root.add_child(meter_heat)
+	# bottom right: street, area, clock on a glass card; speed and radio on another in a car
+	car_card = Panel.new(); car_card.add_stylebox_override("panel", _glass(16)); _anchor(car_card, 1, 1, -300, -158, -16, -106); root.add_child(car_card)
+	lbl_speed = _lab(G.ifont(26, "m"), C_TEXT, 1, 1, -290, -153, -32, -122, Label.ALIGN_RIGHT)
+	lbl_radio = _lab(G.ifont_sp(10, "s", 2), C_ACCENT, 1, 1, -290, -124, -32, -110, Label.ALIGN_RIGHT)
+	br_card = Panel.new(); br_card.add_stylebox_override("panel", _glass(16)); _anchor(br_card, 1, 1, -300, -98, -16, -18); root.add_child(br_card)
+	lbl_street = _lab(G.ifont(16, "s"), C_TEXT, 1, 1, -290, -90, -32, -68, Label.ALIGN_RIGHT)
+	lbl_area = _lab(G.ifont_sp(10, "m", 2), C_DIM, 1, 1, -290, -66, -32, -52, Label.ALIGN_RIGHT)
+	lbl_clock = _lab(G.ifont(12, "r"), C_DIM, 1, 1, -290, -48, -32, -32, Label.ALIGN_RIGHT)
 	# centre
 	big_band = TextureRect.new(); big_band.expand = true
 	var gt = GradientTexture.new(); var gr = Gradient.new()
-	gr.set_color(0, Color(0, 0, 0, 0)); gr.set_color(1, Color(0, 0, 0, 0)); gr.add_point(0.5, Color(0, 0, 0, 0.55)); gt.gradient = gr
+	gr.set_color(0, Color(0, 0, 0, 0)); gr.set_color(1, Color(0, 0, 0, 0)); gr.add_point(0.5, Color(0, 0, 0, 0.32)); gt.gradient = gr
 	big_band.texture = gt
 	_anchor(big_band, 0, 0, 0, 0, 0, 0); big_band.anchor_right = 1; big_band.anchor_top = 0.24; big_band.anchor_bottom = 0.24; big_band.margin_top = -10; big_band.margin_bottom = 110
 	root.add_child(big_band)
-	big_title = _lab(G.font_big, C_TEXT, 0, 0, 0, 0, 0, 0, Label.ALIGN_CENTER); big_title.anchor_right = 1; big_title.anchor_top = 0.24; big_title.anchor_bottom = 0.24; big_title.margin_bottom = 70
-	big_sub = _lab(G.font_hud, C_ACCENT, 0, 0, 0, 0, 0, 0, Label.ALIGN_CENTER); big_sub.anchor_right = 1; big_sub.anchor_top = 0.24; big_sub.anchor_bottom = 0.24; big_sub.margin_top = 70; big_sub.margin_bottom = 100
-	objective = _lab(G.font_hud, C_TEXT, 0, 1, 280, -130, -280, -104, Label.ALIGN_CENTER); objective.anchor_right = 1
-	sub_box = PanelContainer.new(); sub_box.add_stylebox_override("panel", _sb(Color(0, 0, 0, 0.55), 6, 12))
+	big_title = _lab(G.ifont_sp(50, "l", 6), C_TEXT, 0, 0, 0, 0, 0, 0, Label.ALIGN_CENTER); big_title.anchor_right = 1; big_title.anchor_top = 0.24; big_title.anchor_bottom = 0.24; big_title.margin_bottom = 70
+	big_sub = _lab(G.ifont_sp(12, "s", 3), Color(1, 1, 1, 0.78), 0, 0, 0, 0, 0, 0, Label.ALIGN_CENTER); big_sub.anchor_right = 1; big_sub.anchor_top = 0.24; big_sub.anchor_bottom = 0.24; big_sub.margin_top = 70; big_sub.margin_bottom = 100
+	objective = _lab(G.ifont(14, "m"), C_TEXT, 0.5, 1, -150, -132, 150, -104, Label.ALIGN_CENTER)
+	var os = _glass(14, 14, 0.4); os.content_margin_top = 6; os.content_margin_bottom = 6
+	objective.add_stylebox_override("normal", os); objective.valign = Label.VALIGN_CENTER
+	sub_box = PanelContainer.new(); sub_box.add_stylebox_override("panel", _glass(16, 16, 0.5))
 	sub_box.anchor_left = 0.5; sub_box.anchor_right = 0.5; sub_box.anchor_top = 1; sub_box.anchor_bottom = 1; sub_box.margin_top = -96; sub_box.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	sub_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var hb = HBoxContainer.new(); sub_box.add_child(hb)
-	sub_who = Label.new(); sub_who.add_font_override("font", G.font_m); sub_who.add_color_override("font_color", C_ACCENT); hb.add_child(sub_who)
-	sub_text = Label.new(); sub_text.add_font_override("font", G.font_m); hb.add_child(sub_text)
+	sub_who = Label.new(); sub_who.add_font_override("font", G.ifont(16, "s")); sub_who.add_color_override("font_color", C_ACCENT); hb.add_child(sub_who)
+	sub_text = Label.new(); sub_text.add_font_override("font", G.ifont(16, "r")); hb.add_child(sub_text)
 	root.add_child(sub_box)
 	cross = _lab(G.font_m, Color(1, 1, 1, 0.9), 0, 0, 0, 0, 0, 0, Label.ALIGN_CENTER); cross.text = "·"
 	cross.anchor_left = 0.5; cross.anchor_right = 0.5; cross.anchor_top = 0.5; cross.anchor_bottom = 0.5; cross.margin_left = -20; cross.margin_right = 20; cross.margin_top = -14; cross.margin_bottom = 12
@@ -443,8 +478,9 @@ func update(dt):
 	var S = G.S
 	var P = main.player
 	var hud_on = G.MODE in ["play", "phone", "menu"]
-	for c in [minimap, bars, feed, help_box, weapon_icon, lbl_weapon, lbl_ammo, lbl_cash, lbl_cash_delta, stars, meter_buzz, meter_heat, lbl_street, lbl_area, lbl_clock, lbl_speed, lbl_radio, objective, cross, tags]:
+	for c in [minimap, bars, feed, help_box, weapon_icon, lbl_weapon, lbl_ammo, lbl_cash, lbl_cash_delta, stars, meter_buzz, meter_heat, lbl_street, lbl_area, lbl_clock, lbl_speed, lbl_radio, objective, cross, tags, tr_card, br_card]:
 		c.visible = hud_on
+	minimap.material.set_shader_param("size", minimap.rect_size)
 	# cash, rolling up or down like a counter
 	var cash = int(S["cash"])
 	if cash_shown < 0: cash_shown = cash
@@ -475,20 +511,31 @@ func update(dt):
 	bars.update()
 	# where you are
 	lbl_street.text = street_name(P.pos)
-	lbl_area.text = _area(P.pos)
+	lbl_area.text = _area(P.pos).to_upper()
 	var tf = main.story.temp_f()
 	lbl_clock.text = "%s · Day %d · %d°F%s" % [G.clock_str(), int(S.get("day", 1)), tf, (" · " + main.story.warm_label) if main.story.warm_label else ""]
 	if P.car:
-		lbl_speed.text = "%d MPH" % int(abs(P.car.speed) * 2.237)
+		lbl_speed.text = "%d mph" % int(abs(P.car.speed) * 2.237)
 		var st = int(S["settings"].get("radio", 1))
 		lbl_radio.text = G.D["STATIONS"][st].name.to_upper() if st > 0 else "RADIO OFF"
 	else:
 		lbl_speed.text = ""; lbl_radio.text = ""
-	# help box
+	car_card.visible = hud_on and P.car != null
+	# help box: "[E] Enter Basement 808" becomes a key cap and the words
 	var hp = _prompt()
 	help_box.visible = hud_on and hp != ""
-	help_lbl.text = hp
-	objective.text = _objective()
+	var key = ""
+	if hp.begins_with("[") and hp.find("]") > 0 and hp.find("\n") < 0:
+		key = hp.substr(1, hp.find("]") - 1); hp = hp.substr(hp.find("]") + 1).strip_edges()
+	if help_lbl.text != hp or help_key.text != key:
+		help_lbl.text = hp; help_key.text = key; help_key.visible = key != ""
+		help_box.rect_size = Vector2()
+	var ob = _objective()
+	if objective.text != ob:
+		objective.text = ob
+		var ow = objective.get_minimum_size().x
+		objective.margin_left = -ow / 2; objective.margin_right = ow / 2
+	objective.visible = hud_on and ob != ""
 	cross.visible = hud_on and not P.car and (P.aim_t > 0.3 or P.fp_on()) and wheel_kind == ""
 	# big message and subtitles
 	banner_t -= dt
@@ -593,27 +640,29 @@ func say(who, text):
 	sub_who.text = who + "  "; sub_text.text = text; sub_t = 3.8
 	sub_box.margin_left = 0; sub_box.margin_right = 0
 
-# a notification card in the feed above the map
+# a notification in the feed above the map, like a phone notification
 func toast(text):
 	var who = ""
 	var body = text
 	var i = text.find(":  ")
 	if i > 0 and i < 32:
 		who = text.substr(0, i); body = text.substr(i + 3)
-	var card = PanelContainer.new(); card.add_stylebox_override("panel", _sb(Color(0.03, 0.04, 0.07, 0.86), 10, 10))
+	var card = PanelContainer.new(); card.add_stylebox_override("panel", _glass(18, 12, 0.5))
 	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var hb = HBoxContainer.new(); card.add_child(hb)
-	var av = Label.new(); av.text = (who.substr(1, 1) if who.begins_with("@") else (who.substr(0, 1) if who != "" else "●")).to_upper()
-	av.add_font_override("font", G.font_m); av.align = Label.ALIGN_CENTER; av.valign = Label.VALIGN_CENTER; av.rect_min_size = Vector2(30, 30)
+	var hb = HBoxContainer.new(); hb.add_constant_override("separation", 10); card.add_child(hb)
+	var av = Label.new(); av.text = (who.substr(1, 1) if who.begins_with("@") else (who.substr(0, 1) if who != "" else "•")).to_upper()
+	av.add_font_override("font", G.ifont(14, "s")); av.align = Label.ALIGN_CENTER; av.valign = Label.VALIGN_CENTER; av.rect_min_size = Vector2(32, 32)
+	av.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var col = C_ACCENT
 	for k in G.D["CAST"].keys():
 		if G.D["CAST"][k].name == who: col = Color(G.D["CAST"][k].color)
-	var avs = _sb(col, 15, 0); av.add_stylebox_override("normal", avs); av.add_color_override("font_color", Color(0.05, 0.05, 0.07))
+	var avs = _sb(col, 16, 0); av.add_stylebox_override("normal", avs); av.add_color_override("font_color", Color(1, 1, 1))
 	hb.add_child(av)
-	var v = VBoxContainer.new(); v.size_flags_horizontal = Control.SIZE_EXPAND_FILL; hb.add_child(v)
-	if who != "":
-		var w = Label.new(); w.text = who; w.add_font_override("font", G.font_xs); w.add_color_override("font_color", col); v.add_child(w)
-	var b = Label.new(); b.text = body; b.autowrap = true; b.add_font_override("font", G.font_s); b.rect_min_size = Vector2(290, 0); v.add_child(b)
+	var v = VBoxContainer.new(); v.size_flags_horizontal = Control.SIZE_EXPAND_FILL; v.add_constant_override("separation", 1); hb.add_child(v)
+	var top = HBoxContainer.new(); v.add_child(top)
+	var w = Label.new(); w.text = who if who != "" else "Drill Season"; w.add_font_override("font", G.ifont(13, "s")); w.size_flags_horizontal = Control.SIZE_EXPAND_FILL; top.add_child(w)
+	var nw = Label.new(); nw.text = "now"; nw.add_font_override("font", G.ifont(11, "r")); nw.add_color_override("font_color", C_DIM); top.add_child(nw)
+	var b = Label.new(); b.text = body; b.autowrap = true; b.add_font_override("font", G.ifont(13, "r")); b.add_color_override("font_color", Color(1, 1, 1, 0.88)); b.rect_min_size = Vector2(262, 0); v.add_child(b)
 	feed.add_child(card)
 	while feed.get_child_count() > 3:
 		var old = feed.get_child(0)
@@ -709,48 +758,51 @@ func _close_wheel(pick):
 		elif em == "laugh": P.emote(em, 3.0)
 		else: P.emote(em)
 
-# ---------- menus for places (keyboard, mouse or controller) ----------
+# ---------- menus for places (keyboard, mouse or controller), in the wardrobe's style ----------
 func menu(eyebrow, title, sub, items):
 	close_menu()
 	G.MODE = "menu"
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
-	menu_box = VBoxContainer.new()
-	menu_box.margin_left = 56; menu_box.margin_top = 90; menu_box.margin_right = 486; menu_box.add_constant_override("separation", 0)
-	var head = PanelContainer.new()
-	var hs = _sb(C_ACCENT, 0, 16); hs.corner_radius_top_left = 10; hs.corner_radius_top_right = 10
-	head.add_stylebox_override("panel", hs)
-	var hv = VBoxContainer.new(); head.add_child(hv)
-	var e = Label.new(); e.text = eyebrow.to_upper(); e.add_font_override("font", G.font_xs); e.add_color_override("font_color", Color(0.1, 0.06, 0.02)); hv.add_child(e)
-	var t = Label.new(); t.text = title; t.add_font_override("font", G.font_l); t.add_color_override("font_color", Color(0.05, 0.03, 0.02)); hv.add_child(t)
-	menu_box.add_child(head)
-	var subp = PanelContainer.new(); subp.add_stylebox_override("panel", _sb(Color(0.02, 0.03, 0.05, 0.92), 0, 14))
-	var sl = Label.new(); sl.text = sub; sl.autowrap = true; sl.add_font_override("font", G.font_s); sl.add_color_override("font_color", C_DIM); sl.rect_min_size = Vector2(400, 0)
-	subp.add_child(sl); menu_box.add_child(subp)
+	menu_box = Control.new(); _full(menu_box)
+	var scrim = TextureRect.new(); scrim.expand = true; scrim.anchor_right = 0.6; scrim.anchor_bottom = 1; scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var gt = GradientTexture.new(); var gr = Gradient.new(); gr.set_color(0, Color(0.02, 0.02, 0.03, 0.86)); gr.set_color(1, Color(0.02, 0.02, 0.03, 0)); gt.gradient = gr
+	scrim.texture = gt; menu_box.add_child(scrim)
+	var v = VBoxContainer.new(); v.rect_position = Vector2(56, 64); v.rect_size = Vector2(420, 0); v.add_constant_override("separation", 0)
+	menu_box.add_child(v)
+	var e = Label.new(); e.text = eyebrow.to_upper(); e.add_font_override("font", G.ifont_sp(11, "m", 3)); e.add_color_override("font_color", C_DIM); v.add_child(e)
+	var t = Label.new(); t.text = title; t.add_font_override("font", G.ifont(34, "l")); t.add_color_override("font_color", C_TEXT); v.add_child(t)
+	var sl = Label.new(); sl.text = sub; sl.autowrap = true; sl.add_font_override("font", G.ifont(13, "r")); sl.add_color_override("font_color", C_DIM); sl.rect_min_size = Vector2(400, 0)
+	v.add_child(sl)
+	var gap = Control.new(); gap.rect_min_size = Vector2(0, 16); v.add_child(gap)
 	menu_items = items
 	var first = null
 	var first_i = 0
-	var normal = _sb(Color(0.05, 0.06, 0.09, 0.9), 0, 14)
-	var focus = _sb(Color(0.96, 0.97, 1.0, 0.95), 0, 14)
-	var dis = _sb(Color(0.05, 0.06, 0.09, 0.7), 0, 14)
+	var empty = StyleBoxEmpty.new(); empty.content_margin_left = 12; empty.content_margin_right = 12
+	var hi = _sb(Color(1, 1, 1, 0.07), 10, 12)
 	for i in range(items.size()):
 		var it = items[i]
 		var b = Button.new()
-		b.text = "%s%s" % [it.label, ("     " + it.hint) if it.get("hint", "") != "" else ""]
-		b.align = Button.ALIGN_LEFT; b.clip_text = true
-		b.add_font_override("font", G.font_m)
-		b.add_stylebox_override("normal", normal); b.add_stylebox_override("hover", focus); b.add_stylebox_override("focus", focus); b.add_stylebox_override("pressed", focus); b.add_stylebox_override("disabled", dis)
-		b.add_color_override("font_color", C_TEXT); b.add_color_override("font_color_hover", Color(0.05, 0.05, 0.07)); b.add_color_override("font_color_focus", Color(0.05, 0.05, 0.07)); b.add_color_override("font_color_disabled", Color(1, 1, 1, 0.35))
+		b.text = it.label
+		b.align = Button.ALIGN_LEFT; b.clip_text = true; b.rect_min_size = Vector2(0, 48)
+		b.add_font_override("font", G.ifont(16, "r"))
+		for st in ["normal", "disabled"]: b.add_stylebox_override(st, empty)
+		for st in ["hover", "focus", "pressed"]: b.add_stylebox_override(st, hi)
+		b.add_color_override("font_color", C_TEXT); b.add_color_override("font_color_hover", C_TEXT); b.add_color_override("font_color_focus", C_TEXT); b.add_color_override("font_color_disabled", Color(1, 1, 1, 0.3))
 		b.disabled = it.get("disabled", false)
+		if it.get("hint", "") != "":
+			var hl = Label.new(); hl.text = it.hint; hl.add_font_override("font", G.ifont(13, "r")); hl.add_color_override("font_color", C_DIM if not b.disabled else Color(1, 1, 1, 0.25))
+			hl.anchor_left = 1; hl.anchor_right = 1; hl.anchor_bottom = 1; hl.margin_left = -200; hl.margin_right = -12; hl.align = Label.ALIGN_RIGHT; hl.valign = Label.VALIGN_CENTER
+			hl.mouse_filter = Control.MOUSE_FILTER_IGNORE; b.add_child(hl)
+		var ln = ColorRect.new(); ln.color = Color(1, 1, 1, 0.08); ln.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		ln.anchor_top = 1; ln.anchor_bottom = 1; ln.anchor_right = 1; ln.margin_top = -1; ln.margin_left = 12; ln.margin_right = -8; b.add_child(ln)
 		b.connect("pressed", self, "_menu_pick", [i])
 		b.connect("focus_entered", self, "_menu_desc", [i]); b.connect("mouse_entered", self, "_menu_desc", [i])
-		menu_box.add_child(b)
+		v.add_child(b)
 		if first == null and not b.disabled:
 			first = b; first_i = i
-	var dp = PanelContainer.new()
-	var ds = _sb(Color(0.02, 0.03, 0.05, 0.92), 0, 14); ds.corner_radius_bottom_left = 10; ds.corner_radius_bottom_right = 10
-	dp.add_stylebox_override("panel", ds)
-	menu_desc = Label.new(); menu_desc.autowrap = true; menu_desc.add_font_override("font", G.font_s); menu_desc.add_color_override("font_color", C_DIM); menu_desc.rect_min_size = Vector2(400, 0)
-	dp.add_child(menu_desc); menu_box.add_child(dp)
+	var gap2 = Control.new(); gap2.rect_min_size = Vector2(0, 14); v.add_child(gap2)
+	menu_desc = Label.new(); menu_desc.autowrap = true; menu_desc.add_font_override("font", G.ifont(13, "r")); menu_desc.add_color_override("font_color", C_DIM); menu_desc.rect_min_size = Vector2(400, 0)
+	v.add_child(menu_desc)
 	root.add_child(menu_box)
 	if first:
 		first.grab_focus(); _menu_desc(first_i)
@@ -778,26 +830,33 @@ func interact(it):
 
 # ---------- the endings screen ----------
 func ending_panel(eyebrow, title, col, line, cells, obj, method):
-	var shade = ColorRect.new(); shade.color = Color(0, 0, 0, 0.7); shade.anchor_right = 1; shade.anchor_bottom = 1
+	var shade = ColorRect.new(); shade.color = Color(0, 0, 0, 0.72); shade.anchor_right = 1; shade.anchor_bottom = 1
 	var layer2 = CanvasLayer.new(); layer2.layer = 9; add_child(layer2)
 	layer2.add_child(shade)
-	var card = PanelContainer.new(); card.add_stylebox_override("panel", _sb(Color(0.03, 0.04, 0.07, 0.97), 18, 30))
+	var card = PanelContainer.new(); card.add_stylebox_override("panel", _glass(26, 36, 0.62))
 	card.anchor_left = 0.5; card.anchor_right = 0.5; card.anchor_top = 0.5; card.anchor_bottom = 0.5
-	card.margin_left = -380; card.margin_right = 380; card.margin_top = -270; card.margin_bottom = 270
+	card.margin_left = -380; card.margin_right = 380; card.margin_top = -260; card.margin_bottom = 260
 	shade.add_child(card)
-	var v = VBoxContainer.new(); card.add_child(v)
-	var e = Label.new(); e.text = eyebrow.to_upper(); e.add_font_override("font", G.font_s); e.add_color_override("font_color", C_DIM); v.add_child(e)
-	var t = Label.new(); t.text = title.to_upper(); t.add_font_override("font", G.font_big); t.add_color_override("font_color", col); v.add_child(t)
-	var l = Label.new(); l.text = line; l.autowrap = true; l.add_font_override("font", G.font_m); v.add_child(l)
+	var v = VBoxContainer.new(); v.add_constant_override("separation", 10); card.add_child(v)
+	var e = Label.new(); e.text = eyebrow.to_upper(); e.add_font_override("font", G.ifont_sp(11, "m", 3)); e.add_color_override("font_color", C_DIM); v.add_child(e)
+	var t = Label.new(); t.text = title; t.add_font_override("font", G.ifont(46, "l")); t.add_color_override("font_color", col); v.add_child(t)
+	var l = Label.new(); l.text = line; l.autowrap = true; l.add_font_override("font", G.ifont(16, "r")); v.add_child(l)
 	var grid = GridContainer.new(); grid.columns = 4; v.add_child(grid)
 	for c in cells:
 		var cv = VBoxContainer.new(); cv.rect_min_size = Vector2(170, 52); grid.add_child(cv)
-		var a = Label.new(); a.text = str(c[1]); a.add_font_override("font", G.font_l); cv.add_child(a)
-		var b = Label.new(); b.text = c[0]; b.add_font_override("font", G.font_xs); b.add_color_override("font_color", C_DIM); cv.add_child(b)
+		var a2 = Label.new(); a2.text = str(c[1]); a2.add_font_override("font", G.ifont(24, "s")); cv.add_child(a2)
+		var b = Label.new(); b.text = c[0].to_upper(); b.add_font_override("font", G.ifont_sp(10, "m", 2)); b.add_color_override("font_color", C_DIM); cv.add_child(b)
 	var found = []
 	for k in G.D["ENDINGS"].keys(): found.append(("✓ " if G.S["endings"].get(k, 0) else "· ") + G.D["ENDINGS"][k].title)
-	var f = Label.new(); f.text = "ENDINGS FOUND   " + PoolStringArray(found).join("    "); f.add_font_override("font", G.font_s); f.add_color_override("font_color", col); v.add_child(f)
-	var btn = Button.new(); btn.text = "Keep playing"; btn.add_font_override("font", G.font_m); v.add_child(btn)
+	var f = Label.new(); f.text = "Endings found   " + PoolStringArray(found).join("    "); f.autowrap = true; f.add_font_override("font", G.ifont(13, "r")); f.add_color_override("font_color", col); v.add_child(f)
+	var row = HBoxContainer.new(); v.add_child(row)
+	var btn = Button.new(); btn.text = "Keep playing"; row.add_child(btn)
+	btn.rect_min_size = Vector2(150, 42)
+	btn.add_font_override("font", G.ifont(14, "s"))
+	btn.add_stylebox_override("normal", _sb(Color(1, 1, 1), 21, 22)); btn.add_stylebox_override("hover", _sb(Color(0.88, 0.88, 0.9), 21, 22))
+	btn.add_stylebox_override("pressed", _sb(Color(0.78, 0.78, 0.8), 21, 22))
+	var fo = _sb(Color(1, 1, 1), 21, 22); fo.border_color = C_ACCENT; fo.set_border_width_all(2); btn.add_stylebox_override("focus", fo)
+	for cn in ["font_color", "font_color_hover", "font_color_pressed", "font_color_focus"]: btn.add_color_override(cn, Color(0.04, 0.04, 0.05))
 	btn.connect("pressed", obj, method)
 	btn.grab_focus()
 	return layer2

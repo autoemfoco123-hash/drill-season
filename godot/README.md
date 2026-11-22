@@ -215,6 +215,12 @@ Tudo do jogo web, mais algumas coisas só daqui:
 - **Editor de personagem minimalista:** o personagem num foco de luz suave, à direita; à esquerda,
   as seções numa coluna fina, linhas finas com o nome pequeno em cima do valor e ‹ › para trocar,
   bolinhas de cor pequenas e um botão Save branco.
+- **HUD e menu principal no mesmo estilo** do editor e do celular: fonte Inter, cartões de vidro
+  escuro com borda fina (arma e munição, dinheiro e estrelas, Buzz e Heat; rua e hora; velocidade
+  e rádio no carro), minimapa arredondado, barras finas, notificações como as de celular, a tecla
+  em destaque nas dicas ("E Enter…"), títulos grandes finos e espaçados, menus dos lugares em
+  coluna com linhas finas, tela de finais e tela inicial com o botão branco em pílula. Os botões
+  de toque viram círculos de vidro.
 - **Interface nova:** minimapa arredondado com prédios e marcadores, barras de vida, calor e
   fôlego, dinheiro que rola, estrelas de procurado, caixa de ajuda, feed de notificações,
   mensagens grandes no centro, rodas de armas e de emotes, e um **editor de personagem** em tela

@@ -787,6 +787,15 @@ func _ui_test():
 	yield(_shot("u03_wardrobe_presets"), "completed")
 	main.wardrobe.cancel()
 	yield(_wait(0.3), "completed")
+	main.hud.menu("Calder Mini Mart · open late", "Mini Mart", "Coffee, hand warmers and snacks. Warm up before you head back out.", [
+		{ "label": "Hot coffee", "hint": "$4", "desc": "Warms you up for a while." },
+		{ "label": "Hand warmers", "hint": "$6", "desc": "Slow the cold for the next few minutes." },
+		{ "label": "Energy drink", "hint": "$5", "desc": "More stamina for a sprint." },
+		{ "label": "Lottery ticket", "hint": "Sold out", "disabled": true },
+		{ "label": "Leave", "hint": "" }])
+	yield(_wait(0.5), "completed")
+	yield(_shot("u00_menu"), "completed")
+	main.hud.close_menu()
 	main.phone.open()
 	yield(_wait(0.15), "completed")
 	yield(_shot("u04_phone_opening"), "completed")

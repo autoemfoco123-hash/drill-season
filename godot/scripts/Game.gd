@@ -49,14 +49,15 @@ func _ready():
 					fld[2] = 0; fld[3] = 5
 	else:
 		push_error("assets/data.json is missing; run tools/export-godot.js")
-	font_s = _font(14, false)
-	font_m = _font(18, true)
-	font_l = _font(26, true)
-	font_xl = _font(64, true)
-	font_xs = _font(12, true)
-	font_cash = _font(34, true, 3)
-	font_big = _font(56, true, 4)
-	font_hud = _font(17, true, 2)
+	# the whole interface uses Inter now (slim, like the wardrobe and the phone)
+	font_s = ifont(14, "r")
+	font_m = ifont(17, "s")
+	font_l = ifont(25, "s")
+	font_xl = ifont(60, "l")
+	font_xs = ifont(12, "m")
+	font_cash = ifont_o(28, "m", 1)
+	font_big = ifont(54, "l")
+	font_hud = ifont_o(16, "s", 1)
 	_setup_input()
 	S = new_state("")
 
@@ -72,6 +73,24 @@ func ifont(size, w = "r"):
 	f.size = size
 	f.use_filter = true
 	f.add_fallback(load("res://fonts/DejaVuSans-Bold.ttf" if w in ["s", "b"] else "res://fonts/DejaVuSans.ttf"))
+	_ifonts[k] = f
+	return f
+
+# an Inter font with a soft dark outline, for text over the 3D world
+func ifont_o(size, w, outline):
+	var k = "o%d%s%d" % [outline, w, size]
+	if _ifonts.has(k): return _ifonts[k]
+	var f = ifont(size, w).duplicate()
+	f.outline_size = outline; f.outline_color = Color(0, 0, 0, 0.55)
+	_ifonts[k] = f
+	return f
+
+# letter-spaced small caps for eyebrows and labels
+func ifont_sp(size, w, spacing):
+	var k = "sp%d%s%d" % [spacing, w, size]
+	if _ifonts.has(k): return _ifonts[k]
+	var f = ifont(size, w).duplicate()
+	f.extra_spacing_char = spacing
 	_ifonts[k] = f
 	return f
 
