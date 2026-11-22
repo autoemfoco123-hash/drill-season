@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/whiz_1.ogg-999785eb0589205e3d4425f7366975c1.oggstr"
+
+[deps]
+
+source_file="res://assets/sfx/whiz_1.ogg"
+dest_files=[ "res://.import/whiz_1.ogg-999785eb0589205e3d4425f7366975c1.oggstr" ]
+
+[params]
+
+loop=true
+loop_offset=0

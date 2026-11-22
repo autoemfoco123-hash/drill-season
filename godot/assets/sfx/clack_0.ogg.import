@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/clack_0.ogg-137f574307c297ed8212a572d054cbb6.oggstr"
+
+[deps]
+
+source_file="res://assets/sfx/clack_0.ogg"
+dest_files=[ "res://.import/clack_0.ogg-137f574307c297ed8212a572d054cbb6.oggstr" ]
+
+[params]
+
+loop=true
+loop_offset=0

@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/chatter_1.ogg-338fbb16b7c2518d1b4b88b8e72f1ba6.oggstr"
+
+[deps]
+
+source_file="res://assets/sfx/chatter_1.ogg"
+dest_files=[ "res://.import/chatter_1.ogg-338fbb16b7c2518d1b4b88b8e72f1ba6.oggstr" ]
+
+[params]
+
+loop=true
+loop_offset=0

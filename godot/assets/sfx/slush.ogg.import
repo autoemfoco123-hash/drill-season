@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/slush.ogg-a99baaf9b2cab3e685da5c76d680f908.oggstr"
+
+[deps]
+
+source_file="res://assets/sfx/slush.ogg"
+dest_files=[ "res://.import/slush.ogg-a99baaf9b2cab3e685da5c76d680f908.oggstr" ]
+
+[params]
+
+loop=true
+loop_offset=0

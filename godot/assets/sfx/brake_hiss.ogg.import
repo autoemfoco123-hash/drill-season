@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/brake_hiss.ogg-62a10a22a5bdfab8b1c7225d5a9f17e7.oggstr"
+
+[deps]
+
+source_file="res://assets/sfx/brake_hiss.ogg"
+dest_files=[ "res://.import/brake_hiss.ogg-62a10a22a5bdfab8b1c7225d5a9f17e7.oggstr" ]
+
+[params]
+
+loop=true
+loop_offset=0

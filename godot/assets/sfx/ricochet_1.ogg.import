@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/ricochet_1.ogg-1aa4a9443ebd9df9075c70f7aceb9e5e.oggstr"
+
+[deps]
+
+source_file="res://assets/sfx/ricochet_1.ogg"
+dest_files=[ "res://.import/ricochet_1.ogg-1aa4a9443ebd9df9075c70f7aceb9e5e.oggstr" ]
+
+[params]
+
+loop=true
+loop_offset=0

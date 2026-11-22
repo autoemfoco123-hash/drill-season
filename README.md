@@ -30,6 +30,15 @@ Play it at **https://autoemfoco123-hash.github.io/drill-season/** once GitHub Pa
 - **PlayStation 4:** the PS4 web browser turns off WebGL, the 3D graphics most web games use. Drill Season switches to its own software renderer there: the same city, people, cars and day and night, drawn in plain JavaScript at a lower resolution that adjusts itself to keep the game moving. Play with a USB keyboard (WASD to move, arrow keys to look) or with the on-screen buttons and the PS4 cursor; a controller works too if the browser passes it to the page.
 - Older browsers without modern JavaScript or import maps (the PS4 browser, older Safari, some TV browsers) load `drill-season-legacy.js`, the same game compiled to an older standard. Any browser with WebGL turned off uses the software renderer.
 
+### PC (Godot)
+
+`godot/` is a native version made with Godot 3 (GLES2). It runs on old graphics chips such as first-generation Intel HD (Iron Lake), on Linux and Windows.
+
+- It has the same city, cars, guns, sounds and radio stations, which are exported from the web build by `tools/export-godot.js` and `tools/record-radio.js`.
+- It uses the same save format. To move your progress, open the phone in the web game and go to **Settings → Export my progress**. That downloads `drill-season-save.json`. Then click **Import progress from the web game** in the Godot version.
+
+`godot/README.md` (in Portuguese) explains how to run it, lists the controls and covers what is still web-only.
+
 ### Multiplayer
 
 Everyone who opens the page lands on the same block, with no account and no server:

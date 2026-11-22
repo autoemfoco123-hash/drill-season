@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/imp_metal_1.ogg-527e832fc8f59348009c44cddb1e8f35.oggstr"
+
+[deps]
+
+source_file="res://assets/sfx/imp_metal_1.ogg"
+dest_files=[ "res://.import/imp_metal_1.ogg-527e832fc8f59348009c44cddb1e8f35.oggstr" ]
+
+[params]
+
+loop=true
+loop_offset=0

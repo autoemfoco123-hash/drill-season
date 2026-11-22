@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/chirp.ogg-6290a8b508a15f17619dfe6e66e3d1cb.oggstr"
+
+[deps]
+
+source_file="res://assets/sfx/chirp.ogg"
+dest_files=[ "res://.import/chirp.ogg-6290a8b508a15f17619dfe6e66e3d1cb.oggstr" ]
+
+[params]
+
+loop=true
+loop_offset=0

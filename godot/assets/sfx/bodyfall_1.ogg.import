@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/bodyfall_1.ogg-276cea9545c7d6bf6a4bbdcf310e17df.oggstr"
+
+[deps]
+
+source_file="res://assets/sfx/bodyfall_1.ogg"
+dest_files=[ "res://.import/bodyfall_1.ogg-276cea9545c7d6bf6a4bbdcf310e17df.oggstr" ]
+
+[params]
+
+loop=true
+loop_offset=0

@@ -9869,7 +9869,7 @@ function renderApp() {
       <div class="sec">Car radio</div><div class="seg seg-wrap">${STATIONS.map((n, i) => `<button data-r="${i}" class="${st.radio === i ? 'on' : ''}">${n.short}</button>`).join('')}</div>
       <div class="sec">Audio</div><div class="seg"><button data-sc="1" class="${st.score !== false ? 'on' : ''}">Score<small>music on foot</small></button><button data-sc="0" class="${st.score === false ? 'on' : ''}">No score<small>city only</small></button></div>
       <div class="seg"><button data-vo="1" class="${st.voices !== false ? 'on' : ''}">Voices<small>PA · megaphone</small></button><button data-vo="0" class="${st.voices === false ? 'on' : ''}">Mute voices<small>subtitles only</small></button></div>
-      <div class="sec">Game</div>${document.fullscreenEnabled ? `<button class="btn" id="ps-fs" style="width:100%;margin-bottom:8px">${document.fullscreenElement ? 'Leave full screen' : 'Full screen'}</button>` : ''}<button class="btn" id="ps-exit" style="width:100%">Save &amp; exit to title</button>`);
+      <div class="sec">Game</div>${document.fullscreenEnabled ? `<button class="btn" id="ps-fs" style="width:100%;margin-bottom:8px">${document.fullscreenElement ? 'Leave full screen' : 'Full screen'}</button>` : ''}<button class="btn" id="ps-export" style="width:100%;margin-bottom:8px">Export my progress</button><div class="job-s" style="margin:-2px 0 10px">Saves drill-season-save.json to Downloads. The Godot version of the game imports it from there.</div><button class="btn" id="ps-exit" style="width:100%">Save &amp; exit to title</button>`);
     const bind = (id2, key, f) => { const el = $(id2); el.oninput = () => { st[key] = +el.value; el.nextElementSibling.textContent = f(+el.value); applyVolumes(); }; };
     bind('ps-sens', 'sens', v => v.toFixed(1)); bind('ps-fov', 'fov', v => Math.round(v));
     body.querySelectorAll('[data-fp]').forEach(b => b.onclick = () => { st.fp = b.dataset.fp === '1'; if (!st.fp) fpHide(); renderApp(); }); bind('ps-vol', 'vol', v => Math.round(v * 100)); bind('ps-music', 'music', v => Math.round(v * 100));
@@ -9882,9 +9882,22 @@ function renderApp() {
     body.querySelectorAll('[data-sc]').forEach(b => b.onclick = () => { st.score = b.dataset.sc === '1'; renderApp(); });
     body.querySelectorAll('[data-vo]').forEach(b => b.onclick = () => { st.voices = b.dataset.vo === '1'; if (!st.voices && window.speechSynthesis) speechSynthesis.cancel(); renderApp(); });
     $('ps-exit').onclick = () => { closePhone(); exitToTitle(); };
+    $('ps-export').onclick = () => { exportProgress(); };
     if ($('ps-fs')) $('ps-fs').onclick = () => { const p = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); if (p && p.then) p.then(() => setTimeout(renderApp, 200), () => { }); };
     $('ps-test').onclick = () => { soundTest(); setTimeout(() => { const el = $('ps-audio'); if (el) el.textContent = audioInfo(); }, 400); };
   }
+}
+/* the whole save as a file, for the Godot version (Settings → Import progress there) */
+function exportProgress() {
+  saveGame();
+  try {
+    const blob = new Blob([JSON.stringify(S, null, 1)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'drill-season-save.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    toast(null, 'Progress exported: drill-season-save.json. Import it in the Godot version.', '#4cd98a');
+  } catch (e) { toast(null, 'This browser cannot save files', '#ff6b5a'); }
 }
 const ago = ms => { const s = Math.max(0, (Date.now() - ms) / 1000); return s < 60 ? 'now' : s < 3600 ? Math.floor(s / 60) + 'm' : s < 86400 ? Math.floor(s / 3600) + 'h' : Math.floor(s / 86400) + 'd'; };
 function renderBlok(body, add, act) {

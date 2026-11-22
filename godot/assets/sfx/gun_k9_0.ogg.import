@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/gun_k9_0.ogg-af59f10183bcd6485066cef33090e8a7.oggstr"
+
+[deps]
+
+source_file="res://assets/sfx/gun_k9_0.ogg"
+dest_files=[ "res://.import/gun_k9_0.ogg-af59f10183bcd6485066cef33090e8a7.oggstr" ]
+
+[params]
+
+loop=true
+loop_offset=0

@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/gun_plow_s_0.ogg-55bb81dc6a58937961ac137d2f280405.oggstr"
+
+[deps]
+
+source_file="res://assets/sfx/gun_plow_s_0.ogg"
+dest_files=[ "res://.import/gun_plow_s_0.ogg-55bb81dc6a58937961ac137d2f280405.oggstr" ]
+
+[params]
+
+loop=true
+loop_offset=0

@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/casing_0.ogg-7f61d845759c0703da9f2ba33b01af17.oggstr"
+
+[deps]
+
+source_file="res://assets/sfx/casing_0.ogg"
+dest_files=[ "res://.import/casing_0.ogg-7f61d845759c0703da9f2ba33b01af17.oggstr" ]
+
+[params]
+
+loop=true
+loop_offset=0

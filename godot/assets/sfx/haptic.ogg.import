@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/haptic.ogg-2ab9da36fc4e16dac6f6708b6759120b.oggstr"
+
+[deps]
+
+source_file="res://assets/sfx/haptic.ogg"
+dest_files=[ "res://.import/haptic.ogg-2ab9da36fc4e16dac6f6708b6759120b.oggstr" ]
+
+[params]
+
+loop=true
+loop_offset=0

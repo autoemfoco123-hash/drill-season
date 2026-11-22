@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/hat_2.ogg-eca00dae0b746614c5fb8f2063aa60d6.oggstr"
+
+[deps]
+
+source_file="res://assets/sfx/hat_2.ogg"
+dest_files=[ "res://.import/hat_2.ogg-eca00dae0b746614c5fb8f2063aa60d6.oggstr" ]
+
+[params]
+
+loop=true
+loop_offset=0

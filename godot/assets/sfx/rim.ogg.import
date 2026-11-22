@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/rim.ogg-590565276a7d93f99a076a55ab61ff2c.oggstr"
+
+[deps]
+
+source_file="res://assets/sfx/rim.ogg"
+dest_files=[ "res://.import/rim.ogg-590565276a7d93f99a076a55ab61ff2c.oggstr" ]
+
+[params]
+
+loop=true
+loop_offset=0

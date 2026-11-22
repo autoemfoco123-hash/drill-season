@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/lowend.ogg-0f352e2f41223dd5b497a45d8d2f5b52.oggstr"
+
+[deps]
+
+source_file="res://assets/music/lowend.ogg"
+dest_files=[ "res://.import/lowend.ogg-0f352e2f41223dd5b497a45d8d2f5b52.oggstr" ]
+
+[params]
+
+loop=true
+loop_offset=0

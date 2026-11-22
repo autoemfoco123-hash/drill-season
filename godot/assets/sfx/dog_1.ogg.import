@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/dog_1.ogg-2988883cff6825a046de05627a9e374b.oggstr"
+
+[deps]
+
+source_file="res://assets/sfx/dog_1.ogg"
+dest_files=[ "res://.import/dog_1.ogg-2988883cff6825a046de05627a9e374b.oggstr" ]
+
+[params]
+
+loop=true
+loop_offset=0

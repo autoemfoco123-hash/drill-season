@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/rustle_1.ogg-c2fda621c927699e145d942f03b54e25.oggstr"
+
+[deps]
+
+source_file="res://assets/sfx/rustle_1.ogg"
+dest_files=[ "res://.import/rustle_1.ogg-c2fda621c927699e145d942f03b54e25.oggstr" ]
+
+[params]
+
+loop=true
+loop_offset=0

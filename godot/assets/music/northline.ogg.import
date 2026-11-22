@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/northline.ogg-3cbf5f51e7e5c24974db7c17a05725bf.oggstr"
+
+[deps]
+
+source_file="res://assets/music/northline.ogg"
+dest_files=[ "res://.import/northline.ogg-3cbf5f51e7e5c24974db7c17a05725bf.oggstr" ]
+
+[params]
+
+loop=true
+loop_offset=0

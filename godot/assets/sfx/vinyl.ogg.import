@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/vinyl.ogg-25ea435ddfb8d79a2683496d933a6ac5.oggstr"
+
+[deps]
+
+source_file="res://assets/sfx/vinyl.ogg"
+dest_files=[ "res://.import/vinyl.ogg-25ea435ddfb8d79a2683496d933a6ac5.oggstr" ]
+
+[params]
+
+loop=true
+loop_offset=0

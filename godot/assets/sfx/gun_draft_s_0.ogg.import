@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/gun_draft_s_0.ogg-3d4f9750d64c59772e4521cd9d2aef3a.oggstr"
+
+[deps]
+
+source_file="res://assets/sfx/gun_draft_s_0.ogg"
+dest_files=[ "res://.import/gun_draft_s_0.ogg-3d4f9750d64c59772e4521cd9d2aef3a.oggstr" ]
+
+[params]
+
+loop=true
+loop_offset=0
