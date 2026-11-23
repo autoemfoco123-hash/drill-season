@@ -399,14 +399,25 @@ var _spd = 0.0
 var _idle_t = 0.0
 var _skip = 0
 var _skip_dt = 0.0
+# the layers on top of the gait (see animate)
+var _prev_sp = 0.0
+var _acc_l = 0.0          # forward acceleration, smoothed: lean into it, rock back when stopping
+var _exert = 0.0          # 0..1, builds while running: heavier, faster breathing afterwards
+var _br_ph = 0.0
+var _air = 0.0
+var _was_air = false
+var _land = 0.0
+var _turn = 0.0           # turning on the spot: small steps
+var _look = 0.0
 
-# one leg: the thigh swings, the knee folds on the way forward
-func _leg(leg, p, side, thA, swK, kB, run, amp, still, c, k):
+# one leg: the thigh swings, the knee folds on the way forward. ex adds the other layers:
+# (thigh forward, knee bend, thigh out to the side)
+func _leg(leg, p, side, thA, swK, kB, run, amp, still, c, k, ex = Vector3()):
 	var th = sin(p) * thA - run * 0.1 * amp
 	var f = max(0.0, -cos(p - 0.2))
 	var kn = kB + swK * f * sqrt(f)
-	_srot(leg.thigh, Vector3(lerp(th, -1.25 + th * 0.3, c), 0, side * 0.03 * still), k)
-	_srot(leg.knee, Vector3(lerp(kn, 2.0, c), 0, 0), k)
+	_srot(leg.thigh, Vector3(lerp(th, -1.25 + th * 0.3, c) + ex.x, 0, side * 0.03 * still + ex.z), k)
+	_srot(leg.knee, Vector3(lerp(kn, 2.0, c) + ex.y, 0, 0), k)
 
 func _rot(n, x, y, z):
 	n.transform.basis = _basis_xyz(x, y, z)
@@ -445,6 +456,26 @@ func animate(dt, pose):
 	var amp = clamp(s / 1.3, 0.0, 1.0)                  # 0 standing .. 1 on the move
 	var stride = lerp(1.45, 3.1, run)                   # metres per cycle (two steps)
 	if s > 0.12: phase += dt * TAU * s / stride
+	# turning on the spot: the feet step round instead of sliding
+	var yr = G.ang_diff(_last_yaw, rotation.y) / max(dt, 0.001) if not first else 0.0
+	_last_yaw = rotation.y
+	_turn = lerp(_turn, clamp(abs(yr) / 3.5, 0.0, 1.0) * (1.0 - amp), 1 - exp(-dt * 10))
+	if s <= 0.12 and _turn > 0.05: phase += dt * TAU * 1.3 * _turn
+	var leg_amp = max(amp, _turn * 0.45)
+	# accelerating and stopping: the body leans into it and rocks back
+	var acc_raw = (_spd - _prev_sp) / max(dt, 0.001) if not first else 0.0
+	_prev_sp = _spd
+	_acc_l = lerp(_acc_l, clamp(acc_raw, -10.0, 10.0), 1 - exp(-dt * 6))
+	# breathing: slow and small standing, quick and deep after a run
+	_exert = clamp(_exert + dt * (run * amp * 0.12 - 0.035), 0.0, 1.0)
+	_br_ph += dt * TAU * lerp(0.26, 0.85, _exert)
+	var breath = sin(_br_ph)
+	# off the ground: knees tuck; touching down: a soft dip
+	var in_air = pose.get("air", false) == true
+	if _was_air and not in_air: _land = 1.0
+	_was_air = in_air
+	_air = lerp(_air, 1.0 if in_air else 0.0, 1 - exp(-dt * 10))
+	_land *= exp(-dt * 7.0)
 	# a foot lands each time the cycle passes a quarter turn (the thigh at its furthest forward)
 	var fc = int(floor((phase - PI * 0.5) / PI))
 	if first: _fc = fc
@@ -452,6 +483,10 @@ func animate(dt, pose):
 		_fc = fc; foot += 1
 	var ph = phase
 	_idle_t += dt
+	# where you look: the head goes most of the way, the chest a little (not past the shoulders)
+	var lk = float(pose.get("look", 0.0))
+	var lk_k = clamp(lk, -1.25, 1.25) * clamp((2.7 - abs(lk)) / 0.7, 0.0, 1.0)
+	_look = lerp(_look, lk_k, 1 - exp(-dt * 7)) if not first else lk_k
 	var kl = 1.0 if first else 1 - exp(-dt * 22)        # legs follow fast
 	var ka = 1.0 if first else 1 - exp(-dt * 14)        # arms a little softer
 	var kb = 1.0 if first else 1 - exp(-dt * 9)         # body and head softest
@@ -461,30 +496,42 @@ func animate(dt, pose):
 	cr = lerp(cr, crouch, 1 - exp(-dt * 12))
 	var c = cr
 	# leaning into turns
-	var yr = G.ang_diff(_last_yaw, rotation.y) / max(dt, 0.001)
-	_last_yaw = rotation.y
 	_lean = lerp(_lean, clamp(-yr * s * 0.035, -0.28, 0.28), 1 - exp(-dt * 6))
 	var still = 1.0 - amp
+	# standing about: the weight drifts from one leg to the other every few seconds (the free
+	# knee bends, the hip drops on that side, the shoulders tilt back the other way)
+	var aim0 = pose.get("aim", 0.0)
+	var wsk = still * (1.0 - aim0) * (1.0 - c) * (1.0 - _turn)
+	var ws0 = sin(_idle_t * 0.42 + float(get_instance_id() % 97))
+	var ws = sign(ws0) * sqrt(abs(ws0)) * wsk
 	# hips: bob (low between steps when walking, low on landing when running), sway, twist
 	var bob = lerp(-0.035 * abs(sin(ph)), -0.06 * (1.0 - abs(sin(ph))), run) * amp
-	hips.translation.y = lerp(0.92, 0.56, c) + bob - run * 0.035 * amp + sin(_idle_t * 1.7) * 0.004 * still
-	hips.translation.x = -0.025 * cos(ph) * (1.0 - run) * amp + sin(_idle_t * 0.45) * 0.016 * still
-	_srot(hips, Vector3(0, 0.1 * sin(ph) * amp, 0.04 * cos(ph) * (1.0 - run) * amp), kb)
-	# legs: the thigh swings, the knee folds on the swing forward (more when running)
-	var thA = lerp(0.42, 0.8, run) * amp
-	var swK = lerp(1.0, 1.75, run) * amp
-	var kB = lerp(0.07, 0.28, run) * amp + 0.05
-	_leg(L, ph, -1.0, thA, swK, kB, run, amp, still, c, kl)
-	_leg(R, ph + PI, 1.0, thA, swK, kB, run, amp, still, c, kl)
-	var spine_x = lerp(0.05 + run * 0.2, 0.35, c) * max(amp, c) + lerp(0.04, 0.0, amp) + sin(_idle_t * 1.7) * 0.012 * still
-	var spine_y = -0.16 * sin(ph) * amp
-	var spine_z = 0.0
+	var br_amp = lerp(0.006, 0.02, _exert) * (1.0 - amp * 0.6)
+	hips.translation.y = lerp(0.92, 0.56, c) + bob - run * 0.035 * amp - abs(ws) * 0.012 - _land * 0.1 - _air * 0.05 - _turn * 0.012 * abs(sin(ph))
+	hips.translation.x = -0.025 * cos(ph) * (1.0 - run) * amp + ws * 0.035
+	var hip_roll = ws * 0.075
+	_srot(hips, Vector3(0, 0.1 * sin(ph) * amp, 0.04 * cos(ph) * (1.0 - run) * amp + hip_roll), kb)
+	# legs: the thigh swings, the knee folds on the swing forward (more when running); the
+	# layers add the free knee, the tuck in the air and the dip on landing, and keep the feet
+	# planted under a shifting pelvis
+	var thA = lerp(0.42, 0.8, run) * leg_amp
+	var swK = lerp(1.0, 1.75, run) * leg_amp
+	var kB = lerp(0.07, 0.28, run) * leg_amp + 0.05
+	var plant = -hip_roll - ws * 0.038
+	var exL = Vector3(-0.09 * max(0.0, ws) - 0.55 * _air - 0.3 * _land, 0.24 * max(0.0, ws) + 1.0 * _air + 0.62 * _land, plant)
+	var exR = Vector3(-0.09 * max(0.0, -ws) - 0.25 * _air - 0.3 * _land, 0.24 * max(0.0, -ws) + 0.75 * _air + 0.62 * _land, plant)
+	_leg(L, ph, -1.0, thA, swK, kB, run, leg_amp, still, c, kl, exL)
+	_leg(R, ph + PI, 1.0, thA, swK, kB, run, leg_amp, still, c, kl, exR)
+	var acc_lean = clamp(_acc_l * 0.016, -0.13, 0.17) * (1.0 - c) * (1.0 - _air)
+	var spine_x = lerp(0.05 + run * 0.2, 0.35, c) * max(amp, c) + lerp(0.04, 0.0, amp) + breath * br_amp + acc_lean + _land * 0.22 + _air * 0.08
+	var spine_y = -0.16 * sin(ph) * amp + _look * 0.3 * (1.0 - run * 0.7)
+	var spine_z = -ws * 0.09
 	# arms: swing opposite the legs, elbows bend more when running, a little out to the sides
 	var aim = pose.get("aim", 0.0)
 	var pitch = pose.get("pitch", 0.0)
 	var armA = lerp(0.38, 0.95, run) * amp
 	var elb = lerp(-0.2, -1.45, run * amp)
-	var sway = sin(_idle_t * 1.7) * 0.02 * still
+	var sway = sin(_idle_t * 1.7) * 0.02 * still + breath * br_amp * 0.6 + _air * 0.45
 	var relax_l = Vector3(-armA * sin(ph) - run * 0.15 * amp, 0, -0.07 - run * 0.06 - sway)
 	var relax_r = Vector3(armA * sin(ph) - run * 0.15 * amp, 0, 0.07 + run * 0.06 + sway)
 	var ale_rel = elb - 0.18 * max(0.0, sin(ph)) * (1.0 - run) * amp
@@ -548,11 +595,16 @@ func animate(dt, pose):
 	_srot(AL.sh, Vector3(al.x, 0, al.z), kk); _srot(AL.elbow, Vector3(ale, 0, 0), kk)
 	finger.visible = pose.get("flip", false)
 	if pose.get("shiver", false):
-		spine_z = sin(G.REAL_T * 40) * 0.015
+		spine_z += sin(G.REAL_T * 40) * 0.015
 	_srot(spine, Vector3(spine_x, spine_y, spine_z), 1.0 if snap else kb)
-	# the head keeps the eyes level and looks around a little when standing
-	var look_y = (sin(_idle_t * 0.37) * 0.22 + sin(_idle_t * 0.11) * 0.12) * still * (1.0 - aim)
-	_srot(head_g, Vector3(lerp(-spine_x * 0.7, -pitch * 0.6, aim), -spine_y * 0.8 + look_y, 0), kb)
+	# the head keeps the eyes level, follows where you look (up and down too), glances around
+	# when standing, and tilts: into a turn, with the weight shift, a cock now and then
+	var glance = (sin(_idle_t * 0.37) * 0.22 + sin(_idle_t * 0.11) * 0.12) * still * (1.0 - aim) * (1.0 - min(1.0, abs(_look) * 2.0))
+	var head_x = lerp(-spine_x * 0.7 - pitch * 0.4, -pitch * 0.6, aim) - breath * br_amp * 0.5
+	var head_y = -spine_y * 0.8 + glance + _look * 0.75 * (1.0 - aim)
+	var cock = sin(_idle_t * 0.23 + 1.3) * sin(_idle_t * 0.61) * 0.09 * still * (1.0 - aim)
+	var head_z = _lean * 0.4 + ws * 0.11 + cock - _look * 0.1 * (1.0 - aim)
+	_srot(head_g, Vector3(head_x, head_y, head_z), kb)
 	var em = pose.get("emote", "")
 	if em != "":
 		_emote(em, float(pose.get("et", 0.0)))

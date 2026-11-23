@@ -331,7 +331,11 @@ func update(dt):
 		if dP < 70:
 			H.visible = true
 			var em = p.emote if p.emote_left > 0 else ""
-			H.animate(dt, { "speed": sp, "crouch": p.state == "flee" and sp < 0.6, "mug": p.state == "walk" and not answering and fmod(G.REAL_T + p.rq_seed % 20, 20) < 6, "flip": answering and em == "" and p.flip_back_t > 0, "fists": brawl, "guard": brawl, "punch": p.punch_t / 0.3 if brawl and p.punch_t > 0 else 0.0, "punchSide": p.punch_side, "emote": em, "et": p.emote_t })
+			# a glance at you when you come close (and a long look if you're holding a gun)
+			var lk = 0.0
+			if dP < 7.0 and p.state != "flee":
+				lk = G.ang_diff(p.yaw, atan2(P.pos.x - p.pos.x, P.pos.z - p.pos.z))
+			H.animate(dt, { "speed": sp, "look": lk, "crouch": p.state == "flee" and sp < 0.6, "mug": p.state == "walk" and not answering and fmod(G.REAL_T + p.rq_seed % 20, 20) < 6, "flip": answering and em == "" and p.flip_back_t > 0, "fists": brawl, "guard": brawl, "punch": p.punch_t / 0.3 if brawl and p.punch_t > 0 else 0.0, "punchSide": p.punch_side, "emote": em, "et": p.emote_t })
 		else:
 			H.visible = false
 		main.gang.update_recruit_plate(p)

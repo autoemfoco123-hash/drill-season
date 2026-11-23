@@ -331,6 +331,7 @@ func update(dt):
 	var fists = G.S.get("fists", false)
 	human.animate(dt, {
 		"speed": speed, "crouch": (1.0 if not aiming else 0.6) if crouch else 0.0, "aim": 0.0 if fists else max(aim_t, 1.0 if G.GAME_T - last_shot < 0.5 else 0.0),
+		"look": G.ang_diff(body_yaw, cam_yaw + PI) if not fp_on() else 0.0, "air": not on_ground and vel.y > -40.0,
 		"pitch": cam_pitch, "down": (clamp(down_t, 0, 1) if down else 0.0) if emote_name != "snowangel" else min(1.0, emote_t * 3), "twoHand": not G.S["cur"] in ["k9", "buzz"], "shiver": G.S.get("warmth", 100) < 30,
 		"hands": hands_up > 0, "wave": wave_t > 0 and not aiming, "flip": flipping(),
 		"fists": fists, "guard": fists and aiming, "punch": punch_t / punch_dur if punch_t > 0 else 0.0, "punchSide": punch_side, "hook": punch_hook,
@@ -441,7 +442,7 @@ func update_camera(dt):
 		# tilt: lean into a strafe and a turn, plus a touch with each step
 		var strafe = (Input.get_action_strength("move_r") - Input.get_action_strength("move_l")) if G.MODE == "play" and not dead else 0.0
 		var yr = G.ang_diff(_look_yaw, cam_yaw) / max(dt, 0.001)
-		var roll_t = (-strafe * 0.032 - clamp(yr, -6.0, 6.0) * 0.004) * hb + sin(bob_ph) * 0.006 * ab
+		var roll_t = (-strafe * 0.068 - clamp(yr, -6.0, 6.0) * 0.0095) * hb + sin(bob_ph) * 0.015 * ab
 		cam_roll += (roll_t - cam_roll) * (1 - exp(-dt * 8.0))
 		cam.translation = Vector3(pos.x, pivot_y + by - land_dip, pos.z) + fwd2 * 0.14 + rgt * bxl + jit
 		cam.rotation = Vector3(clamp(cam_pitch + recoil, -1.45, 1.45), cam_yaw, cam_roll)

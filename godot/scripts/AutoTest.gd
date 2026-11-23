@@ -1130,6 +1130,54 @@ func _anim_test():
 		yield(_shot("a_sturdy_pump"), "completed")
 		get_tree().quit()
 		return
+	if "layers" in OS.get_environment("DS_ANIMTEST"):
+		# the layers on top of the gait, front three-quarter view
+		h.rotation.y = 0.5
+		_frame(at + Vector3(0, 1.0, 4.0), at + Vector3(0, 0.85, 0), 40)
+		# standing: the weight shift over ~15 s, four frames
+		for k in range(4):
+			for _j in range(int(3.7 / 0.016)): h.animate(0.016, { "speed": 0.0 })
+			yield(get_tree(), "idle_frame")
+			yield(_shot("l_idle_%d" % k), "completed")
+		# looking left, right, up
+		for lk in [["look_l", 1.1, 0.0], ["look_r", -1.1, 0.0], ["look_up", 0.0, 0.6]]:
+			for _j in range(60): h.animate(0.016, { "speed": 0.0, "look": lk[1], "pitch": lk[2] })
+			yield(get_tree(), "idle_frame")
+			yield(_shot("l_" + lk[0]), "completed")
+		# side view for the rest
+		h.rotation.y = PI / 2
+		_frame(at + Vector3(0, 1.0, 4.2), at + Vector3(0, 0.9, 0), 40)
+		# setting off: speed ramps up fast; then a hard stop from a run
+		var sp = 0.0
+		for _j in range(14):
+			sp = min(6.0, sp + 0.016 * 30.0); h.animate(0.016, { "speed": sp })
+		yield(get_tree(), "idle_frame")
+		yield(_shot("l_accel"), "completed")
+		for _j in range(90): h.animate(0.016, { "speed": 6.0 })
+		for _j in range(10):
+			sp = max(0.0, sp - 0.016 * 40.0); h.animate(0.016, { "speed": sp })
+		yield(get_tree(), "idle_frame")
+		yield(_shot("l_stop"), "completed")
+		# in the air, then landing
+		for _j in range(30): h.animate(0.016, { "speed": 4.0, "air": true })
+		yield(get_tree(), "idle_frame")
+		yield(_shot("l_air"), "completed")
+		for _j in range(4): h.animate(0.016, { "speed": 4.0, "air": false })
+		yield(get_tree(), "idle_frame")
+		yield(_shot("l_land"), "completed")
+		# out of breath after a long sprint
+		for _j in range(600): h.animate(0.016, { "speed": 7.0 })
+		var e0 = h._exert
+		for _j in range(60): h.animate(0.016, { "speed": 0.0 })
+		_log("exertion after a 10 s sprint %.2f, breathing %.2f Hz" % [e0, lerp(0.26, 0.85, h._exert)])
+		# turning on the spot
+		var f0 = h.foot
+		for _j in range(120):
+			h.rotation.y += 0.016 * 3.0
+			h.animate(0.016, { "speed": 0.0 })
+		_log("turning on the spot: %d steps in 1.9 s" % (h.foot - f0))
+		get_tree().quit()
+		return
 	for spec in [["walk", 1.45, 8], ["run", 6.0, 8], ["idle", 0.0, 3]]:
 		var n = spec[2]
 		var cyc = 2.5 if spec[1] <= 0 else (1.45 if spec[1] < 3 else 3.1) / spec[1]

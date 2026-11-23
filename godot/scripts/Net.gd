@@ -712,7 +712,7 @@ func update(dt):
 func _my_state():
 	var P = main.player
 	var s = { "x": stepify(P.pos.x, 0.01), "y": stepify(P.pos.y, 0.01), "z": stepify(P.pos.z, 0.01), "vx": stepify(P.vel.x, 0.1), "vz": stepify(P.vel.z, 0.1),
-		"yaw": stepify(P.body_yaw, 0.01), "sp": stepify(P.speed, 0.1), "cr": P.crouch, "aim": stepify(P.aim_t, 0.1), "pitch": stepify(P.cam_pitch, 0.01),
+		"yaw": stepify(P.body_yaw, 0.01), "sp": stepify(P.speed, 0.1), "cr": P.crouch, "aim": stepify(P.aim_t, 0.1), "pitch": stepify(P.cam_pitch, 0.01), "lk": stepify(G.ang_diff(P.body_yaw, P.cam_yaw + PI), 0.05), "air": not P.on_ground,
 		"fists": G.S.get("fists", false), "punch": stepify(P.punch_t / P.punch_dur, 0.05) if P.punch_t > 0 else 0.0, "ps": P.punch_side, "flip": P.flipping(), "wave": P.wave_t > 0,
 		"em": EMOTE_IDS.find(P.emote_name), "et": stepify(P.emote_t, 0.1), "down": P.is_ragdoll() or P.dead, "gun": G.S["cur"], "hands": P.hands_up > 0 }
 	if P.car:
@@ -766,6 +766,7 @@ func _update_remote(r, dt):
 	var em = int(_num(s.get("em", 0), 0, EMOTE_IDS.size() - 1))
 	r.crouched = s.get("cr", false) == true
 	r.h.animate(dt, { "speed": _num(s.get("sp"), 0, 20), "crouch": 1.0 if r.crouched else 0.0, "aim": 0.0 if s.get("fists", false) else _num(s.get("aim"), 0, 1), "pitch": _num(s.get("pitch"), -1.5, 1.5),
+		"look": _num(s.get("lk"), -3.2, 3.2), "air": s.get("air", false) == true,
 		"fists": s.get("fists", false) == true, "guard": s.get("fists", false) == true and _num(s.get("aim"), 0, 1) > 0.5, "punch": _num(s.get("punch"), 0, 1), "punchSide": -1 if _num(s.get("ps"), -1, 1) < 0 else 1,
 		"flip": s.get("flip", false) == true, "wave": s.get("wave", false) == true, "hands": s.get("hands", false) == true, "twoHand": str(s.get("gun", "k9")) != "k9",
 		"emote": EMOTE_IDS[em], "et": _num(s.get("et"), 0, 999), "down": 1.0 if EMOTE_IDS[em] == "snowangel" else 0.0 })
