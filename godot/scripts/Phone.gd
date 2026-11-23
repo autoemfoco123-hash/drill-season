@@ -445,8 +445,11 @@ func close(now = false):
 func _layout():
 	var vs = panel.get_viewport_rect().size
 	var e = 1.0 - pow(1.0 - anim, 3.0)
-	var x = round(vs.x - DW - PAD - 34)
-	var y = round((vs.y - DH) / 2.0 + (1.0 - e) * (DH * 0.55 + vs.y * 0.5))
+	# console mode's bigger layout is shorter than the phone: shrink it to fit
+	var k = min(1.0, (vs.y - 16.0) / DH)
+	device.rect_scale = Vector2(k, k)
+	var x = round(vs.x - DW * k - PAD - 34)
+	var y = round((vs.y - DH * k) / 2.0 + (1.0 - e) * (DH * 0.55 + vs.y * 0.5))
 	device.rect_position = Vector2(x, y)
 	dim.color = Color(0, 0, 0, 0.24 * e)
 
@@ -1271,6 +1274,11 @@ func _app_settings():
 	_switch("Head bob and tilt (first person)", st.get("headbob", true), "_headbob")
 	var tm = str(st.get("touch", "auto"))
 	_cell("On-screen controls", { "auto": "Auto", "on": "On", "off": "Off" }.get(tm, "Auto"), "_touch_mode")
+	_sec("Controller and TV")
+	_switch("Console mode", main.console.on, "_console_mode")
+	_switch("Aim assist (controller)", st.get("aimAssist", true), "_toggle_on", ["aimAssist"])
+	_switch("Vibration", st.get("rumble", true), "_toggle_on", ["rumble"])
+	_foot("Console mode is for a TV and a controller: full screen, bigger text, the controller's own buttons on screen, an on-screen keyboard and a pause menu on %s." % G.pad_label("MENU"))
 	_sec("Sound")
 	_slider("Volume", st.get("vol", 0.8), 0, 1, 0.05, "vol")
 	_slider("Music", st.get("music", 0.85), 0, 1, 0.05, "music")
@@ -1310,6 +1318,11 @@ func _set(v, key, vl = null, top = 1.0, step = 0.05):
 	if vl: vl.text = _slider_text(v, top, step)
 func _toggle(key):
 	G.S["settings"][key] = not G.S["settings"].get(key, false); show_app("settings", true)
+func _toggle_on(key):
+	G.S["settings"][key] = not G.S["settings"].get(key, true); show_app("settings", true)
+	if key == "rumble" and G.S["settings"][key]: G.rumble(0.4, 0.4, 0.15)
+func _console_mode():
+	main.console.set_on(not main.console.on); show_app("settings", true)
 func _headbob():
 	G.S["settings"]["headbob"] = not G.S["settings"].get("headbob", true); show_app("settings", true)
 func _outlines():
@@ -1350,9 +1363,15 @@ func _app_pad():
 	for i in pads:
 		_kv([["Connected", Input.get_joy_name(i)]])
 	_slider("Stick look speed", G.S["settings"]["pad"].get("sens", 1.0), 0.4, 2.5, 0.05, "padsens")
+	_action("Show the controls", "_show_controls")
 	_sec("Buttons")
-	_kv([["Move · look", "L stick · R stick"], ["Shoot · aim", "RT · LT"], ["Jump · crouch · reload", "A · B · X"], ["Car · use · weapon", "Y · RB · LB"], ["Sprint · view", "L3 · R3"],
-		["Phone · bandage", "D-pad ↑ · ↓"], ["Wave · finger", "D-pad ← · →"], ["Settings · map", "Menu · View"], ["Gas · brake · handbrake", "RT · LT · A"]])
+	var L = funcref(G, "pad_label")
+	_kv([["Move · look", "Left stick · right stick"], ["Shoot · aim", "%s · %s" % [L.call_func("RT"), L.call_func("LT")]], ["Jump · crouch · reload", "%s · %s · %s" % [L.call_func("A"), L.call_func("B"), L.call_func("X")]],
+		["Car · use · weapon", "%s · %s · %s" % [L.call_func("Y"), L.call_func("RB"), L.call_func("LB")]], ["Sprint · view", "%s · %s" % [L.call_func("LS"), L.call_func("RS")]],
+		["Phone · bandage", "D-pad ↑ · ↓"], ["Emotes · finger", "D-pad ← · →"], ["Pause · map", "%s · %s" % [L.call_func("MENU"), L.call_func("VIEW")]], ["Gas · brake · handbrake", "%s · %s · %s" % [L.call_func("RT"), L.call_func("LT"), L.call_func("A")]]])
+
+func _show_controls():
+	close(true); main.console.controls()
 
 # ---------- Stats ----------
 func _app_stats():

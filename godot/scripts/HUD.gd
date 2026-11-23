@@ -39,6 +39,7 @@ var tr_card
 var br_card
 var car_card
 var help_key
+var help_icon
 var death_rect
 var death_mat
 var death_title
@@ -73,14 +74,19 @@ var wheel_hold = 0.0
 var wheel_vec = Vector2()
 var wheel_sel = -1
 var last_emote = "dance1"
+var wheel_page = 0      # emote wheel: 0 dances, 1 gestures
+var wheel_geo = [Vector2(), 0.0]   # where the wheel was drawn (centre, radius), for taps
 
 const C_BG = Color(0.03, 0.03, 0.04, 0.36)
 const C_TEXT = Color(0.97, 0.97, 0.98)
 const C_DIM = Color(1, 1, 1, 0.58)
 const C_ACCENT = Color(1.0, 0.62, 0.22)
 const C_CASH = Color(0.6, 0.95, 0.66)
-const EMOTES = [["wave", "Wave"], ["flip", "Finger"], ["dance1", "Two-step"], ["dance2", "Arm wave"], ["dance3", "Robot"], ["sturdy", "Sturdy"], ["hype", "Hype"], ["clap", "Clap"], ["laugh", "Laugh"],
+# the emote wheel has two pages: dances and everything else (LB / RB, Q / E or the mouse wheel)
+const DANCES = [["dance1", "Two-step"], ["dance2", "Arm wave"], ["dance3", "Robot"], ["sturdy", "Sturdy"], ["griddy", "Griddy"], ["shmoney", "Shmoney"], ["woah", "Woah"], ["hitfolks", "Hit dem folks"]]
+const EMOTES = [["wave", "Wave"], ["flip", "Finger"], ["hype", "Hype"], ["clap", "Clap"], ["laugh", "Laugh"],
 	["shrug", "Shrug"], ["salute", "Salute"], ["point", "Point"], ["facepalm", "Facepalm"], ["flex", "Flex"], ["sit", "Sit"], ["snowangel", "Snow angel"], ["pray", "Pray"], ["flop", "Flop"]]
+const PAGES = ["DANCES", "EMOTES"]
 const WEAPONS = [["fists", "Fists"], ["k9", "K9"], ["buzz", "Buzzsaw"], ["draft", "Draft"], ["dragon", "Dragon"], ["plow", "Snowplow"], ["snowball", "Snowball"]]
 
 static func _sb(col, r = 10, pad = 10):
@@ -289,10 +295,43 @@ class Wheel extends Control:
 	func _draw():
 		var kind = hud.wheel_kind
 		if kind == "": return
-		var items = hud.EMOTES if kind == "emote" else hud.WEAPONS
+		var items = hud.wheel_items()
 		var ctr = rect_size / 2
 		var R = min(rect_size.x, rect_size.y) * (0.32 if kind == "emote" else 0.27)
 		draw_circle(ctr, R + 70, Color(0, 0, 0, 0.22))
+		hud.wheel_geo = [rect_global_position + ctr, R]
+		if kind == "emote":
+			# the two pages as tabs above the wheel, with the buttons that flip them
+			var tf = G.ifont_sp(13, "m", 2)
+			var gap = 34.0
+			var ws = []
+			var total = 0.0
+			for pg in hud.PAGES:
+				ws.append(tf.get_string_size(pg).x); total += ws[-1]
+			total += gap
+			var x = ctr.x - total / 2
+			var y = ctr.y - R - 92
+			for i in range(hud.PAGES.size()):
+				var on = i == hud.wheel_page
+				draw_string(tf, Vector2(x, y), hud.PAGES[i], Color(1, 1, 1) if on else Color(1, 1, 1, 0.4))
+				if on: draw_rect(Rect2(x, y + 7, ws[i], 2), Color(1, 0.62, 0.22))
+				x += ws[i] + gap
+			# the buttons that flip the pages, either side of the tabs
+			var l0 = ctr.x - total / 2 - 16
+			var r0 = ctr.x + total / 2 + 16
+			if G.pad_on():
+				for side in [["LB", l0, -1], ["RB", r0, 1]]:
+					var tx = G.pad_tex(side[0])
+					var hh = 26.0
+					var ww = hh * tx.get_width() / float(tx.get_height())
+					draw_texture_rect(tx, Rect2(Vector2(side[1] - (ww if side[2] < 0 else 0.0), y - 19), Vector2(ww, hh)), false)
+			else:
+				var hf = G.ifont(12, "b")
+				for side in [[G.action_key("next_weapon"), l0, -1], [G.action_key("use"), r0, 1]]:
+					var kw = hf.get_string_size(side[0]).x + 12
+					var kr = Rect2(Vector2(side[1] - (kw if side[2] < 0 else 0.0), y - 17), Vector2(kw, 20))
+					draw_rect(kr, Color(1, 1, 1, 0.85))
+					draw_string(hf, kr.position + Vector2(6, 15), side[0], Color(0.05, 0.05, 0.06))
 		var n = items.size()
 		for i in range(n):
 			var a0 = -PI / 2 + (i - 0.5) * TAU / n
@@ -317,7 +356,7 @@ class Wheel extends Control:
 				var sub = hud._weapon_sub(items[i][0])
 				var sw = G.font_xs.get_string_size(sub).x
 				draw_string(G.font_xs, p - Vector2(sw / 2, -24), sub, Color(0.05, 0.05, 0.07) if sel else Color(1, 1, 1, 0.6))
-		var title = "EMOTES" if kind == "emote" else "WEAPONS"
+		var title = hud.PAGES[hud.wheel_page] if kind == "emote" else "WEAPONS"
 		var name = items[hud.wheel_sel][1] if hud.wheel_sel >= 0 else title
 		var nw = G.font_l.get_string_size(name).x
 		draw_circle(ctr, R - 46, Color(0.03, 0.03, 0.04, 0.82))
@@ -405,6 +444,10 @@ void fragment() {
 	var ks = _sb(Color(1, 1, 1, 0.95), 6, 7); ks.content_margin_top = 2; ks.content_margin_bottom = 2
 	help_key.add_stylebox_override("normal", ks); help_key.valign = Label.VALIGN_CENTER; help_key.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	hrow.add_child(help_key)
+	# on a controller the key cap becomes the button's own icon
+	help_icon = TextureRect.new(); help_icon.expand = true; help_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	help_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER; help_icon.visible = false
+	hrow.add_child(help_icon); hrow.move_child(help_icon, 0)
 	help_lbl = Label.new(); help_lbl.add_font_override("font", G.ifont(15, "m")); help_lbl.valign = Label.VALIGN_CENTER
 	hrow.add_child(help_lbl); help_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(help_box)
@@ -515,6 +558,13 @@ func set_touch_layout(on):
 		feed.alignment = BoxContainer.ALIGN_END
 		help_box.margin_left = 22; help_box.margin_top = 22
 
+# console mode keeps the HUD inside the TV's safe area (a margin on every side)
+func safe_area(f):
+	if not root: return
+	var vs = Vector2(1152, 648) if f > 0 else Vector2(1280, 720)
+	root.margin_left = round(vs.x * f); root.margin_right = -round(vs.x * f)
+	root.margin_top = round(vs.y * f); root.margin_bottom = -round(vs.y * f)
+
 func show():
 	root.visible = true
 func hide():
@@ -538,7 +588,7 @@ func update(dt):
 		death_sub.modulate.a = ta
 		if P.dead:
 			var left = int(ceil(4.0 - P.death_t))
-			death_sub.text = ("RESPAWN IN %d" % left) if left > 0 else ("PRESS %s TO WAKE UP AT CALDER GENERAL" % ("A" if Input.get_connected_joypads().size() > 0 else "SPACE OR E"))
+			death_sub.text = ("RESPAWN IN %d" % left) if left > 0 else ("PRESS %s TO WAKE UP AT CALDER GENERAL" % (G.pad_label("A") if G.pad_on() else "SPACE OR E"))
 	else:
 		death_title.modulate.a = 0; death_sub.modulate.a = 0
 	for c in [minimap, bars, feed, help_box, weapon_icon, lbl_weapon, lbl_ammo, lbl_cash, lbl_cash_delta, stars, meter_buzz, meter_heat, lbl_street, lbl_area, lbl_clock, lbl_speed, lbl_radio, objective, cross, tags, tr_card, br_card]:
@@ -593,8 +643,11 @@ func update(dt):
 	var key = ""
 	if hp.begins_with("[") and hp.find("]") > 0 and hp.find("\n") < 0:
 		key = hp.substr(1, hp.find("]") - 1); hp = hp.substr(hp.find("]") + 1).strip_edges()
-	if help_lbl.text != hp or help_key.text != key:
-		help_lbl.text = hp; help_key.text = key; help_key.visible = key != ""
+	var icon = G.pad_tex(key) if G.pad_on() and G.PAD_FILE.has(key) else null
+	if help_lbl.text != hp or help_key.text != key or help_icon.texture != icon:
+		help_lbl.text = hp; help_key.text = key; help_key.visible = key != "" and icon == null
+		help_icon.texture = icon; help_icon.visible = icon != null
+		if icon: help_icon.rect_min_size = Vector2(28 * icon.get_width() / float(icon.get_height()), 28)
 		help_box.rect_size = Vector2()
 	var ob = _objective()
 	if objective.text != ob:
@@ -641,7 +694,7 @@ func _area(p):
 	return "CALDER PARK · CHICAGO"
 
 func _key(k, pad):
-	if Input.get_connected_joypads().size() > 0: return "[" + pad + "]"
+	if G.pad_on(): return "[" + pad + "]"      # the help box shows the button's icon for these
 	return "[" + k + "]"
 
 func _prompt():
@@ -761,14 +814,29 @@ func _weapon_sub(id):
 
 func wheel_open(): return wheel_kind != ""
 
+func wheel_items():
+	if wheel_kind == "weapon": return WEAPONS
+	return DANCES if wheel_page == 0 else EMOTES
+
+func wheel_flip(d = 1):
+	if wheel_kind != "emote": return
+	wheel_page = (wheel_page + d + PAGES.size()) % PAGES.size()
+	wheel_sel = -1; wheel_vec = Vector2()
+	main.sfx.play("tap", 0.35)
+
 func _wheel_input(dt):
 	var P = main.player
 	if G.MODE != "play" or P.car or P.dead:
 		if wheel_kind != "": _close_wheel(false)
 		wheel_hold = 0
 		return
+	# emote wheel open: LB / RB (Q / E) flip between dances and gestures
+	if wheel_kind == "emote":
+		if Input.is_action_just_pressed("next_weapon"): wheel_flip(-1)
+		if Input.is_action_just_pressed("use"): wheel_flip(1)
+		wheel_hold = 0
 	# weapon: tap cycles, hold opens the wheel
-	if Input.is_action_pressed("next_weapon"):
+	elif Input.is_action_pressed("next_weapon"):
 		wheel_hold += dt
 		if wheel_hold > 0.22 and wheel_kind == "": _open_wheel("weapon")
 	elif wheel_hold > 0:
@@ -780,12 +848,14 @@ func _wheel_input(dt):
 	if wheel_kind != "":
 		var stick = Vector2(Input.get_action_strength("look_r") - Input.get_action_strength("look_l"), Input.get_action_strength("look_d") - Input.get_action_strength("look_u"))
 		if stick.length() > 0.4: wheel_vec = stick * 100
-		var items = EMOTES if wheel_kind == "emote" else WEAPONS
+		var items = wheel_items()
 		if wheel_vec.length() > 30:
 			var a = atan2(wheel_vec.y, wheel_vec.x) + PI / 2
 			wheel_sel = int(round(fposmod(a, TAU) / (TAU / items.size()))) % items.size()
 
 func _input(e):
+	if wheel_kind == "emote" and e is InputEventMouseButton and e.pressed and (e.button_index == BUTTON_WHEEL_UP or e.button_index == BUTTON_WHEEL_DOWN):
+		wheel_flip(-1 if e.button_index == BUTTON_WHEEL_UP else 1); get_tree().set_input_as_handled()
 	if wheel_kind != "" and e is InputEventMouseMotion and not touch:
 		wheel_vec += e.relative
 		if wheel_vec.length() > 120: wheel_vec = wheel_vec.normalized() * 120
@@ -814,7 +884,7 @@ func _close_wheel(pick):
 		elif id == "snowball": P.throw_snowball()
 		elif G.S["guns"][id].owned: P.switch_weapon(id)
 	else:
-		var em = EMOTES[wheel_sel][0]
+		var em = wheel_items()[wheel_sel][0]
 		last_emote = em
 		if em == "wave": P.wave_t = 2.2
 		elif em == "flip":

@@ -33,6 +33,22 @@ func _label(parent, text, font, col):
 func open():
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	for c in box.get_children(): c.queue_free()
+	main.console.home_closed()
+	if main.console.on:
+		# console mode: the home screen with big tiles (Console.gd)
+		main.console.home(box)
+		box.visible = true
+	else:
+		_desktop_menu()
+	if human: human.queue_free()
+	var save0 = G.load_save()
+	var sk = save0["skin"] if save0 else G.default_skin()
+	human = load("res://scripts/Human.gd").new().build(G.skin_opts(sk))
+	main.add_child(human)
+	human.translation = spot
+	G.MODE = "title"
+
+func _desktop_menu():
 	var scrim = TextureRect.new(); scrim.expand = true; scrim.anchor_right = 0.62; scrim.anchor_bottom = 1; scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var gt = GradientTexture.new(); var gr = Gradient.new(); gr.set_color(0, Color(0.02, 0.02, 0.03, 0.9)); gr.set_color(1, Color(0.02, 0.02, 0.03, 0)); gr.add_point(0.55, Color(0.02, 0.02, 0.03, 0.62)); gt.gradient = gr
 	scrim.texture = gt; box.add_child(scrim)
@@ -69,18 +85,17 @@ func open():
 	if first == null: first = play
 	var web = G.find_web_save()
 	_text_btn(v, "Import progress from the web game" + (" · found" if web != "" else ""), "_import", [])
+	if OS.get_name() != "Android": _text_btn(v, "Console mode · TV and controller", "_console", [])
 	_text_btn(v, "Quit", "_quit", [])
 	_gap(v, 18)
-	info = _label(v, "Keyboard and mouse, or any controller. Tab opens your phone.", G.ifont(11, "r"), Color(1, 1, 1, 0.36))
+	var pads = Input.get_connected_joypads().size() > 0
+	info = _label(v, ("Controller found: press %s for console mode. " % G.pad_label("MENU") if pads else "") + "Keyboard and mouse, or any controller. Tab opens your phone.", G.ifont(11, "r"), Color(1, 1, 1, 0.36))
 	info.autowrap = true; info.rect_min_size = Vector2(380, 0)
 	box.visible = true
 	first.grab_focus()
-	if human: human.queue_free()
-	var sk = save["skin"] if save else G.default_skin()
-	human = load("res://scripts/Human.gd").new().build(G.skin_opts(sk))
-	main.add_child(human)
-	human.translation = spot
-	G.MODE = "title"
+
+func _console():
+	main.console.set_on(true)
 
 func _gap(v, h):
 	var g = Control.new(); g.rect_min_size = Vector2(0, h); g.mouse_filter = Control.MOUSE_FILTER_IGNORE; v.add_child(g)
@@ -146,6 +161,7 @@ func _quit():
 
 func _close():
 	box.visible = false
+	main.console.home_closed()
 	if human:
 		human.queue_free()
 		human = null

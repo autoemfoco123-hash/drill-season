@@ -34,6 +34,9 @@ para o app que você usou. Se o Play Protect avisar que o app é desconhecido, t
 - **Duas armas novas** (uma pistola estilo AK e uma metralhadora de mão) e **dois carros novos**
   (um sedã musculoso e um SUV grande), com tiro e recarga animados em todas as armas, clarão no
   cano, cápsulas, e balanço e inclinação da câmera em primeira pessoa.
+- **Modo console** para jogar na TV com controle (Xbox ou PlayStation): tela inicial de console,
+  teclado na tela, menu de pausa, tela de controles, os botões do seu controle na tela, mira
+  assistida e vibração. E **mais danças**: griddy, shmoney, woah e hit dem folks.
 - **Dança sturdy** na roda de emotes (a gangue e as pessoas na rua dançam junto) e **passos mais
   leves**: um som curto de tênis por pisada, em sincronia com a animação, diferente na neve, na
   lama, na calçada, na escada de metal e dentro dos lugares fechados.

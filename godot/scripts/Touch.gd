@@ -109,6 +109,15 @@ func _input(e):
 		return
 	var s = _size()
 	if e is InputEventScreenTouch:
+		# emote wheel open: a second finger on its middle or on the tabs flips dances / emotes
+		if e.pressed and main.hud.wheel_kind == "emote" and not fingers.has(e.index):
+			var g = main.hud.wheel_geo
+			var tabs = e.position.y < g[0].y - g[1] - 50 and e.position.y > g[0].y - g[1] - 140 and abs(e.position.x - g[0].x) < 220
+			if e.position.distance_to(g[0]) < g[1] - 46 or tabs:
+				main.hud.wheel_flip(1)
+				fingers[e.index] = { "kind": "tap" }
+				get_tree().set_input_as_handled()
+				return
 		if e.pressed:
 			var b = _hit(e.position)
 			if b:

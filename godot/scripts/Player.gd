@@ -19,6 +19,8 @@ var pivot_y = 1.6
 var speed = 0.0
 var crouch = false
 var aiming = false
+var assist_f = 0.0     # aim assist: 0 nothing near the crosshair .. 1 right on someone
+var _aim_prev = false
 var aim_t = 0.0
 var sprinting = false
 var stamina = 100.0
@@ -150,6 +152,8 @@ func _input(e):
 		look(e.relative.x, e.relative.y)
 	if e is InputEventMouseButton and e.pressed and Input.get_mouse_mode() != Input.MOUSE_MODE_CAPTURED and not main.touch.enabled:
 		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+	if main.hud.wheel_kind == "emote" and (e.is_action_pressed("use") or e.is_action_pressed("next_weapon")):
+		return   # those flip the emote wheel's pages
 	if e.is_action_pressed("camera"):
 		G.S["settings"]["fp"] = not fp_on()
 		main.hud.banner("First person" if fp_on() else "Third person", "V to switch")
@@ -188,7 +192,8 @@ func _input(e):
 	elif e.is_action_pressed("map"):
 		main.phone.open("map")
 	elif e.is_action_pressed("pause"):
-		main.phone.open("settings")
+		if main.console.on: main.console.pause_menu()
+		else: main.phone.open("settings")
 	elif e is InputEventKey and e.pressed and not e.echo and e.scancode == KEY_Y and main.net.online():
 		# Y: chat (the phone's Online app, with the chat box)
 		main.phone.open("online")
@@ -219,10 +224,12 @@ func update(dt):
 			pending_hit = null
 			_land_punch(h)
 	# right stick and arrow keys look
+	_aim_assist(dt)
 	var lx = Input.get_action_strength("look_r") - Input.get_action_strength("look_l")
 	var ly = Input.get_action_strength("look_d") - Input.get_action_strength("look_u")
 	if abs(lx) + abs(ly) > 0.05 and G.MODE == "play" and not main.hud.wheel_open():
 		var k = 1100 * dt * float(G.S["settings"]["pad"].get("sens", 1.0)) / max(0.1, float(G.S["settings"].get("sens", 1.0)))
+		k *= 1.0 - 0.45 * assist_f    # the stick slows down over a target
 		look(sign(lx) * pow(abs(lx), 1.6) * k, sign(ly) * pow(abs(ly), 1.6) * k * 0.72)
 	if car:
 		pos = Vector3(car.pos.x, 0, car.pos.z); vel = Vector3(car.vel.x, 0, car.vel.y); speed = abs(car.speed); body_yaw = car.yaw
@@ -755,6 +762,7 @@ func try_fire():
 	if hit_any:
 		main.hud.hitmarker(head_any); main.sfx.play("imp_flesh", 0.3)
 	main.sfx.shot(G.S["cur"], muzzle, 1.0, GUN.cfg_of(G.S["cur"]).get("muzzle") == "supp")
+	G.rumble({ "plow": 0.7, "dragon": 0.5 }.get(G.S["cur"], 0.25), { "plow": 0.9, "dragon": 0.6 }.get(G.S["cur"], 0.3), 0.07)
 	main.sfx.flash(muzzle)
 	# the gun kicks, the slide or bolt cycles, the flash shows, the brass flies (the shotgun's
 	# hull comes out when you pump it)
@@ -791,6 +799,46 @@ func shoot_ray(o, d, max_t):
 		if t < best:
 			best = t; who = null; hit_car = v
 	return { "t": best if best < max_t else INF, "who": who, "head": head, "car": hit_car }
+
+# aim assist, for controllers only (Settings → Aim assist): the stick slows down when the
+# crosshair is over someone, and while you aim it drifts onto crew members and cops near the
+# crosshair, with a small snap toward them the moment you start aiming. Walls block it.
+func _aim_assist(dt):
+	assist_f = 0.0
+	var start = aiming and not _aim_prev
+	_aim_prev = aiming
+	if not G.last_pad or not G.S["settings"].get("aimAssist", true) or car or G.MODE != "play" or G.S.get("fists", false) or dead:
+		return
+	if aim_t < 0.15 and G.GAME_T - last_shot > 0.4 and not start: return
+	var cam = main.camera
+	var o = cam.global_transform.origin
+	var fwd = -cam.global_transform.basis.z
+	var rng = float(stats().range) * 1.6
+	var best_to = Vector3()
+	var best_s = 1.0
+	var hostile = false
+	for li in [[main.crews.ENEMIES, true], [main.police.COPS, true], [main.net.targets(), false], [main.peds.PEDS, false]]:
+		for e in li[0]:
+			if e.is_down(): continue
+			var p = e.pos + Vector3(0, 1.0 if ("crouched" in e and e.crouched) else 1.3, 0)
+			var to = p - o
+			var dist = to.length()
+			if dist > rng or dist < 1.2: continue
+			to /= dist
+			# the cone is wider up close, where a body fills more of the screen
+			var cone = min(0.3, 0.1 + 0.6 / dist) * (1.6 if start else 1.0)
+			var sc = fwd.angle_to(to) / cone
+			if sc >= best_s: continue
+			if W.raycast(o, to, dist) < dist - 0.6: continue
+			best_s = sc; best_to = to; hostile = li[1]
+	if best_s >= 1.0: return
+	assist_f = 1.0 - best_s
+	if not hostile: return
+	var dyaw = G.ang_diff(atan2(-fwd.x, -fwd.z), atan2(-best_to.x, -best_to.z))
+	var dpit = asin(clamp(best_to.y, -1, 1)) - asin(clamp(fwd.y, -1, 1))
+	var k = 0.55 if start else (1.0 - exp(-dt * 4.5 * assist_f)) * 0.7
+	cam_yaw += dyaw * k
+	cam_pitch = clamp(cam_pitch + dpit * k, -1.25, 1.0)
 
 func ray_body(o, d, p, crouched):
 	var top = 0.92 if crouched else 1.42
@@ -859,7 +907,7 @@ func _land_punch(h):
 	main.sfx.play3d("punch", e.pos + Vector3(0, 1.45, 0), 1.0 if hook else 0.75)
 	main.hud.hitmarker(hook)
 	shake = max(shake, 0.2 if hook else 0.1)
-	Input.start_joy_vibration(0, 0.6 if hook else 0.3, 0.6, 0.14 if hook else 0.08)
+	G.rumble(0.6 if hook else 0.3, 0.6, 0.14 if hook else 0.08)
 	e.take_hit(h.pu.dmg, false, h.f, true, true)
 	if "vel" in e:
 		e.vel.x += h.f.x * (4 if hook else 2.2); e.vel.z += h.f.z * (4 if hook else 2.2)
@@ -881,7 +929,7 @@ func hurt(dmg, from, silent = false):
 	if typeof(from) == TYPE_VECTOR3: last_from = from
 	G.S["health"] -= dmg; last_hurt = G.GAME_T; shake = min(1, shake + dmg * 0.04)
 	main.hud.hurt_flash(dmg)
-	Input.start_joy_vibration(0, min(1, 0.25 + dmg / 30.0), 0.4, 0.16)
+	G.rumble(min(1, 0.25 + dmg / 30.0), 0.4, 0.16)
 	if not silent:
 		main.sfx.play("hurt", 0.7)
 	if G.S["health"] <= 0:
@@ -981,7 +1029,7 @@ func emote(name, dur = 0.0):
 	if car or dead or is_ragdoll(): return
 	emote_name = name; emote_t = 0.0; emote_dur = dur; clap_t = 0
 	G.S["stats"]["emotes"] = int(G.S["stats"].get("emotes", 0)) + 1
-	if name.begins_with("dance") or name == "hype" or name == "sturdy":
+	if name in G.DANCES or name == "hype":
 		main.peds.react_to_emote(pos, "dance")
 		main.gang.dance_along(name)
 	elif name == "laugh" or name == "flex" or name == "point":

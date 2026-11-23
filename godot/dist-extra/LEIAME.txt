@@ -1,0 +1,44 @@
+Drill Season (versão Godot)
+
+Linux:   deixe DrillSeason.x86_64 e DrillSeason.pck na mesma pasta e rode
+           chmod +x DrillSeason.x86_64
+           ./DrillSeason.x86_64
+Windows: abra DrillSeason.exe (se aparecer "O Windows protegeu o computador",
+         clique em Mais informações > Executar assim mesmo).
+Mac:     arraste "Drill Season" para Aplicativos e, na primeira vez, clique com o
+         botão direito > Abrir.
+
+Modo console (TV e controle): rode console.sh (Linux) ou console.bat (Windows), ou aperte
+START / OPTIONS no controle na tela inicial, ou ligue em Settings > Console mode. Fica em
+tela cheia, com o texto maior, os botões do seu controle na tela (Xbox ou PlayStation),
+teclado na tela para digitar, menu de pausa no START e uma tela com todos os controles.
+Mira assistida e vibração para controle (dá para desligar em Settings).
+Para voltar ao modo PC: START > Desktop mode.
+
+Online (Android, Linux, Windows e Mac juntos): celular (Tab) > Online.
+  - Servers: a lista de servidores do mundo inteiro. Toque num, digite a senha se tiver,
+    e Join. Dentro do servidor tem chat (tecla Y) e a lista de jogadores.
+  - Create a server: o seu servidor (nome, senha, vagas, mensagem do dia, PvP). Ele fica
+    na lista de todo mundo enquanto você joga.
+  - Quick play: sala pública ou sala privada com código de 5 letras.
+  Não precisa abrir portas no roteador.
+
+Servidor dedicado (24 horas, sem você jogando): edite servidor.sh (Linux) ou
+servidor.bat (Windows) com o nome, a senha, as vagas e a mensagem, e rode. Deixe ligado
+num PC ou VPS: o servidor aparece em Online > Servers para todo mundo. Numa VPS Linux
+sem tela, instale antes o xvfb (sudo apt install xvfb).
+A senha segura curiosos, mas não é segurança forte: não use uma senha de outro lugar.
+
+Visual: cel shading com contorno de tinta. Num PC fraco dá para desligar o contorno em
+Settings > Ink outlines.
+
+Progresso do jogo web: no navegador, celular > Settings > Export my progress; aqui,
+"Import progress from the web game" na tela inicial.
+
+PC fraco (Intel HD Iron Lake): o padrão é o modo Fast. Se ficar lento, rode numa
+janela menor (Linux: ./DrillSeason.x86_64 --resolution 960x540).
+Os personagens, crews, marcas e lugares da história são fictícios.
+
+Em memória de King Von (1994–2020) e XXXTentacion (1998–2018). Long live.
+No Calder Park, a oeste do pavilhão, fica o jardim memorial com a réplica do mausoléu do
+XXXTentacion. Preste homenagem (E) e veja o céu responder.

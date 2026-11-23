@@ -395,7 +395,7 @@ func collide(v):
 		main.sfx.play3d("crash_big" if impact > 10 else "crash_small", v.pos + Vector3(0, 0.7, 0), clamp(impact / 12.0, 0.35, 1.5))
 		if v.driver == "player":
 			main.player.shake = min(1, impact / 18.0)
-			Input.start_joy_vibration(0, clamp(impact / 14.0, 0.2, 1), 0.8, 0.12 + impact * 0.012)
+			G.rumble(clamp(impact / 14.0, 0.2, 1), 0.8, 0.12 + impact * 0.012)
 			if impact > 12: main.player.hurt(impact * 0.6, null, true)
 	return impact
 

@@ -64,7 +64,7 @@ var rejected = {}           # ids the host turned away (everyone ignores them)
 var kicked = {}             # host: id -> until
 var chat = []               # [{ "n": name, "m": text }]
 var chat_t = 0.0
-const EMOTE_IDS = ["", "dance1", "dance2", "dance3", "hype", "clap", "laugh", "shrug", "salute", "point", "facepalm", "flex", "sit", "snowangel", "pray", "sturdy"]
+const EMOTE_IDS = ["", "dance1", "dance2", "dance3", "hype", "clap", "laugh", "shrug", "salute", "point", "facepalm", "flex", "sit", "snowangel", "pray", "sturdy", "griddy", "shmoney", "woah", "hitfolks"]
 const CAR_MODELS = ["hatch", "sedan", "suv", "pickup", "coupe", "van", "police", "taxi", "bruiser", "boulder"]
 
 # ---------- a tiny MQTT 3.1.1 client (QoS 0) over a WebSocket or plain TCP ----------

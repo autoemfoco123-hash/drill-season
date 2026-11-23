@@ -110,7 +110,7 @@ O jogo salva sozinho a cada 20 segundos e ao sair, em
 | Interagir, falar, recrutar | E | RB / R1 |
 | Trocar de arma | toque Q (ou 1 2 3 5 6, e 4 para os punhos) | toque LB / L1 |
 | Roda de armas (câmera lenta) | segure Q | segure LB / L1 |
-| Roda de emotes (danças, palmas, rir, sentar, anjo na neve...) | segure Z | segure D-pad esquerda |
+| Roda de emotes (danças, palmas, rir, sentar, anjo na neve...) | segure Z (Q / E trocam a página) | segure D-pad esquerda (LB / RB trocam a página) |
 | Bola de neve | X | pela roda de armas |
 | Se jogar no chão (ragdoll) | J (Espaço ou andar para levantar) | pela roda de emotes |
 | Correr | Shift | L3 |
@@ -123,6 +123,8 @@ O jogo salva sozinho a cada 20 segundos e ao sair, em
 | Pausar | Esc | Start / Menu |
 | Estúdio (jogo de ritmo) | D F J K ou setas | ◀ ▶ X B |
 | Pular cena | Espaço ou Enter | A / Cruz |
+| Teclado na tela (digitar com o controle) | — | A num campo de texto |
+| Menu de pausa (modo console) | Esc | Start / Options |
 
 No carro, W ou o gatilho direito acelera, S ou o gatilho esquerdo freia e dá ré, e H
 buzina.
@@ -168,10 +170,35 @@ Tudo do jogo web, mais algumas coisas só daqui:
   fontes de calor, café, aquecedores de mão, ulceração.
 - **Ragdoll** em todo mundo: quem cai baleado, nocauteado, atropelado ou pelo trem cai de verdade.
   Dá para escorregar no gelo correndo e se jogar no chão (J).
-- **Emotes:** quatro danças (two-step, arm wave, robô e a **sturdy**: base baixa, pisão para a
-  frente de um lado e do outro, os braços cruzando, e a cada dois compassos os punhos socando para
-  baixo), hype, palmas, rir, dar de ombros, continência, apontar, mão na cara, músculo, sentar,
-  anjo na neve e rezar. Quem está perto reage, e a sua gangue dança junto (a sturdy também).
+- **Emotes:** a roda tem duas páginas (LB / RB, Q / E, a rodinha do mouse ou um segundo dedo no
+  meio da roda). **Danças:** two-step, arm wave, robô, **sturdy** (base baixa, pisão para a frente
+  de um lado e do outro, os braços cruzando, e a cada dois compassos os punhos socando para baixo),
+  **griddy** (o calcanhar batendo na frente a cada tempo com um pulinho, os braços como numa
+  corrida e, a cada dois compassos, as mãos fazendo óculos nos olhos), **shmoney** (balanço nos
+  joelhos, um braço rolando para a frente do lado do corpo e o outro dobrado, trocando a cada
+  dois compassos), **woah** (os braços cruzam o peito e travam com uma afundada, um lado e depois
+  o outro) e **hit dem folks** (curvado, os dois braços descendo juntos para um lado e para o
+  outro). **Gestos:** acenar, dedo do meio, hype, palmas, rir, dar de ombros, continência,
+  apontar, mão na cara, músculo, sentar, anjo na neve, rezar e se jogar no chão. Quem está perto
+  reage, e a sua gangue e as pessoas na rua dançam junto.
+- **Modo console (TV e controle):** ligue em Settings → **Console mode**, aperte START /
+  OPTIONS na tela inicial, ou abra pelo `console.sh` / `console.bat` dos zips de PC (eles passam
+  `--console`). Fica assim:
+  - tela inicial de console: "Press any button" e depois blocos grandes (Continuar, Novo jogo,
+    Controles, Modo PC, Sair), com relógio e o nome do controle;
+  - tela cheia, sem ponteiro do mouse, o texto 11% maior e o HUD dentro da área segura da TV;
+  - os botões do seu controle na tela: letras coloridas do Xbox ou os símbolos do PlayStation
+    (✕ ○ □ △, L1, R1, Options), escolhidos pelo nome do controle;
+  - **teclado na tela** para tudo que pede texto (o nome do personagem, o servidor, a senha, o
+    chat, a gangue): A digita, B apaga, X espaço, Y maiúscula, LB / RB movem o cursor, START
+    confirma;
+  - **menu de pausa** no START (continuar, celular, mapa, controles, configurações, modo PC,
+    salvar e sair) e uma **tela de controles** com o controle desenhado;
+  - o analógico esquerdo e o D-pad segurado navegam em todos os menus, repetindo como num console.
+  Para qualquer controle (com ou sem o modo console): **mira assistida** (o analógico fica mais
+  lento em cima de alguém e, mirando, a mira puxa de leve para membros de crew e policiais perto
+  dela, com um pequeno "snap" quando você começa a mirar; parede bloqueia) e **vibração** nos
+  tiros, socos, pancadas e batidas de carro. Os dois podem ser desligados em Settings.
 - **Guerra de bolas de neve:** as pessoas riem, devolvem, fogem ou escorregam; a polícia não acha graça.
 - **Online com servidores (Android, Linux, Windows e Mac juntos):** no celular, **Online**:
   - **Servers**: a lista de servidores do mundo inteiro, com nome, jogadores/vagas, região e
@@ -396,7 +423,7 @@ listener websockets) e aponte o jogo para ele com
 
 Ele grava capturas e um `autotest.log`.
 
-Para ver rostos, barbas, o dedo do meio e o visual cel: `DS_LOOKTEST=1`. Para ver o editor de personagem e todas as telas do celular: `DS_UITEST=1`. Para os lugares de entrar: `DS_ROOMTEST=1`. Para as animações (andar, correr e parado, de lado, mais quantas pisadas por segundo em cada velocidade): `DS_ANIMTEST=1`; só a dança sturdy: `DS_ANIMTEST=sturdy`. Para a morte: `DS_DEATHTEST=1`. Para as armas (tiro e recarga de cada uma, em primeira e terceira pessoa) e os carros novos: `DS_GUNTEST=1`. Para as colisões (carro no muro, batida de frente, corpo contra carro girado, multidão): `DS_COLTEST=1`. Para testar servidores,
+Para ver rostos, barbas, o dedo do meio e o visual cel: `DS_LOOKTEST=1`. Para ver o editor de personagem e todas as telas do celular: `DS_UITEST=1`. Para os lugares de entrar: `DS_ROOMTEST=1`. Para as animações (andar, correr e parado, de lado, mais quantas pisadas por segundo em cada velocidade): `DS_ANIMTEST=1`; só a dança sturdy: `DS_ANIMTEST=sturdy`; griddy, shmoney, woah e hit dem folks: `DS_ANIMTEST=dances`. Para o modo console (tela inicial, teclado na tela, HUD de TV, pausa, controles de Xbox e PlayStation, as duas páginas da roda, o celular e a mira assistida): `DS_CONSOLETEST=1 DS_CONSOLE=1 DS_FAKEPAD=xbox` (ou `ps`); `DS_FAKEPAD` finge que tem um controle ligado. Para a morte: `DS_DEATHTEST=1`. Para as armas (tiro e recarga de cada uma, em primeira e terceira pessoa) e os carros novos: `DS_GUNTEST=1`. Para as colisões (carro no muro, batida de frente, corpo contra carro girado, multidão): `DS_COLTEST=1`. Para testar servidores,
 com um servidor dedicado rodando (`--server --name="Test Dedicated" --password=...`): `DS_SRVTEST=client`
 (com `DS_PW=` para a senha) acha o servidor, é barrado com a senha errada, entra com a certa, conversa
 e depois cria o "Test Host"; `DS_SRVTEST=joiner` noutro jogo entra nele. `DS_BROKERS=` troca os

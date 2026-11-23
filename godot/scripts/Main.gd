@@ -25,6 +25,7 @@ var memorial
 var sky
 var eras
 var interiors
+var console
 var camera
 var env
 var sun
@@ -84,7 +85,8 @@ func _ready():
 	sky = _system("res://scripts/Sky.gd", "Sky")
 	eras = _system("res://scripts/Eras.gd", "Eras")
 	interiors = _system("res://scripts/Interiors.gd", "Interiors")
-	for s in [sfx, vehicles, player, peds, police, crews, gang, hud, phone, title, story, cutscene, studio, blok, train, fx, net, wardrobe, cockpit, touch, memorial, sky, eras, interiors]:
+	console = _system("res://scripts/Console.gd", "Console")
+	for s in [sfx, vehicles, player, peds, police, crews, gang, hud, phone, title, story, cutscene, studio, blok, train, fx, net, wardrobe, cockpit, touch, memorial, sky, eras, interiors, console]:
 		s.setup(self)
 	story.build_npcs()
 	eras.build()

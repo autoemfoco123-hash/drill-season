@@ -22,6 +22,7 @@ func run(m):
 	elif OS.get_environment("DS_ANIMTEST") != "": call_deferred("_anim_test")
 	elif OS.get_environment("DS_DEATHTEST") != "": call_deferred("_death_test")
 	elif OS.get_environment("DS_GUNTEST") != "": call_deferred("_gun_test")
+	elif OS.get_environment("DS_CONSOLETEST") != "": call_deferred("_console_test")
 	else: call_deferred("_go")
 
 func _wait(s):
@@ -147,7 +148,7 @@ func _tour():
 	main.hud._open_wheel("emote"); main.hud.wheel_vec = Vector2(60, -60)
 	yield(_wait(0.3), "completed")
 	yield(_shot("10_emote_wheel"), "completed")
-	main.hud.wheel_sel = 2
+	main.hud.wheel_page = 0; main.hud.wheel_sel = 0
 	Input.action_release("emote")
 	yield(get_tree(), "idle_frame")
 	_face_ped(P, 4)
@@ -1089,6 +1090,23 @@ func _anim_test():
 		for _j in range(300): h.animate(0.01, { "speed": sp })
 		_log("footfalls at %.1f m/s: %.2f a second" % [sp, (h.foot - f0) / 3.0])
 	h.animate(0.5, { "speed": 0.0 })
+	if "dances" in OS.get_environment("DS_ANIMTEST"):
+		h.rotation.y = 0.55
+		_frame(at + Vector3(0, 1.0, 3.8), at + Vector3(0, 0.75, 0), 40)
+		for dn in ["griddy", "shmoney", "woah", "hitfolks"]:
+			h.animate(0.5, { "speed": 0.0 })
+			var et = 0.0
+			# griddy: the goggles come on beats 6-8, shmoney swaps arms after 8 beats
+			var span = { "griddy": 8.0 / 2.6, "shmoney": 10.0 / 2.2, "woah": 4.0 / 2.2, "hitfolks": 2.0 / 2.3 }[dn]
+			for k in range(6):
+				var target = 0.3 + k * span / 5.0
+				while et < target:
+					et += 0.016
+					h.animate(0.016, { "speed": 0.0, "emote": dn, "et": et })
+				yield(get_tree(), "idle_frame")
+				yield(_shot("a_%s_%d" % [dn, k]), "completed")
+		get_tree().quit()
+		return
 	if "sturdy" in OS.get_environment("DS_ANIMTEST"):
 		h.rotation.y = 0.55
 		_frame(at + Vector3(0, 1.0, 3.8), at + Vector3(0, 0.75, 0), 40)
@@ -1118,6 +1136,102 @@ func _anim_test():
 				h.animate(0.016, { "speed": spec[1] })
 				yield(get_tree(), "idle_frame")
 			yield(_shot("a_%s_%d" % [spec[0], k]), "completed")
+	get_tree().quit()
+
+# console mode (run with DS_CONSOLE=1 DS_FAKEPAD=xbox): the home screen, the on-screen keyboard,
+# the HUD in the TV layout with button icons, the pause menu, the controls screen (Xbox and
+# PlayStation), the emote wheel's two pages, the phone, and aim assist pulling onto a target
+func _console_test():
+	yield(_wait(1.5), "completed")
+	var C = main.console
+	_log("console %s · pad %s (%s) · ui %s" % [str(C.on), G.pad_kind, G.pad_name(), str(get_viewport().get_visible_rect().size)])
+	yield(_shot("c01_splash"), "completed")
+	C._home_tiles()
+	yield(_wait(0.5), "completed")
+	yield(_shot("c02_home"), "completed")
+	C.tiles[1].grab_focus()
+	yield(_wait(0.3), "completed")
+	C._t_new()
+	yield(_wait(0.2), "completed")
+	var K = C.osk
+	# type "ice" with the D-pad and A, then the rest
+	K.row = 2; K.col = 0
+	K.move(Vector2(0, -1)); K.move(Vector2(1, 0)); K.move(Vector2(1, 0)); K.move(Vector2(1, 0)); K.move(Vector2(1, 0)); K.move(Vector2(1, 0)); K.move(Vector2(1, 0)); K.move(Vector2(1, 0))
+	_log("keyboard key: %s" % K.keys[K.row][K.col][0])
+	K.press()
+	K.type("ce.kold")
+	K.shift = true
+	yield(_wait(0.2), "completed")
+	yield(_shot("c03_keyboard"), "completed")
+	_log("typed: %s" % K.text)
+	C.close_keyboard(true)
+	yield(_wait(2.0), "completed")
+	_log("started as @%s, mode %s" % [G.S["name"], G.MODE])
+	G.time_offset += (13 * 60 - G.world_minutes())
+	var P = main.player
+	P.place(2, 0, -20, 0)
+	var v = main.vehicles.spawn("sedan", P.pos.x + 2.4, P.pos.z, 0, { "owned": true, "color": 0x8a1c24 })
+	yield(_wait(1.0), "completed")
+	yield(_shot("c04_hud"), "completed")
+	C.pause_menu()
+	yield(_wait(0.3), "completed")
+	yield(_shot("c05_pause"), "completed")
+	main.hud.close_menu()
+	C.controls()
+	yield(_wait(0.3), "completed")
+	yield(_shot("c06_controls"), "completed")
+	G.pad_kind = "ps"
+	C.over.update()
+	yield(_wait(0.2), "completed")
+	yield(_shot("c07_controls_ps"), "completed")
+	C.close_controls()
+	yield(_wait(0.4), "completed")
+	yield(_shot("c08_hud_ps"), "completed")
+	G.pad_kind = "xbox"
+	main.vehicles.remove(v)
+	# the emote wheel: dances, then gestures
+	Input.action_press("emote")
+	main.hud.wheel_page = 0
+	main.hud._open_wheel("emote"); main.hud.wheel_vec = Vector2(70, -40)
+	yield(_wait(0.3), "completed")
+	yield(_shot("c09_wheel_dances"), "completed")
+	main.hud.wheel_flip(1)
+	main.hud.wheel_vec = Vector2(-60, -60)
+	yield(_wait(0.3), "completed")
+	yield(_shot("c10_wheel_emotes"), "completed")
+	main.hud.wheel_flip(-1)
+	main.hud.wheel_sel = 4
+	Input.action_release("emote")
+	yield(_wait(1.2), "completed")
+	_log("wheel picked: %s" % P.emote_name)
+	_clean_view(false)
+	P.cam_yaw = PI
+	yield(_shot("c11_griddy"), "completed")
+	P.emote_name = ""
+	# the phone in the TV layout
+	main.phone.open("settings")
+	yield(_wait(0.9), "completed")
+	yield(_shot("c12_phone_settings"), "completed")
+	main.phone.close(true)
+	yield(_wait(0.5), "completed")
+	# aim assist: a crew member a little off the crosshair, the controller aiming
+	var fwd = -main.camera.global_transform.basis.z
+	var side = Vector3(-fwd.z, 0, fwd.x).normalized()
+	var at = P.pos + Vector3(fwd.x, 0, fwd.z).normalized() * 11 + side * 1.4
+	var crew = main.crews.spawn_crew(at, 1, 0)
+	var e = crew.members[0]
+	crew.state = "standoff"
+	G.last_pad = true
+	Input.action_press("aim")
+	var angs = []
+	for i in range(40):
+		yield(get_tree(), "idle_frame")
+		e.pos = at
+		var cam = main.camera
+		var to = (e.pos + Vector3(0, 1.3, 0) - cam.global_transform.origin).normalized()
+		if i % 8 == 0: angs.append(stepify(rad2deg((-cam.global_transform.basis.z).angle_to(to)), 0.1))
+	Input.action_release("aim")
+	_log("aim assist, degrees off target over time: %s (assist %.2f)" % [str(angs), P.assist_f])
 	get_tree().quit()
 
 # dying: the ragdoll, the camera on it, the red screen, then waking up at the hospital

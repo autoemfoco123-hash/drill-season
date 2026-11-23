@@ -750,6 +750,90 @@ func _emote(em, t):
 		_rot(AR.sh, 0, 0, 1.45 - sin(a + 2.4) * 0.35 * k); _rot(AR.elbow, -0.5 - sin(a + 3.6) * 0.6, 0, 0)
 		_rot(spine, 0.05, 0, sin(a) * 0.09); _rot(head_g, 0, 0, -sin(a) * 0.12)
 		_rot(L.knee, 0.2 + max(0, sin(a * 0.5)) * 0.3, 0, 0); _rot(R.knee, 0.2 + max(0, -sin(a * 0.5)) * 0.3, 0, 0)
+	elif em == "griddy":
+		# the griddy: a heel tapped out front on every beat with a skip between, the arms pumping
+		# like a sprint; every two bars the hands come up round the eyes like goggles
+		var u = t * 2.6
+		var w = sin(u * PI)                             # +1 right heel out .. -1 left heel out
+		var r = max(0.0, w)
+		var l = max(0.0, -w)
+		var u8 = fmod(u, 8.0)
+		var g = clamp((u8 - 5.7) * 4.0, 0.0, 1.0) * clamp((8.0 - u8) * 4.0, 0.0, 1.0)
+		hips.translation.y = lerp(0.92, 0.86 + (1.0 - abs(w)) * 0.05, k)
+		hips.translation.x = -w * 0.025 * k
+		_rot(hips, 0, w * 0.12 * k, 0)
+		_rot(R.thigh, lerp(-0.3, -0.42, r) * k, 0, 0.04); _rot(R.knee, lerp(0.65, 0.05, r) * k + 0.05, 0, 0)
+		_rot(L.thigh, lerp(-0.3, -0.42, l) * k, 0, -0.04); _rot(L.knee, lerp(0.65, 0.05, l) * k + 0.05, 0, 0)
+		var sw = w * 0.85
+		_rot(AL.sh, lerp(-0.15 - sw, -1.45, g) * k, 0, lerp(-0.12, 0.5, g) * k); _rot(AL.elbow, lerp(-1.5, -2.35, g) * k, 0, 0)
+		_rot(AR.sh, lerp(-0.15 + sw, -1.45, g) * k, 0, lerp(0.12, -0.5, g) * k); _rot(AR.elbow, lerp(-1.5, -2.35, g) * k, 0, 0)
+		_rot(spine, lerp(-0.06, 0.02, g) * k, -w * 0.1 * k, 0)
+		_rot(head_g, (-0.05 + abs(w) * 0.06) * k, 0, 0)
+	elif em == "shmoney":
+		# the shmoney: a loose bounce on the knees, rocking side to side, one arm swinging and
+		# rolling out at the side on every beat, the other bent at the ribs; the arms swap every
+		# two bars, with a lean back and a shoulder shake
+		var u = t * 2.2
+		var b = u * PI
+		var u16 = fmod(u, 16.0)
+		var a = clamp((u16 - 7.6) * 2.5, 0.0, 1.0) * clamp((16.0 - u16) * 2.5, 0.0, 1.0)   # 0 right arm swings .. 1 left
+		var sw = sin(b)
+		var rock = sin(b * 0.5)
+		hips.translation.y = lerp(0.92, 0.87 - abs(sw) * 0.035, k)
+		hips.translation.x = rock * 0.06 * k
+		_rot(hips, 0, rock * 0.14 * k, -rock * 0.04 * k)
+		_rot(L.thigh, -0.18 * k, 0, -0.1); _rot(L.knee, (0.38 + max(0.0, rock) * 0.25) * k, 0, 0)
+		_rot(R.thigh, -0.18 * k, 0, 0.1); _rot(R.knee, (0.38 + max(0.0, -rock) * 0.25) * k, 0, 0)
+		var sx = -0.35 - sw * 0.6                       # the swinging arm, out at the side
+		var ex = -0.45 - max(0.0, sw) * 0.75            # its forearm rolling forward
+		var ox = -0.35 - abs(sw) * 0.1                  # the bent arm
+		_rot(AR.sh, lerp(sx, ox, a) * k, 0, lerp(0.32, 0.45, a) * k); _rot(AR.elbow, lerp(ex, -1.7, a) * k, 0, 0)
+		_rot(AL.sh, lerp(ox, sx, a) * k, 0, -lerp(0.45, 0.32, a) * k); _rot(AL.elbow, lerp(-1.7, ex, a) * k, 0, 0)
+		var side = 1.0 - 2.0 * a
+		_rot(spine, (-0.1 + abs(sw) * 0.05) * k, (side * 0.15 + rock * 0.08) * k, sin(b * 2.0) * 0.04 * k)
+		_rot(head_g, (0.05 + abs(sw) * 0.1) * k, -side * 0.12 * k, 0)
+	elif em == "woah":
+		# the woah: a bounce, then every other beat the arms whip across the chest and stop dead
+		# with a dip and a lean, the head turned away; one side, then the other
+		var u = t * 2.2
+		var side = 1.0 if int(floor(u / 2.0)) % 2 == 0 else -1.0
+		var f2 = fmod(u, 2.0) / 2.0
+		var hit = 1.0 - pow(1.0 - clamp(f2 * 6.0, 0.0, 1.0), 3.0)    # snaps in fast ...
+		hit *= clamp((1.0 - f2) * 4.0, 0.0, 1.0)                     # ... holds, lets go before the next
+		var bob = abs(sin(u * PI))
+		hips.translation.y = lerp(0.92, 0.88 - hit * 0.06 - bob * 0.015, k)
+		_rot(hips, 0, side * hit * 0.25 * k, 0)
+		_rot(L.thigh, -0.2 * k, 0, -0.12); _rot(L.knee, (0.35 + hit * 0.35) * k, 0, 0)
+		_rot(R.thigh, -0.2 * k, 0, 0.12); _rot(R.knee, (0.35 + hit * 0.35) * k, 0, 0)
+		# loose: [x, z, elbow]; the lead arm across the chest, the other punched down and out
+		var lead = [-0.9, -0.62, -1.4]
+		var low = [0.15, 0.6, -0.15]
+		var rr = lead if side > 0 else low
+		var ll = low if side > 0 else lead
+		_rot(AR.sh, lerp(-0.3, rr[0], hit) * k, 0, lerp(0.15, rr[1], hit) * k); _rot(AR.elbow, lerp(-1.2, rr[2], hit) * k, 0, 0)
+		_rot(AL.sh, lerp(-0.3, ll[0], hit) * k, 0, -lerp(0.15, ll[1], hit) * k); _rot(AL.elbow, lerp(-1.2, ll[2], hit) * k, 0, 0)
+		_rot(spine, (0.06 + hit * 0.08) * k, side * hit * 0.2 * k, side * hit * 0.1 * k)
+		_rot(head_g, (0.04 + bob * 0.06) * k, -side * hit * 0.35 * k, 0)
+	elif em == "hitfolks":
+		# hit dem folks: bent at the waist, both arms swinging down together across the body to
+		# one side on a beat, up through the chest, then down to the other side, knees giving
+		var u = t * 2.3
+		var s0 = sin(u * PI)
+		var sv = sign(s0) * pow(abs(s0), 0.6)
+		var a = abs(sv)
+		hips.translation.y = lerp(0.92, 0.86 - a * 0.04, k)
+		_rot(hips, 0, -sv * 0.15 * k, 0)
+		_rot(L.thigh, -0.35 * k, 0, -0.14); _rot(L.knee, (0.65 + a * 0.15) * k, 0, 0)
+		_rot(R.thigh, -0.35 * k, 0, 0.14); _rot(R.knee, (0.65 + a * 0.15) * k, 0, 0)
+		# [x, z, elbow] for each arm: up at the chest between swings, down to the side on one
+		var mid_r = [-1.0, 0.1, -1.3]
+		var mid_l = [-1.0, -0.1, -1.3]
+		# (positive z takes the right arm out and the left arm across)
+		var to_r = [[-0.4, 0.35, -0.25], [-0.95, 0.55, -0.3]] if sv >= 0 else [[-0.95, -0.55, -0.3], [-0.4, -0.35, -0.25]]
+		_rot(AR.sh, lerp(mid_r[0], to_r[0][0], a) * k, 0, lerp(mid_r[1], to_r[0][1], a) * k); _rot(AR.elbow, lerp(mid_r[2], to_r[0][2], a) * k, 0, 0)
+		_rot(AL.sh, lerp(mid_l[0], to_r[1][0], a) * k, 0, lerp(mid_l[1], to_r[1][1], a) * k); _rot(AL.elbow, lerp(mid_l[2], to_r[1][2], a) * k, 0, 0)
+		_rot(spine, (0.42 + a * 0.06) * k, sv * 0.35 * k, 0)
+		_rot(head_g, (0.05 - a * 0.08) * k, -sv * 0.1 * k, 0)
 	elif em == "sturdy":
 		# the sturdy: sitting low, chest over the toes, a heavy drop on every beat. The feet trade a
 		# stomp out front, side to side with a little hop between, the hips turn into the stomping

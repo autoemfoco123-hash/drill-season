@@ -4,6 +4,8 @@ extends Node
 # settings, input bindings and the shared world clock.
 
 const SAVE_PATH = "user://save.json"
+# every dance on the emote wheel (the street and your gang join in on these)
+const DANCES = ["dance1", "dance2", "dance3", "sturdy", "griddy", "shmoney", "woah", "hitfolks"]
 const WEB_SAVE_NAME = "drill-season-save.json"
 
 var D = {}              # assets/data.json
@@ -442,6 +444,99 @@ func _setup_input():
 			for b in a[3]:
 				_pad(name, b)
 	# menus: ui_* actions already include the arrows, Enter, Escape and the pad's A/B/D-pad
+
+# ---------- buttons on screen: keys, or the controller's own (Xbox letters or PlayStation shapes) ----------
+var last_pad = false        # the last thing touched was a controller
+var console_on = false      # console mode (Console.gd keeps it)
+var pad_kind = "xbox"       # "xbox" or "ps", from the controller's name
+const PAD_FILE = { "A": "a", "B": "b", "X": "x", "Y": "y", "LB": "lb", "RB": "rb", "LT": "lt", "RT": "rt", "LS": "ls", "RS": "rs",
+	"VIEW": "view", "MENU": "menu", "UP": "up", "DOWN": "down", "LEFT": "left", "RIGHT": "right" }
+const PAD_XB = { "A": "A", "B": "B", "X": "X", "Y": "Y", "LB": "LB", "RB": "RB", "LT": "LT", "RT": "RT", "LS": "LS", "RS": "RS",
+	"VIEW": "View", "MENU": "Menu", "UP": "D-pad up", "DOWN": "D-pad down", "LEFT": "D-pad left", "RIGHT": "D-pad right" }
+const PAD_PS = { "A": "✕", "B": "○", "X": "□", "Y": "△", "LB": "L1", "RB": "R1", "LT": "L2", "RT": "R2", "LS": "L3", "RS": "R3",
+	"VIEW": "Create", "MENU": "Options", "UP": "D-pad up", "DOWN": "D-pad down", "LEFT": "D-pad left", "RIGHT": "D-pad right" }
+const BTN_NAME = { JOY_XBOX_A: "A", JOY_XBOX_B: "B", JOY_XBOX_X: "X", JOY_XBOX_Y: "Y", JOY_L: "LB", JOY_R: "RB", JOY_L2: "LT", JOY_R2: "RT",
+	JOY_L3: "LS", JOY_R3: "RS", JOY_SELECT: "VIEW", JOY_START: "MENU", JOY_DPAD_UP: "UP", JOY_DPAD_DOWN: "DOWN", JOY_DPAD_LEFT: "LEFT", JOY_DPAD_RIGHT: "RIGHT" }
+
+var fake_pad = OS.get_environment("DS_FAKEPAD")   # tests: pretend an "xbox" or "ps" pad is plugged in
+
+func has_pad():
+	return Input.get_connected_joypads().size() > 0 or fake_pad != ""
+
+func pad_name():
+	var pads = Input.get_connected_joypads()
+	if pads.size() > 0: return Input.get_joy_name(pads[0])
+	if fake_pad != "": return "DualSense Wireless Controller" if fake_pad == "ps" else "Xbox Wireless Controller"
+	return ""
+
+func detect_pad_kind():
+	if fake_pad != "": return "ps" if fake_pad == "ps" else "xbox"
+	var pads = Input.get_connected_joypads()
+	if pads.empty(): return "xbox"
+	var n = Input.get_joy_name(pads[0]).to_lower()
+	for k in ["playstation", "dualshock", "dualsense", "sony", "ps3", "ps4", "ps5", "wireless controller"]:
+		if k in n: return "ps"
+	return "xbox"
+
+# show controller buttons? (one is plugged in, and it's what you used last, or console mode is on)
+func pad_on():
+	return has_pad() and (last_pad or console_on)
+
+# "A", "RB", "MENU"... as the player's controller calls it ("✕", "R1", "Options" on a PlayStation pad)
+func pad_label(b):
+	return (PAD_PS if pad_kind == "ps" else PAD_XB).get(b, b)
+
+var _pad_cache = {}
+# icons are kept once loaded: a texture loaded inside a _draw() and dropped would be freed before
+# the frame is drawn (and show up as a white box)
+func pad_tex(b):
+	if not PAD_FILE.has(b): return null
+	return pad_tex_file(PAD_FILE[b])
+
+func pad_tex_file(f):
+	var path = "res://assets/ui/pad/%s_%s.png" % [pad_kind, f]
+	if not _pad_cache.has(path): _pad_cache[path] = load(path)
+	return _pad_cache[path]
+
+# the controller button an action is on, by its Xbox name
+func action_btn(action):
+	if not InputMap.has_action(action): return ""
+	for e in InputMap.get_action_list(action):
+		if e is InputEventJoypadButton and BTN_NAME.has(e.button_index): return BTN_NAME[e.button_index]
+	for e in InputMap.get_action_list(action):
+		if e is InputEventJoypadMotion:
+			if e.axis == JOY_AXIS_6: return "LT"
+			if e.axis == JOY_AXIS_7: return "RT"
+			return "LS" if e.axis <= JOY_AXIS_1 else "RS"
+	return ""
+
+func action_key(action):
+	if not InputMap.has_action(action): return "?"
+	for e in InputMap.get_action_list(action):
+		if e is InputEventKey: return OS.get_scancode_string(e.scancode)
+	for e in InputMap.get_action_list(action):
+		if e is InputEventMouseButton: return ["", "Left click", "Right click", "Middle click"][min(e.button_index, 3)]
+	return "?"
+
+# the button for an action, as text: "E" on a keyboard, "RB" or "R1" on a controller
+func glyph(action):
+	if pad_on():
+		var b = action_btn(action)
+		if b != "": return pad_label(b)
+	return action_key(action)
+
+# the same as a picture for RichTextLabels (a key in brackets when there's no controller)
+func glyph_bb(action, size = 24):
+	if pad_on():
+		var b = action_btn(action)
+		if PAD_FILE.has(b): return "[img=%d]res://assets/ui/pad/%s_%s.png[/img]" % [size, pad_kind, PAD_FILE[b]]
+	return "[" + action_key(action) + "]"
+
+# controller rumble on every connected pad (Settings → Vibration turns it off)
+func rumble(weak, strong, dur):
+	if typeof(S) == TYPE_DICTIONARY and S.has("settings") and not S["settings"].get("rumble", true): return
+	for p in Input.get_connected_joypads():
+		Input.start_joy_vibration(p, weak, strong, dur)
 
 # ---------- looks (the same skin format as the web wardrobe) ----------
 func clean_skin(s):
