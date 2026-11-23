@@ -65,7 +65,7 @@ var kicked = {}             # host: id -> until
 var chat = []               # [{ "n": name, "m": text }]
 var chat_t = 0.0
 const EMOTE_IDS = ["", "dance1", "dance2", "dance3", "hype", "clap", "laugh", "shrug", "salute", "point", "facepalm", "flex", "sit", "snowangel"]
-const CAR_MODELS = ["hatch", "sedan", "suv", "pickup", "coupe", "van", "police", "taxi"]
+const CAR_MODELS = ["hatch", "sedan", "suv", "pickup", "coupe", "van", "police", "taxi", "bruiser", "boulder"]
 
 # ---------- a tiny MQTT 3.1.1 client (QoS 0) over a WebSocket or plain TCP ----------
 class Mqtt extends Reference:
@@ -563,7 +563,7 @@ func _event(id, e):
 			var vb = Vector3(_num(b[0], -300, 300), _num(b[1], -5, 60), _num(b[2], -300, 300))
 			if r == null or va.distance_to(r.pos) < 10:
 				main.sfx.tracer(va, vb)
-				main.sfx.shot(str(e.get("k", "k9")) if str(e.get("k", "")) in ["k9", "draft", "plow"] else "k9", va, 0.8)
+				main.sfx.shot(str(e.get("k", "k9")) if str(e.get("k", "")) in GUN.IDS else "k9", va, 0.8)
 				main.sfx.flash(va)
 		return
 	if t == "chat":

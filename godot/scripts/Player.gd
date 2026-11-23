@@ -39,6 +39,26 @@ var wave_t = 0.0
 var flip_t = 0.0
 var fire_note_t = 0.0
 var death_t = 0.0          # seconds since you died (the death screen)
+# first person: head bob, tilt, landing dip, weapon sway
+var bob_ph = 0.0
+var cam_roll = 0.0
+var land_dip = 0.0
+var was_ground = true
+var air_vy = 0.0
+var _look_yaw = 0.0
+var _look_pitch = 0.0
+var sway = Vector2()
+# the gun's own animation: kick, the slide/bolt/pump cycle, the flash, the reload
+var vm_kick = 0.0
+var shot_t = 9.0
+var flash_t = 0.0
+var flash_frames = 0       # the flash shows for at least this many drawn frames
+var flash_rot = 0.0
+var flash_scale = 1.0
+var reload_total = 1.0
+var reload_shells = 1
+var eject_at = -1.0
+var lh = null              # first person: the other hand, for reloads
 var respawning = false
 var last_from = null       # where the last hit came from, for the fall
 var hands_up = 0.0
@@ -142,6 +162,8 @@ func _input(e):
 	elif e.is_action_pressed("gun1"): switch_weapon("k9")
 	elif e.is_action_pressed("gun2"): switch_weapon("draft")
 	elif e.is_action_pressed("gun3"): switch_weapon("plow")
+	elif e.is_action_pressed("gun4"): switch_weapon("dragon")
+	elif e.is_action_pressed("gun5"): switch_weapon("buzz")
 	elif e.is_action_pressed("fists"): set_fists(true)
 	elif e.is_action_pressed("crouch") and not car:
 		crouch = not crouch
@@ -302,10 +324,11 @@ func update(dt):
 	var fists = G.S.get("fists", false)
 	human.animate(dt, {
 		"speed": speed, "crouch": (1.0 if not aiming else 0.6) if crouch else 0.0, "aim": 0.0 if fists else max(aim_t, 1.0 if G.GAME_T - last_shot < 0.5 else 0.0),
-		"pitch": cam_pitch, "down": (clamp(down_t, 0, 1) if down else 0.0) if emote_name != "snowangel" else min(1.0, emote_t * 3), "twoHand": G.S["cur"] != "k9", "shiver": G.S.get("warmth", 100) < 30,
+		"pitch": cam_pitch, "down": (clamp(down_t, 0, 1) if down else 0.0) if emote_name != "snowangel" else min(1.0, emote_t * 3), "twoHand": not G.S["cur"] in ["k9", "buzz"], "shiver": G.S.get("warmth", 100) < 30,
 		"hands": hands_up > 0, "wave": wave_t > 0 and not aiming, "flip": flipping(),
 		"fists": fists, "guard": fists and aiming, "punch": punch_t / punch_dur if punch_t > 0 else 0.0, "punchSide": punch_side, "hook": punch_hook,
 		"emote": emote_name, "et": emote_t,
+		"reload": _reload_u() if not fists else -1.0, "kick": vm_kick if not fists else 0.0,
 	})
 	if throw_t > 0:
 		# overhand throw on the right arm
@@ -313,6 +336,15 @@ func update(dt):
 		human._rot(human.AR.sh, lerp(-2.7, -0.6, 1 - tk), 0, 0.2); human._rot(human.AR.elbow, lerp(-1.6, -0.2, 1 - tk), 0, 0); human.sync_bones()
 	if gun_model:
 		gun_model.visible = not fists and hands_up <= 0 and emote_name == "" and throw_t <= 0
+		if gun_model.visible and not fp_on():
+			_apply_gun(gun_model, G.S["cur"], _gun_pose(G.S["cur"], _reload_u()))
+	shot_t += dt
+	flash_t -= dt
+	flash_frames -= 1
+	vm_kick *= exp(-dt * 14.0)
+	if eject_at >= 0 and shot_t >= eject_at:
+		eject_at = -1.0
+		_eject_brass()
 	# timers
 	fire_cd -= dt; switch_t -= dt; bloom = max(0, bloom - dt * 2.2)
 	if reload_t > 0:
@@ -379,8 +411,25 @@ func update_camera(dt):
 	var zoom = lerp(1.0, float(stats().get("zoom", 1.2)) if not G.S.get("fists", false) else 1.0, a)
 	if fp_on():
 		var fwd2 = Vector3(-sin(cam_yaw), 0, -cos(cam_yaw))
-		cam.translation = Vector3(pos.x, pivot_y, pos.z) + fwd2 * 0.14 + jit
-		cam.rotation = Vector3(clamp(cam_pitch + recoil, -1.45, 1.45), cam_yaw, 0)
+		var rgt = Vector3(cos(cam_yaw), 0, -sin(cam_yaw))
+		# head bob: a step's dip and a little side to side, less when aiming, none in the air
+		var hb = 1.0 if G.S["settings"].get("headbob", true) else 0.0
+		var ab = clamp(speed / 5.5, 0.0, 1.2) * (1.0 - aim_t * 0.75) * (1.0 if on_ground else 0.0) * hb
+		bob_ph += dt * speed * 1.85
+		var by = -abs(sin(bob_ph)) * 0.042 * ab
+		var bxl = sin(bob_ph) * 0.02 * ab
+		# a dip when you land, deeper after a longer fall
+		if on_ground and not was_ground: land_dip = min(0.16, 0.03 + abs(air_vy) * 0.012) * max(hb, 0.3)
+		was_ground = on_ground
+		if not on_ground: air_vy = vel.y
+		land_dip *= exp(-dt * 7.0)
+		# tilt: lean into a strafe and a turn, plus a touch with each step
+		var strafe = (Input.get_action_strength("move_r") - Input.get_action_strength("move_l")) if G.MODE == "play" and not dead else 0.0
+		var yr = G.ang_diff(_look_yaw, cam_yaw) / max(dt, 0.001)
+		var roll_t = (-strafe * 0.032 - clamp(yr, -6.0, 6.0) * 0.004) * hb + sin(bob_ph) * 0.006 * ab
+		cam_roll += (roll_t - cam_roll) * (1 - exp(-dt * 8.0))
+		cam.translation = Vector3(pos.x, pivot_y + by - land_dip, pos.z) + fwd2 * 0.14 + rgt * bxl + jit
+		cam.rotation = Vector3(clamp(cam_pitch + recoil, -1.45, 1.45), cam_yaw, cam_roll)
 		cam.fov = lerp(cam.fov, (float(G.S["settings"].get("fov", 70)) + (6 if sprinting else 0)) / zoom, 1 - exp(-dt * 12))
 		human.visible = false
 		_update_vm(dt, a)
@@ -439,6 +488,7 @@ func _update_vm(dt, a):
 	var key = G.S["cur"] + str(G.S.get("fists", false)) + JSON.print(GUN.cfg_of(G.S["cur"]))
 	if vm == null or key != vm_key:
 		if vm: vm.queue_free()
+		lh = null
 		vm = Spatial.new()
 		main.camera.add_child(vm)
 		var skin = G.hex_color(G.skin_opts(G.S["skin"]).skin)
@@ -454,10 +504,20 @@ func _update_vm(dt, a):
 			vm.add_child(vm_gun)
 			_vm_part(vm, SphereMesh.new(), skin, Vector3(0.004, -0.032, 0.035), Vector3(0.04, 0.045, 0.05))
 			_vm_part(vm, CylinderMesh.new(), sleeve, Vector3(0.06, -0.13, 0.22), Vector3(0.04, 0.2, 0.04), Vector3(1.0, 0, 0.3))
+			# the other hand, in the gun's own space, for reloads and racking
+			lh = Spatial.new(); lh.name = "LH"; vm_gun.add_child(lh)
+			_vm_part(lh, SphereMesh.new(), skin, Vector3(), Vector3(0.042, 0.04, 0.05))
+			_vm_part(lh, CylinderMesh.new(), sleeve, Vector3(-0.03, -0.12, -0.08), Vector3(0.04, 0.2, 0.04), Vector3(0.6, 0, -0.3))
+			lh.visible = false
 		vm_key = key
 	vm.visible = hands_up <= 0
 	var bob = min(1.0, speed / 5.0)
-	var bx = cos(step_acc * 6) * 0.01 * bob
+	var bx = cos(bob_ph) * 0.012 * bob
+	# weapon sway: the gun lags a little behind where you look
+	var dyaw = G.ang_diff(_look_yaw, cam_yaw)
+	var dpit = cam_pitch - _look_pitch
+	_look_yaw = cam_yaw; _look_pitch = cam_pitch
+	sway = sway.linear_interpolate(Vector2(clamp(-dyaw * 1.6, -0.12, 0.12), clamp(dpit * 1.6, -0.1, 0.1)), 1 - exp(-dt * 10.0))
 	if G.S.get("fists", false):
 		for s in [-1, 1]:
 			var f = vm.get_node("L" if s < 0 else "R")
@@ -467,12 +527,120 @@ func _update_vm(dt, a):
 			if punch_t > 0 and punch_side == s:
 				var e = sin(clamp(punch_t / punch_dur, 0, 1) * PI)
 				z -= 0.26 * e; y += 0.06 * e; x = lerp(x, s * 0.03, e)
-			f.translation = Vector3(x + bx, y, z)
+			f.translation = Vector3(x + bx, y + abs(sin(bob_ph)) * 0.008 * bob, z)
 		vm.translation = Vector3()
+		vm.rotation = Vector3(sway.y, sway.x, 0)
 	else:
-		var reload = sin(clamp(reload_t / max(0.2, float(stats().get("reload", 1))), 0, 1) * PI) if reload_t > 0 else 0.0
-		vm.translation = Vector3(lerp(0.13, 0.0, a) + bx, lerp(-0.15, -0.092, a) - reload * 0.12, lerp(-0.42, -0.36, a))
-		vm.rotation = Vector3(reload * 0.6, lerp(0.04, 0.0, a), 0)
+		var id = G.S["cur"]
+		var P = _gun_pose(id, _reload_u())
+		var kk = vm_kick * clamp(float(stats().get("recoil", 1.0)), 0.5, 2.5)
+		vm.translation = Vector3(lerp(0.13, 0.0, a) + bx + sway.x * 0.08, lerp(-0.15, -0.092, a) + abs(sin(bob_ph)) * 0.008 * bob, lerp(-0.42, -0.36, a)) + P.off + Vector3(0, 0.004, 0.045) * kk
+		vm.rotation = Vector3(0.11 * kk + sway.y, lerp(0.04, 0.0, a) + sway.x + (randf() - 0.5) * 0.01 * kk, 0) + P.rot
+		_apply_gun(vm_gun, id, P)
+		if lh:
+			lh.visible = P.hand != null
+			if P.hand != null: lh.translation = P.hand
+
+# ---------- the gun moving: what fires, what reloads ----------
+# where the mag sits and which way it drops (gun space: barrel +Z, up +Y), and where the
+# other hand grabs to rack it
+const MAGW = { "k9": Vector3(0, -0.04, -0.02), "draft": Vector3(0, -0.06, 0.11), "dragon": Vector3(0, -0.08, 0.15), "buzz": Vector3(0, -0.07, 0.0) }
+const MAGD = { "k9": Vector3(0, -0.28, -0.07), "draft": Vector3(0, -0.3, 0.03), "dragon": Vector3(0, -0.3, 0.1), "buzz": Vector3(0, -0.32, 0.03) }
+const RACK = { "k9": Vector3(0, 0.09, -0.03), "draft": Vector3(0.05, 0.08, 0.13), "dragon": Vector3(0.05, 0.07, 0.14), "buzz": Vector3(0, 0.15, 0.12), "plow": Vector3(0, 0.02, 0.31) }
+
+func _ease(x):
+	x = clamp(x, 0.0, 1.0)
+	return x * x * (3.0 - 2.0 * x)
+
+func _reload_u():
+	return (1.0 - reload_t / max(0.2, reload_total)) if reload_t > 0 else -1.0
+
+# the pose of the gun's parts at reload progress u (-1 when not reloading)
+func _gun_pose(id, u):
+	var kind = GUN.KIND.get(id, "pistol")
+	var g = G.S["guns"].get(id, { "mag": 1 })
+	var out = { "rot": Vector3(), "off": Vector3(), "slide": 0.0, "mag": Vector3(), "mag_vis": kind != "shotgun", "hand": null }
+	if u < 0:
+		if kind == "shotgun":
+			# pump: back and forward a moment after the shot
+			var t = shot_t - 0.16
+			if t > 0 and t < 0.28:
+				out.slide = clamp(t / 0.14, 0.0, 1.0) if t < 0.14 else clamp(1.0 - (t - 0.14) / 0.14, 0.0, 1.0)
+				out.off = Vector3(0, -0.012, 0.02) * sin(t / 0.28 * PI)
+				out.hand = RACK.plow + Vector3(0, 0, -GUN.TRAVEL.plow * out.slide)
+		else:
+			out.slide = clamp(shot_t / 0.012, 0.0, 1.0) if shot_t < 0.012 else clamp(1.0 - (shot_t - 0.012) / 0.05, 0.0, 1.0)
+			if kind == "pistol" and int(g.mag) <= 0: out.slide = 1.0
+		return out
+	var tilt = min(_ease(u / 0.15), _ease((1.0 - u) / 0.12))
+	if kind == "shotgun":
+		# roll it over and push shells into the loading port one by one, then pump
+		out.rot = Vector3(0.12, 0, -0.45) * tilt
+		out.off = Vector3(0.03, 0.03, 0) * tilt
+		var n = max(1, reload_shells)
+		if u >= 0.12 and u < 0.86:
+			var seg = 0.74 / n
+			var k = int((u - 0.12) / seg)
+			var sp = (u - 0.12 - k * seg) / seg
+			out.mag = Vector3(0.01, -0.22, -0.02).linear_interpolate(Vector3(), _ease((sp - 0.15) / 0.6))
+			out.mag_vis = sp < 0.85
+			out.hand = out.mag + Vector3(0, -0.035, 0.08)
+		elif u >= 0.86:
+			var pp = (u - 0.86) / 0.14
+			out.slide = clamp(pp / 0.5, 0.0, 1.0) if pp < 0.5 else clamp(1.0 - (pp - 0.5) / 0.5, 0.0, 1.0)
+			out.hand = RACK.plow + Vector3(0, 0, -GUN.TRAVEL.plow * out.slide)
+		return out
+	# mag guns: tilt, drop the mag, fetch a new one, seat it, rack, back to ready
+	out.rot = Vector3(0.22, 0, 0.5) * tilt
+	out.off = Vector3(-0.04, 0.02, 0) * tilt
+	var D = MAGD.get(id, Vector3(0, -0.3, 0))
+	var Wl = MAGW.get(id, Vector3())
+	var pouch = Vector3(-0.08, -0.55, 0.05)
+	var rack = RACK.get(id, Vector3(0, 0.09, -0.04))
+	if u >= 0.15 and u < 0.34:
+		out.mag = D * _ease((u - 0.15) / 0.19); out.mag_vis = u < 0.32
+	elif u >= 0.34 and u < 0.55:
+		out.mag_vis = false
+	elif u >= 0.55 and u < 0.72:
+		out.mag = D * 0.75 * (1.0 - _ease((u - 0.55) / 0.17))
+	if u >= 0.22 and u < 0.45:
+		out.hand = (Wl + Vector3(0, -0.09, 0)).linear_interpolate(pouch, _ease((u - 0.22) / 0.23))
+	elif u >= 0.45 and u < 0.55:
+		out.hand = pouch.linear_interpolate(Wl + D * 0.75 + Vector3(0, -0.1, 0), _ease((u - 0.45) / 0.1))
+	elif u >= 0.55 and u < 0.72:
+		out.hand = Wl + out.mag + Vector3(0, -0.1, 0)
+	elif u >= 0.72 and u < 0.78:
+		out.hand = (Wl + Vector3(0, -0.1, 0)).linear_interpolate(rack, _ease((u - 0.72) / 0.06))
+	elif u >= 0.78 and u < 0.86:
+		out.slide = 1.0
+		out.hand = rack + Vector3(0, 0, -GUN.TRAVEL.get(id, 0.05))
+	elif u >= 0.86 and u < 1.0:
+		out.hand = rack.linear_interpolate(pouch, _ease((u - 0.86) / 0.14))
+	if kind == "pistol" and int(g.mag) <= 0 and u < 0.78: out.slide = 1.0
+	return out
+
+func _apply_gun(gn, id, P):
+	if gn == null: return
+	var sl = gn.get_node_or_null("Slide")
+	if sl: sl.translation = Vector3(0, 0, -GUN.TRAVEL.get(id, 0.05) * P.slide)
+	var mg = gn.get_node_or_null("Mag")
+	if mg:
+		mg.translation = P.mag
+		mg.visible = P.mag_vis
+	var fl = gn.get_node_or_null("Flash")
+	if fl:
+		fl.visible = flash_t > 0 or flash_frames > 0
+		if fl.visible:
+			fl.rotation = Vector3(0, 0, flash_rot); fl.scale = Vector3.ONE * flash_scale
+
+# a casing (or the shotgun's hull) out of the ejection port, to the right and up
+func _eject_brass():
+	var gn = vm_gun if fp_on() and vm_gun else gun_model
+	if gn == null or not gn.is_inside_tree() or not gn.has_node("Eject"): return
+	var at = gn.get_node("Eject").global_transform.origin
+	var rgt = Vector3(cos(cam_yaw), 0, -sin(cam_yaw))
+	var v = rgt * G.rand(1.6, 2.4) + Vector3(0, G.rand(1.6, 2.4), 0) + Vector3(-sin(cam_yaw), 0, -cos(cam_yaw)) * G.rand(-0.4, 0.2)
+	main.fx.brass(at, v, G.S["cur"] == "plow")
 
 func _vm_part(parent, m, col, p, s, r = Vector3()):
 	if m is SphereMesh:
@@ -502,8 +670,8 @@ func set_fists(on):
 
 func cycle_weapon():
 	var ids = []
-	for id in ["k9", "draft", "plow"]:
-		if G.S["guns"][id].owned: ids.append(id)
+	for id in GUN.IDS:
+		if G.S["guns"].has(id) and G.S["guns"][id].owned: ids.append(id)
 	ids.append("fists")
 	var cur = "fists" if G.S.get("fists", false) else G.S["cur"]
 	var nxt = ids[(ids.find(cur) + 1) % ids.size()]
@@ -517,7 +685,8 @@ func start_reload():
 	var st = stats()
 	if reload_t > 0 or g.mag >= st.mag or g.res <= 0:
 		return
-	reload_t = float(st.reload); reload_for = G.S["cur"]
+	reload_t = float(st.reload); reload_for = G.S["cur"]; reload_total = reload_t
+	reload_shells = int(min(st.mag - g.mag, g.res))
 	main.sfx.play("pump" if G.S["cur"] == "plow" else "reload", 0.55)
 
 func _finish_reload():
@@ -583,6 +752,13 @@ func try_fire():
 		main.hud.hitmarker(head_any); main.sfx.play("imp_flesh", 0.3)
 	main.sfx.shot(G.S["cur"], muzzle, 1.0, GUN.cfg_of(G.S["cur"]).get("muzzle") == "supp")
 	main.sfx.flash(muzzle)
+	# the gun kicks, the slide or bolt cycles, the flash shows, the brass flies (the shotgun's
+	# hull comes out when you pump it)
+	vm_kick = min(1.8, vm_kick + 1.0)
+	shot_t = 0.0
+	if GUN.cfg_of(G.S["cur"]).get("muzzle") != "supp":
+		flash_t = 0.045; flash_frames = 2; flash_rot = randf() * TAU; flash_scale = G.rand(0.8, 1.15)
+	eject_at = 0.24 if G.S["cur"] == "plow" else 0.01
 	var rec = float(st.recoil) * (0.8 if crouch else 1.0)
 	recoil += rec * 0.018; cam_pitch = clamp(cam_pitch + rec * 0.0035, -1.3, 1.1); cam_yaw += (randf() - 0.5) * rec * 0.006
 	bloom = min(1.6, bloom + 0.22 * float(st.recoil))

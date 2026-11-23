@@ -243,14 +243,23 @@ func thump(at, v):
 
 # ---------- guns ----------
 func shot(kind, at, vol = 1.0, suppressed = false):
-	var k = kind if kind in ["k9", "draft", "plow"] else "k9"
+	# the two newer guns borrow the closest sound, pitched: the AK pistol lower and louder,
+	# the machine pistol higher and snappier
+	var pitch = 1.0
+	var k = kind
+	if kind == "dragon":
+		k = "draft"; pitch = 0.78; vol *= 1.35
+	elif kind == "buzz":
+		k = "draft"; pitch = 1.14; vol *= 0.9
+	elif not kind in ["k9", "draft", "plow"]:
+		k = "k9"
 	var name = "gun_" + k + ("_s" if suppressed else "")
-	play3d(name, at, vol * (1.25 if k == "plow" else (0.85 if k == "draft" else 1.0)) * (0.6 if suppressed else 1.0), 1.0, "Guns")
+	play3d(name, at, vol * (1.25 if k == "plow" else (0.85 if k == "draft" else 1.0)) * (0.6 if suppressed else 1.0), pitch, "Guns")
 	# brass on the ground, if it's close enough to hear
 	var cam = main.camera.global_transform.origin
 	if at.distance_to(cam) < 14:
 		var floor_at = Vector3(at.x, W.ground_at(at.x, at.z, at.y) + 0.02, at.z)
-		play3d_later(G.rand(0.35, 0.6), "shell" if k == "plow" else "casing", floor_at, 0.22)
+		play3d_later(G.rand(0.35, 0.6), "shell" if kind == "plow" else "casing", floor_at, 0.22)
 
 func impact(at, metal = false):
 	play3d("imp_metal" if metal else ("imp_snow" if at.y < 0.22 else "imp_brick"), at, 0.5)

@@ -337,7 +337,7 @@ func _process(dt):
 		G.save_game()
 
 func start_game(state):
-	G.S = state
+	G.S = G.migrate(state)
 	G.MODE = "play"
 	set_quality(G.S["settings"].get("quality", "low"))
 	player.spawn()

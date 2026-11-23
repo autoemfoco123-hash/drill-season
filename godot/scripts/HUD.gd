@@ -81,7 +81,7 @@ const C_ACCENT = Color(1.0, 0.62, 0.22)
 const C_CASH = Color(0.6, 0.95, 0.66)
 const EMOTES = [["wave", "Wave"], ["flip", "Finger"], ["dance1", "Two-step"], ["dance2", "Arm wave"], ["dance3", "Robot"], ["hype", "Hype"], ["clap", "Clap"], ["laugh", "Laugh"],
 	["shrug", "Shrug"], ["salute", "Salute"], ["point", "Point"], ["facepalm", "Facepalm"], ["flex", "Flex"], ["sit", "Sit"], ["snowangel", "Snow angel"], ["pray", "Pray"], ["flop", "Flop"]]
-const WEAPONS = [["fists", "Fists"], ["k9", "K9"], ["draft", "Draft"], ["plow", "Snowplow"], ["snowball", "Snowball"]]
+const WEAPONS = [["fists", "Fists"], ["k9", "K9"], ["buzz", "Buzzsaw"], ["draft", "Draft"], ["dragon", "Dragon"], ["plow", "Snowplow"], ["snowball", "Snowball"]]
 
 static func _sb(col, r = 10, pad = 10):
 	var sb = StyleBoxFlat.new(); sb.bg_color = col; sb.set_corner_radius_all(r); sb.anti_aliasing = true
@@ -256,6 +256,21 @@ class WeaponIcon extends Control:
 			return
 		if kind == "snowball":
 			draw_circle(o, 11, c); draw_circle(o + Vector2(-3, -3), 4, Color(0.85, 0.9, 1)); return
+		if kind == "dragon":
+			# the short AK: receiver, wood handguard, curved mag
+			draw_rect(Rect2(o.x - 34, o.y - 8, 44, 10), c)
+			draw_rect(Rect2(o.x + 10, o.y - 6, 18, 7), c)
+			draw_rect(Rect2(o.x + 28, o.y - 4, 10, 3), c)
+			draw_colored_polygon(PoolVector2Array([Vector2(o.x - 30, o.y + 1), Vector2(o.x - 22, o.y + 1), Vector2(o.x - 25, o.y + 14), Vector2(o.x - 33, o.y + 14)]), c)
+			draw_colored_polygon(PoolVector2Array([Vector2(o.x - 8, o.y + 1), Vector2(o.x + 2, o.y + 1), Vector2(o.x + 8, o.y + 16), Vector2(o.x - 1, o.y + 18)]), c)
+			return
+		if kind == "buzz":
+			# the boxy machine pistol: square receiver, mag up the grip
+			draw_rect(Rect2(o.x - 24, o.y - 9, 40, 12), c)
+			draw_rect(Rect2(o.x + 16, o.y - 5, 8, 4), c)
+			draw_rect(Rect2(o.x - 6, o.y + 2, 8, 18), c)
+			draw_rect(Rect2(o.x - 22, o.y - 12, 5, 3), c)
+			return
 		var L = { "k9": 52.0, "draft": 76.0, "plow": 96.0 }.get(kind, 60.0)
 		var x0 = o.x - L / 2
 		draw_rect(Rect2(x0, o.y - 8, L * 0.75, 9), c)

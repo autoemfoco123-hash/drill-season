@@ -65,6 +65,117 @@ func _scene(model):
 		_scenes[model] = load("res://assets/cars/" + model + ".glb")
 	return _scenes[model]
 
+# ---------- the two cars built in code (original designs) ----------
+const MB = preload("res://scripts/MeshBuild.gd")
+var _proc = {}
+
+func _car_node(model):
+	if model in ["bruiser", "boulder"]:
+		if not _proc.has(model): _proc[model] = _build_car(model)
+		return _proc[model].duplicate()
+	return _scene(model).instance()
+
+func _cmat(col, unshaded = false, gloss = false):
+	var m = SpatialMaterial.new(); m.albedo_color = col; m.roughness = 0.3 if gloss else 0.7
+	if unshaded: m.flags_unshaded = true
+	else: G.toon(m, true)
+	return m
+
+# a side profile (z, y points, closed) made solid between x0 and x1: the skin and both sides
+func _slab(mb, k, prof, x0, x1):
+	var c = Vector2()
+	for p in prof: c += p
+	c /= prof.size()
+	var n = prof.size()
+	for i in range(n):
+		var a = prof[i]
+		var b = prof[(i + 1) % n]
+		var e = b - a
+		var nrm = Vector2(e.y, -e.x).normalized()
+		if nrm.dot((a + b) * 0.5 - c) < 0: nrm = -nrm
+		mb.quad(k, Vector3(x0, a.y, a.x), Vector3(x1, a.y, a.x), Vector3(x1, b.y, b.x), Vector3(x0, b.y, b.x), Vector3(0, nrm.y, nrm.x), Vector2(), Vector2(), Vector2(), Vector2())
+	var poly = PoolVector2Array(prof)
+	var tris = Geometry.triangulate_polygon(poly)
+	for side in [[x0, -1.0], [x1, 1.0]]:
+		for t in range(0, tris.size(), 3):
+			var A = prof[tris[t]]
+			var B = prof[tris[t + 1]]
+			var Cc = prof[tris[t + 2]]
+			mb.tri(k, Vector3(side[0], A.y, A.x), Vector3(side[0], B.y, B.x), Vector3(side[0], Cc.y, Cc.x), Vector3(side[1], 0, 0))
+
+func _wheel(mb, x, z, r, w):
+	var xf = Transform(Basis(Vector3(0, 0, 1), PI / 2), Vector3(x, r, z))
+	mb.lathe("tire", xf, [[r * 0.62, -w / 2], [r, -w / 2], [r, w / 2], [r * 0.62, w / 2]], 14)
+	var side = 1.0 if x > 0 else -1.0
+	var hub = Transform(Basis(Vector3(0, 0, 1), PI / 2), Vector3(x + side * (w / 2 - 0.02), r, z))
+	mb.lathe("rim", hub, [[0.0, -0.025], [r * 0.64, -0.025], [r * 0.64, 0.025], [0.0, 0.025]], 10)
+
+func _build_car(model):
+	var mb = MB.new()
+	var root = Spatial.new()
+	mb.mat("paint", _cmat(Color(1, 1, 1), false, true))
+	mb.mat("glass", _cmat(Color(0.08, 0.1, 0.13), false, true))
+	mb.mat("trim", _cmat(Color(0.06, 0.06, 0.07)))
+	mb.mat("chrome", _cmat(Color(0.75, 0.77, 0.8), false, true))
+	mb.mat("tire", _cmat(Color(0.05, 0.05, 0.055)))
+	mb.mat("rim", _cmat(Color(0.18, 0.19, 0.21), false, true))
+	mb.mat("lightw", _cmat(Color(1, 0.97, 0.88), true))
+	mb.mat("lightr", _cmat(Color(0.95, 0.08, 0.06), true))
+	if model == "bruiser":
+		# long and low: a flat deck, a long hood with a power bulge, a short greenhouse
+		var body = [Vector2(-2.5, 0.3), Vector2(2.5, 0.3), Vector2(2.53, 0.62), Vector2(2.38, 0.84), Vector2(1.15, 0.92), Vector2(-1.3, 0.9), Vector2(-2.45, 0.88), Vector2(-2.53, 0.64)]
+		_slab(mb, "paint", body, -0.96, 0.96)
+		var cab = [Vector2(-1.3, 0.89), Vector2(1.15, 0.91), Vector2(0.36, 1.4), Vector2(-0.88, 1.38)]
+		_slab(mb, "glass", cab, -0.8, 0.8)
+		mb.box("paint", Transform(Basis(), Vector3(0, 1.405, -0.26)), Vector3(1.52, 0.05, 1.18), 0.5, false)
+		for px in [-0.79, 0.79]:
+			mb.box("paint", Transform(Basis(Vector3(1, 0, 0), -0.55), Vector3(px, 1.15, 0.77)), Vector3(0.05, 0.58, 0.06), 0.5, false)
+			mb.box("paint", Transform(Basis(Vector3(1, 0, 0), 0.75), Vector3(px, 1.13, -1.1)), Vector3(0.05, 0.62, 0.08), 0.5, false)
+			mb.box("paint", Transform(Basis(), Vector3(px, 1.15, -0.25)), Vector3(0.05, 0.5, 0.06), 0.5, false)
+		mb.box("paint", Transform(Basis(), Vector3(0, 0.94, 1.75)), Vector3(0.7, 0.06, 1.1), 0.5, false)
+		# front: a wide dark grille between slim headlights; rear: one light bar across the tail
+		mb.box("trim", Transform(Basis(), Vector3(0, 0.55, 2.52)), Vector3(1.4, 0.24, 0.05), 0.5, false)
+		for hx in [-0.72, 0.72]:
+			mb.box("lightw", Transform(Basis(), Vector3(hx, 0.72, 2.47)), Vector3(0.36, 0.07, 0.05), 0.5, false)
+		mb.box("lightr", Transform(Basis(), Vector3(0, 0.76, -2.49)), Vector3(1.7, 0.08, 0.04), 0.5, false)
+		mb.box("trim", Transform(Basis(), Vector3(0, 0.4, -2.52)), Vector3(1.7, 0.16, 0.04), 0.5, false)
+		mb.box("trim", Transform(Basis(), Vector3(0, 0.92, -2.35)), Vector3(1.5, 0.04, 0.2), 0.5, false)
+		for ex in [-0.45, 0.45]:
+			mb.box("chrome", Transform(Basis(), Vector3(ex, 0.32, -2.55)), Vector3(0.12, 0.07, 0.08), 0.5, false)
+		for sx in [-0.97, 0.97]:
+			mb.box("trim", Transform(Basis(), Vector3(sx, 0.34, 0)), Vector3(0.03, 0.06, 3.4), 0.5, false)
+			mb.box("trim", Transform(Basis(), Vector3(sx * 1.03, 1.08, 0.72)), Vector3(0.12, 0.08, 0.16), 0.5, false)
+			mb.box("trim", Transform(Basis(), Vector3(sx, 0.62, 0.05)), Vector3(0.01, 0.5, 0.012), 0.5, false)
+		for w in [[-0.84, 1.55], [0.84, 1.55], [-0.84, -1.55], [0.84, -1.55]]:
+			_wheel(mb, w[0], w[1], 0.37, 0.27)
+	else:
+		# tall and square: three rows of windows, roof rails, a big grille
+		var body2 = [Vector2(-2.55, 0.38), Vector2(2.55, 0.38), Vector2(2.58, 0.8), Vector2(2.42, 1.04), Vector2(1.5, 1.08), Vector2(-2.48, 1.07), Vector2(-2.58, 0.82)]
+		_slab(mb, "paint", body2, -1.0, 1.0)
+		var cab2 = [Vector2(-2.47, 1.06), Vector2(1.5, 1.07), Vector2(0.92, 1.76), Vector2(-2.32, 1.74)]
+		_slab(mb, "glass", cab2, -0.88, 0.88)
+		mb.box("paint", Transform(Basis(), Vector3(0, 1.785, -0.7)), Vector3(1.78, 0.06, 3.25), 0.5, false)
+		for px in [-0.87, 0.87]:
+			mb.box("paint", Transform(Basis(Vector3(1, 0, 0), -0.7), Vector3(px, 1.42, 1.22)), Vector3(0.05, 0.85, 0.07), 0.5, false)
+			for pz in [0.15, -1.1, -2.32]:
+				mb.box("paint", Transform(Basis(), Vector3(px, 1.42, pz)), Vector3(0.05, 0.7, 0.1), 0.5, false)
+			mb.box("trim", Transform(Basis(), Vector3(px * 0.8, 1.86, -0.7)), Vector3(0.05, 0.05, 2.9), 0.5, false)
+		# front: a tall grille with bars, headlights; rear: the light bar and a dark tailgate band
+		mb.box("trim", Transform(Basis(), Vector3(0, 0.7, 2.57)), Vector3(1.5, 0.36, 0.05), 0.5, false)
+		for gy in [0.6, 0.7, 0.8]:
+			mb.box("chrome", Transform(Basis(), Vector3(0, gy, 2.6)), Vector3(1.4, 0.02, 0.02), 0.5, false)
+		for hx2 in [-0.78, 0.78]:
+			mb.box("lightw", Transform(Basis(), Vector3(hx2, 0.92, 2.5)), Vector3(0.34, 0.08, 0.05), 0.5, false)
+		mb.box("lightr", Transform(Basis(), Vector3(0, 1.0, -2.55)), Vector3(1.8, 0.09, 0.04), 0.5, false)
+		mb.box("trim", Transform(Basis(), Vector3(0, 0.5, -2.58)), Vector3(1.8, 0.22, 0.04), 0.5, false)
+		for sx2 in [-1.01, 1.01]:
+			mb.box("trim", Transform(Basis(), Vector3(sx2, 0.42, 0)), Vector3(0.03, 0.1, 3.6), 0.5, false)
+			mb.box("trim", Transform(Basis(), Vector3(sx2 * 1.03, 1.2, 1.1)), Vector3(0.12, 0.1, 0.18), 0.5, false)
+		for w2 in [[-0.88, 1.6], [0.88, 1.6], [-0.88, -1.62], [0.88, -1.62]]:
+			_wheel(mb, w2[0], w2[1], 0.41, 0.3)
+	mb.commit(root)
+	return root
+
 func spawn(model, x, z, yaw, o = {}):
 	if VEH.size() >= 56 and not o.get("owned", false):
 		return null
@@ -79,7 +190,7 @@ func spawn(model, x, z, yaw, o = {}):
 	v.box = { "x0": 0, "x1": 0, "y0": 0, "y1": 2.05 if v.sp.van else 1.05, "z0": 0, "z1": 0, "on": true, "q": 0, "tag": "car" }
 	v.cab = { "x0": 0, "x1": 0, "y0": 1.0, "y1": v.sp.get("roofY", 1.4), "z0": 0, "z1": 0, "on": not v.sp.van, "q": 0, "tag": "cabin" }
 	W.DYN.append(v.box); W.DYN.append(v.cab)
-	var n = _scene(model).instance()
+	var n = _car_node(model)
 	main.add_child(n)
 	v.node = n
 	_paint(v)

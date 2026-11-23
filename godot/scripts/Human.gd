@@ -500,6 +500,23 @@ func animate(dt, pose):
 		al = Vector3(-2.9, 0, -0.25); ale = -0.35; ar = Vector3(-2.9, 0, 0.25); are = -0.35
 	if pose.get("pose", false):
 		ar = Vector3(-1.9, 0, 0.3); are = -1.2; al.x = -0.4; spine_x = -0.08
+	# reloading: the gun comes down and in, the other hand goes to it, down for a fresh mag
+	# and back up; firing kicks the arms up a little
+	var ru = pose.get("reload", -1.0)
+	if ru >= 0.0 and not pose.get("hands", false):
+		# the gun comes down in front of the chest (like holding a phone), the other hand meets
+		# it, drops to the hip for a fresh mag, and comes back
+		var tl = min(clamp(ru / 0.15, 0.0, 1.0), clamp((1.0 - ru) / 0.12, 0.0, 1.0))
+		ar = Vector3(lerp(ar.x, -0.9, tl), 0, lerp(ar.z, 0.12, tl)); are = lerp(are, -0.75, tl)
+		var dn2 = clamp(min((ru - 0.25) / 0.12, (0.72 - ru) / 0.12), 0.0, 1.0)
+		if tl > 0.3:
+			al = Vector3(lerp(-0.8, 0.1, dn2), 0, lerp(-0.3, -0.08, dn2))
+			ale = lerp(-0.6, -0.25, dn2)
+	var kick = pose.get("kick", 0.0)
+	if kick > 0.01:
+		ar.x -= 0.16 * kick
+		if pose.get("twoHand", false): al.x -= 0.12 * kick
+		spine_x -= 0.03 * kick
 	var snap = false
 	if pose.get("fists", false) and pose.get("down", 0.0) == 0:
 		var gk = 1.0 if pose.get("guard", false) else 0.6

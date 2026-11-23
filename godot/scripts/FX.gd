@@ -66,6 +66,7 @@ func set_quality(q):
 	snow.amount = 900 if q == "high" else (650 if q == "medium" else 420)
 
 func update(dt):
+	_brass_update(dt)
 	var cam = main.camera.global_transform.origin
 	var st = main.story
 	var w = Vector3(st.WIND.dx, 0, st.WIND.dz) * (0.6 + st.WIND.gust * 2.2)
@@ -93,6 +94,54 @@ func _place(list, spots, cam, r, y):
 			p.visible = false; p.emitting = false
 
 func _by_d(a, b): return a[0] < b[0]
+
+# ---------- brass: casings out of the ejection port, bouncing on the ground ----------
+var BRASS = []
+var _brass_mats = []
+func brass(at, v, shell = false):
+	if at.distance_to(main.camera.global_transform.origin) > 14: return
+	if _brass_mats.empty():
+		for c in [Color(0.85, 0.66, 0.28), Color(0.72, 0.16, 0.12)]:
+			var m = SpatialMaterial.new(); m.albedo_color = c; m.metallic = 0.5; m.roughness = 0.35
+			G.toon(m)
+			_brass_mats.append(m)
+	var b = null
+	for o in BRASS:
+		if o.t <= 0:
+			b = o; break
+	if b == null:
+		if BRASS.size() >= 24: b = BRASS[0]
+		else:
+			var mi = MeshInstance.new(); var cm = CylinderMesh.new(); cm.radial_segments = 6; cm.rings = 1
+			mi.mesh = cm; mi.cast_shadow = GeometryInstance.SHADOW_CASTING_SETTING_OFF
+			main.add_child(mi)
+			b = { "n": mi, "t": 0.0, "v": Vector3(), "w": Vector3() }
+			BRASS.append(b)
+	var cm2 = b.n.mesh
+	cm2.top_radius = 0.0105 if shell else 0.0045; cm2.bottom_radius = cm2.top_radius; cm2.height = 0.06 if shell else 0.02
+	b.n.material_override = _brass_mats[1 if shell else 0]
+	b.n.visible = true
+	b.n.translation = at
+	b.v = v; b.t = 1.6
+	b.w = Vector3(G.rand(-18, 18), G.rand(-18, 18), G.rand(-18, 18))
+
+func _brass_update(dt):
+	for b in BRASS:
+		if b.t <= 0: continue
+		b.t -= dt
+		if b.t <= 0:
+			b.n.visible = false; continue
+		b.v.y -= 9.8 * dt
+		var p = b.n.translation + b.v * dt
+		var g = W.ground_at(p.x, p.z, p.y + 0.2)
+		if p.y < g + 0.01:
+			p.y = g + 0.01
+			if abs(b.v.y) > 0.6:
+				b.v = Vector3(b.v.x * 0.45, -b.v.y * 0.35, b.v.z * 0.45); b.w *= 0.5
+			else:
+				b.v = Vector3(); b.w = Vector3()
+		b.n.translation = p
+		b.n.rotation += b.w * dt
 
 # ---------- snowballs ----------
 func throw_snowball(from, vel, by):

@@ -1223,7 +1223,7 @@ func _app_garage():
 		_cell(G.D["CAR_SPECS"][c.model].name, "Bring here", "_bring", [i])
 	if G.S["garage"].size() == 0: _foot("No cars yet.")
 	_sec("Marrow Motors")
-	for model in ["sedan", "suv", "pickup", "van", "coupe"]:
+	for model in ["sedan", "suv", "pickup", "van", "coupe", "bruiser", "boulder"]:
 		var sp = G.D["CAR_SPECS"][model]
 		var ok = G.S["cash"] >= sp.price and G.S["buzz"] >= sp.buzz
 		_cell(sp.name, G.fmt_money(sp.price) + ((" · Buzz %d" % sp.buzz) if sp.buzz > 0 else ""), "_buy_car", [model], not ok)
@@ -1268,6 +1268,7 @@ func _app_settings():
 	if main.touch.enabled: _slider("Touch look speed", st.get("touchSens", 1.0), 0.3, 3.0, 0.05, "touchSens")
 	_switch("Invert look Y", st.get("invertY", false), "_toggle", ["invertY"])
 	_cell("Camera", "First person" if st.get("fp", false) else "Third person", "_toggle", ["fp"])
+	_switch("Head bob and tilt (first person)", st.get("headbob", true), "_headbob")
 	var tm = str(st.get("touch", "auto"))
 	_cell("On-screen controls", { "auto": "Auto", "on": "On", "off": "Off" }.get(tm, "Auto"), "_touch_mode")
 	_sec("Sound")
@@ -1309,6 +1310,8 @@ func _set(v, key, vl = null, top = 1.0, step = 0.05):
 	if vl: vl.text = _slider_text(v, top, step)
 func _toggle(key):
 	G.S["settings"][key] = not G.S["settings"].get(key, false); show_app("settings", true)
+func _headbob():
+	G.S["settings"]["headbob"] = not G.S["settings"].get("headbob", true); show_app("settings", true)
 func _outlines():
 	G.S["settings"]["outlines"] = not G.S["settings"].get("outlines", true)
 	G.apply_outlines(); show_app("settings", true)

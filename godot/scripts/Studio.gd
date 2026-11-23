@@ -447,7 +447,7 @@ func _render_bench():
 	var right = VBoxContainer.new(); right.size_flags_horizontal = Control.SIZE_EXPAND_FILL; sc.add_child(right)
 	var tabs = HBoxContainer.new(); right.add_child(tabs)
 	var first = null
-	for id in ["k9", "draft", "plow"]:
+	for id in GUN.IDS:
 		var o = G.S["guns"][id]
 		var sub = ("equipped" if G.S["cur"] == id else "owned") if o.owned else "%s · Buzz %d" % [G.fmt_money(G.D["WEAPONS"][id].price), G.D["WEAPONS"][id].buzz]
 		var b = _btn(tabs, ("● " if id == gid else "") + G.D["WEAPONS"][id].short + " (" + sub + ")", "_bench_tab", [id])

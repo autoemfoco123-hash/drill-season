@@ -21,6 +21,7 @@ func run(m):
 	elif OS.get_environment("DS_COLTEST") != "": call_deferred("_col_test")
 	elif OS.get_environment("DS_ANIMTEST") != "": call_deferred("_anim_test")
 	elif OS.get_environment("DS_DEATHTEST") != "": call_deferred("_death_test")
+	elif OS.get_environment("DS_GUNTEST") != "": call_deferred("_gun_test")
 	else: call_deferred("_go")
 
 func _wait(s):
@@ -1118,4 +1119,78 @@ func _death_test():
 	yield(_wait(2.0), "completed")
 	_log("after respawn: dead %s at %s, health %d" % [str(P.dead), str(P.pos), int(G.S["health"])])
 	yield(_shot("d4_hospital"), "completed")
+	get_tree().quit()
+
+# every gun in first person: a shot (with its flash) and four moments of the reload; one in
+# third person; then the two new cars
+func _gun_test():
+	yield(_wait(1.0), "completed")
+	main.title._close(); main.start_game(G.new_state("guntest"))
+	yield(_wait(1.5), "completed")
+	_clean_view(true)
+	G.time_offset += (17 * 60 + 30 - G.world_minutes())
+	var P = main.player
+	P.place(0, 0, -70, PI)
+	for id in GUN.IDS:
+		G.S["guns"][id].owned = true; G.S["guns"][id].res = 200
+	G.S["settings"]["fp"] = true
+	for id in GUN.IDS:
+		P.switch_weapon(id)
+		yield(_wait(0.6), "completed")
+		var g = G.S["guns"][id]
+		# fire one, catch the flash
+		P.fire_cd = 0; P.try_fire()
+		P.flash_frames = 8     # hold the flash long enough for the screenshot
+		yield(get_tree(), "idle_frame")
+		yield(_shot("g_%s_0fire" % id), "completed")
+		P.flash_frames = 0
+		yield(_wait(0.5), "completed")
+		g.mag = 0 if id != "plow" else 3
+		P.reload_t = 0; P.start_reload()
+		var T = P.reload_total
+		var marks = [0.24, 0.42, 0.62, 0.8]
+		var tprev = 0.0
+		for i in range(marks.size()):
+			yield(_wait(T * (marks[i] - tprev)), "completed")
+			tprev = marks[i]
+			yield(_shot("g_%s_%dreload" % [id, i + 1]), "completed")
+		var t0 = G.REAL_T
+		while P.reload_t > 0 and G.REAL_T - t0 < 8.0:
+			yield(get_tree(), "idle_frame")
+		yield(_wait(0.2), "completed")
+		_log("%s: mag %d after reload (reload_t %.2f, reload_for %s, cur %s, res %d), kind %s" % [id, g.mag, P.reload_t, str(P.reload_for), G.S["cur"], g.res, GUN.KIND[id]])
+	# third person reload
+	G.S["settings"]["fp"] = false
+	P.switch_weapon("dragon")
+	yield(_wait(0.5), "completed")
+	G.S["guns"]["dragon"].mag = 0; P.start_reload()
+	while P._reload_u() < 0.18:
+		yield(get_tree(), "idle_frame")
+	_frame(P.pos + Vector3(1.6, 1.6, -1.6), P.pos + Vector3(0, 1.2, 0), 45)
+	yield(_wait(0.2), "completed")
+	yield(_shot("g_tp_reload"), "completed")
+	main.cutscene.end()
+	# head bob: walking forward in first person, two frames half a step apart
+	G.S["settings"]["fp"] = true
+	Input.action_press("move_f"); Input.action_press("move_r")
+	yield(_wait(1.0), "completed")
+	yield(_shot("g_bob_a"), "completed")
+	yield(_wait(0.17), "completed")
+	yield(_shot("g_bob_b"), "completed")
+	Input.action_release("move_f"); Input.action_release("move_r")
+	_log("roll while strafing: %.3f" % P.cam_roll)
+	# the two new cars
+	G.S["settings"]["fp"] = false
+	var a = main.vehicles.spawn("bruiser", -4, -84, 0.6, { "color": 0x8a1c24, "owned": true })
+	var b = main.vehicles.spawn("boulder", 4, -84, -0.6, { "color": 0x262b33, "owned": true })
+	P.place(0, 0, -76, PI)
+	_frame(Vector3(0, 2.2, -77), Vector3(0, 0.8, -84), 55)
+	yield(_wait(0.6), "completed")
+	yield(_shot("g_cars_front"), "completed")
+	main.cutscene.end()
+	_frame(Vector3(0, 2.4, -92), Vector3(0, 0.8, -84), 55)
+	yield(_wait(0.6), "completed")
+	yield(_shot("g_cars_back"), "completed")
+	main.cutscene.end()
+	_log("cars: %s %s" % [str(a != null), str(b != null)])
 	get_tree().quit()

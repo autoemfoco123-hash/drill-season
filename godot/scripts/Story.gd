@@ -670,7 +670,7 @@ func store_menu(kind):
 		_item("Hand warmers", "Warmth drains half as fast for 2 minutes.", "$15", "_buy", ["warmers", 15]),
 		_item("Bandage", "Press B to heal 40 health.", "$25", "_buy", ["bandage", 25]),
 	]
-	for id in ["k9", "draft", "plow"]:
+	for id in GUN.IDS:
 		if G.S["guns"][id].owned:
 			var A = G.D["WEAPONS"][id].ammo
 			items.append(_item("%s ammo" % G.D["WEAPONS"][id].short, "%d rounds." % A.n, G.fmt_money(A.price), "_buy", ["ammo:" + id, A.price]))

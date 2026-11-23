@@ -49,6 +49,8 @@ func _ready():
 						fld.append(0)
 					fld[2] = 0; fld[3] = 5
 			_add_era_looks()
+		_add_new_guns()
+		_add_new_cars()
 	else:
 		push_error("assets/data.json is missing; run tools/export-godot.js")
 	# the whole interface uses Inter now (slim, like the wardrobe and the phone)
@@ -88,6 +90,41 @@ func _add_era_looks():
 		["2024", "New Wave", { "hair": "twists", "head": "headphones", "headCol": 0x15171a, "top": "parka", "topCol": 0x4f8a3a, "top2": 0x15171a, "pants": "joggers", "pantsCol": 0x15171a, "shoes": "sneaker", "shoesCol": 0x15171a, "bag": "cross", "bagCol": 0x15171a }],
 		["2026", "Today", { "hair": "dreads", "hairCol": 0x4a2a1a, "head": "beanie", "headCol": 0x15171a, "pom": 0, "top": "varsity", "topCol": 0x5a1a1a, "top2": 0xe8e8ea, "pants": "cargo", "pantsCol": 0x15171a, "shoes": "high", "shoesCol": 0x15171a, "glasses": 1, "chain": 1 }],
 	]
+
+# two more guns, original designs with made-up makers like the rest: a short AK-pattern pistol
+# and a boxy compact machine pistol
+func _add_new_guns():
+	var Wd = D["WEAPONS"]
+	Wd["dragon"] = { "name": 'Kessler "Dragon" Pistol', "short": "Dragon", "cls": "AK-pattern pistol · Kessler Rail Works", "dmg": 29, "rpm": 600, "auto": true,
+		"spread": 4.4, "aimSpread": 2.0, "range": 48, "mag": 30, "reload": 2.5, "recoil": 1.6, "noise": 3.0, "pellets": 1, "zoom": 1.3, "aimSpeed": 0.9,
+		"price": 3800, "buzz": 45, "ammo": { "n": 60, "price": 60 } }
+	Wd["buzz"] = { "name": 'Low End "Buzzsaw" 9', "short": "Buzzsaw", "cls": "Compact machine pistol · Low End Metalworks", "dmg": 13, "rpm": 950, "auto": true,
+		"spread": 4.8, "aimSpread": 2.3, "range": 34, "mag": 32, "reload": 1.9, "recoil": 0.7, "noise": 1.6, "pellets": 1, "zoom": 1.3, "aimSpeed": 1.0,
+		"price": 2600, "buzz": 35, "ammo": { "n": 64, "price": 50 } }
+
+# two more cars, original designs with the city's made-up maker: a long, low muscle sedan and
+# a tall three-row muscle SUV (built in code, see Vehicles._build_car)
+func _add_new_cars():
+	var C = D["CAR_SPECS"]
+	C["bruiser"] = { "name": "Kessler Bruiser", "len": 5.05, "wid": 1.92, "r": 0.36, "wb": [0.9, 4.1], "acc": 8.8, "top": 35, "price": 7800, "buzz": 40,
+		"roofY": 1.42, "wbLen": 3.1, "police": false, "taxi": false, "van": false }
+	C["boulder"] = { "name": "Kessler Boulder", "len": 5.1, "wid": 2.0, "r": 0.4, "wb": [0.95, 4.15], "acc": 7.6, "top": 31, "price": 9200, "buzz": 45,
+		"roofY": 1.8, "wbLen": 3.1, "police": false, "taxi": false, "van": false }
+	D["CAR_GEOM"]["bruiser"] = { "zWB": 1.15, "yWB": 0.92, "zWT": 0.35, "yWT": 1.42, "zRB": -1.35, "roofY": 1.42, "zMid": 1.8, "yMid": 0.9, "zNose": 2.45, "yNose": 0.76 }
+	D["CAR_GEOM"]["boulder"] = { "zWB": 1.5, "yWB": 1.06, "zWT": 0.9, "yWT": 1.78, "zRB": -2.35, "roofY": 1.8, "zMid": 2.0, "yMid": 1.05, "zNose": 2.5, "yNose": 0.92 }
+	for m in ["bruiser", "boulder"]:
+		if not m in D["CAR_MODELS"]: D["CAR_MODELS"].append(m)
+		if D.has("CIVIL_MODELS") and not m in D["CIVIL_MODELS"]: D["CIVIL_MODELS"].append(m)
+
+# older saves: add what newer versions have (new guns and their parts)
+func migrate(st):
+	var dc = D.get("DEF_CFG", { "optic": "iron", "barrel": "standard", "mag": "std", "muzzle": "none", "finish": "gunmetal", "charm": "none" })
+	var dp = ["optic:iron", "barrel:standard", "mag:std", "muzzle:none"]
+	for id in ["dragon", "buzz"]:
+		if not st["guns"].has(id):
+			st["guns"][id] = { "owned": false, "mag": int(D["WEAPONS"][id].mag), "res": int(D["WEAPONS"][id].ammo.n), "cfg": dc.duplicate() }
+		if st.has("parts") and not st["parts"].has(id): st["parts"][id] = dp.duplicate()
+	return st
 
 func era_skin(i):
 	var e = D["SKIN"]["ERAS"][i % D["SKIN"]["ERAS"].size()]
@@ -256,8 +293,10 @@ func new_state(name):
 			"k9": { "owned": true, "mag": 12, "res": 36, "cfg": dc.duplicate() },
 			"draft": { "owned": false, "mag": 30, "res": 60, "cfg": dc.duplicate() },
 			"plow": { "owned": false, "mag": 6, "res": 12, "cfg": dc.duplicate() },
+			"dragon": { "owned": false, "mag": 30, "res": 60, "cfg": dc.duplicate() },
+			"buzz": { "owned": false, "mag": 32, "res": 64, "cfg": dc.duplicate() },
 		},
-		"parts": { "k9": dp.duplicate(), "draft": dp.duplicate(), "plow": dp.duplicate() },
+		"parts": { "k9": dp.duplicate(), "draft": dp.duplicate(), "plow": dp.duplicate(), "dragon": dp.duplicate(), "buzz": dp.duplicate() },
 		"cos": ["finish:gunmetal", "charm:none"],
 		"threads": { "benny": [], "kiara": [], "coach": [], "vance": [], "saint": [], "reyes": [] },
 		"unread": { "benny": 0, "kiara": 0, "coach": 0, "vance": 0, "saint": 0, "reyes": 0 },
@@ -387,7 +426,7 @@ func _setup_input():
 		"wave": [[KEY_G], [], [], []], "flip": [[KEY_T], [], [], [JOY_DPAD_RIGHT]],
 		"emote": [[KEY_Z], [], [], [JOY_DPAD_LEFT]], "flop": [[KEY_J], [], [], []], "snowball": [[KEY_X], [], [], []],
 		"horn": [[KEY_H], [], [], []], "pause": [[KEY_ESCAPE], [], [], [JOY_START]],
-		"gun1": [[KEY_1], [], [], []], "gun2": [[KEY_2], [], [], []], "gun3": [[KEY_3], [], [], []], "fists": [[KEY_4], [], [], []],
+		"gun1": [[KEY_1], [], [], []], "gun2": [[KEY_2], [], [], []], "gun3": [[KEY_3], [], [], []], "fists": [[KEY_4], [], [], []], "gun4": [[KEY_5], [], [], []], "gun5": [[KEY_6], [], [], []],
 		"map": [[KEY_M], [], [], [JOY_SELECT]],
 	}
 	for name in A.keys():

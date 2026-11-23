@@ -31,6 +31,9 @@ para o app que você usou. Se o Play Protect avisar que o app é desconhecido, t
 - Dedo do meio em primeira pessoa, andando e dentro do carro (o braço sai pela janela).
 - **Lugares para entrar:** a casa (sala, cozinha, quarto), o Calder Mini Mart, o estúdio Basement
   808 (cabine, mesa de som, sofá) e a loja de armas Ironside Arms (balcão, parede de fuzis, bancada).
+- **Duas armas novas** (uma pistola estilo AK e uma metralhadora de mão) e **dois carros novos**
+  (um sedã musculoso e um SUV grande), com tiro e recarga animados em todas as armas, clarão no
+  cano, cápsulas, e balanço e inclinação da câmera em primeira pessoa.
 - **Animações novas** de andar, correr e ficar parado, e **morte como num jogo sandbox**: ragdoll,
   câmera em terceira pessoa no corpo e a tela ficando vermelha.
 - **Eras do drill:** visuais de 2012 até hoje no editor e oito personagens originais pelas esquinas.

@@ -297,9 +297,9 @@ func _build_gunshop():
 	# the guns themselves, built like the ones you carry
 	# pistols lying on their side in the case, rifles hung sideways on the pegboard
 	for i in range(5):
-		_gun(["k9", "draft", "k9", "plow", "k9"][i], Vector3(-3.4 + i * 1.5, 0.95, -0.8), Vector3(0, PI / 2 + 0.25, PI / 2), 0.9)
+		_gun(["k9", "buzz", "k9", "buzz", "k9"][i], Vector3(-3.4 + i * 1.5, 0.95, -0.8), Vector3(0, PI / 2 + 0.25, PI / 2), 0.9)
 	for i2 in range(6):
-		_gun(["draft", "plow", "draft"][i2 % 3], Vector3(-3.0 + (i2 % 3) * 3.0, 1.45 + int(i2 / 3) * 0.75, -d / 2 + 0.14), Vector3(0, -PI / 2, 0), 1.35)
+		_gun(["draft", "plow", "dragon"][i2 % 3], Vector3(-3.0 + (i2 % 3) * 3.0, 1.45 + int(i2 / 3) * 0.75, -d / 2 + 0.14), Vector3(0, -PI / 2, 0), 1.35)
 	_light(Vector3(-3.0, 3.0, 0.0), Color(1, 0.96, 0.88), 0.72, 9.0)
 	_light(Vector3(3.0, 3.0, 0.0), Color(1, 0.96, 0.88), 0.72, 9.0)
 	_light(Vector3(0, 2.8, -3.8), Color(1, 0.5, 0.45), 0.5, 4.0)
@@ -445,7 +445,7 @@ func room_addr():
 # ---------------------------------------------------------------- the counter
 func counter_menu(_a = null):
 	var items = []
-	for id in ["k9", "draft", "plow"]:
+	for id in GUN.IDS:
 		var Wp = G.D["WEAPONS"][id]
 		if G.S["guns"][id].owned:
 			var A = Wp.ammo

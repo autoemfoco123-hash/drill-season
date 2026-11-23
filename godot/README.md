@@ -108,7 +108,7 @@ O jogo salva sozinho a cada 20 segundos e ao sair, em
 | Recarregar | R | X / Quadrado |
 | Entrar ou sair do carro | F | Y / Triângulo |
 | Interagir, falar, recrutar | E | RB / R1 |
-| Trocar de arma | toque Q (ou 1 2 3, e 4 para os punhos) | toque LB / L1 |
+| Trocar de arma | toque Q (ou 1 2 3 5 6, e 4 para os punhos) | toque LB / L1 |
 | Roda de armas (câmera lenta) | segure Q | segure LB / L1 |
 | Roda de emotes (danças, palmas, rir, sentar, anjo na neve...) | segure Z | segure D-pad esquerda |
 | Bola de neve | X | pela roda de armas |
@@ -203,6 +203,23 @@ Tudo do jogo web, mais algumas coisas só daqui:
   - vento que acompanha as rajadas, a cidade ao fundo, sirenes, cachorros, aviões e o gelo do lago
     rangendo; fogo crepitando nos barris e vapor nos bueiros;
   - mixagem com compressor e limitador.
+- **Primeira pessoa mais viva:** a cabeça balança com os passos (menos mirando, nada no ar), a
+  câmera inclina para o lado quando você anda de lado e quando vira, dá uma afundada quando você
+  cai de algum lugar, e a arma fica um pouco para trás quando você mexe a mira. Dá para desligar
+  em Settings → **Head bob and tilt**.
+- **Tiro e recarga animados em todas as armas:** cada tiro dá um coice na arma, o ferrolho ou a
+  corrediça vai para trás e volta, sai o clarão na boca do cano e a cápsula voa para a direita e
+  quica no chão. A pistola fica com a corrediça travada para trás quando acaba a munição. Na
+  recarga a arma inclina, o pente cai, a outra mão busca um novo, encaixa e puxa o ferrolho; a
+  espingarda recebe os cartuchos um por um pela janela de baixo e termina com a bombada. Em
+  terceira pessoa o personagem traz a arma para a frente do peito e a outra mão vai e volta com o
+  pente.
+- **Duas armas novas** (nomes inventados, como todas as do jogo): a **Dragon**, uma pistola no
+  estilo AK curta (madeira, pente curvo, sem coronha; tecla 5) e a **Buzzsaw**, uma metralhadora
+  de mão quadrada com o pente no cabo (tecla 6). Estão no balcão da Ironside Arms e na bancada.
+- **Dois carros novos** (também com nomes inventados): o **Kessler Bruiser**, um sedã musculoso
+  comprido e baixo, e o **Kessler Boulder**, um SUV grande de três fileiras. Aparecem no trânsito
+  e estão na concessionária do app Garage.
 - **Animações novas:** andar e correr são dois ciclos diferentes misturados pela velocidade, com
   a passada casada com o chão (o pé não escorrega). O joelho dobra quando a perna vai para frente
   (mais na corrida), o quadril sobe e desce, balança e gira, os ombros giram ao contrário, os braços
@@ -375,7 +392,7 @@ listener websockets) e aponte o jogo para ele com
 
 Ele grava capturas e um `autotest.log`.
 
-Para ver rostos, barbas, o dedo do meio e o visual cel: `DS_LOOKTEST=1`. Para ver o editor de personagem e todas as telas do celular: `DS_UITEST=1`. Para os lugares de entrar: `DS_ROOMTEST=1`. Para as animações (andar, correr e parado, de lado): `DS_ANIMTEST=1`. Para a morte: `DS_DEATHTEST=1`. Para as colisões (carro no muro, batida de frente, corpo contra carro girado, multidão): `DS_COLTEST=1`. Para testar servidores,
+Para ver rostos, barbas, o dedo do meio e o visual cel: `DS_LOOKTEST=1`. Para ver o editor de personagem e todas as telas do celular: `DS_UITEST=1`. Para os lugares de entrar: `DS_ROOMTEST=1`. Para as animações (andar, correr e parado, de lado): `DS_ANIMTEST=1`. Para a morte: `DS_DEATHTEST=1`. Para as armas (tiro e recarga de cada uma, em primeira e terceira pessoa) e os carros novos: `DS_GUNTEST=1`. Para as colisões (carro no muro, batida de frente, corpo contra carro girado, multidão): `DS_COLTEST=1`. Para testar servidores,
 com um servidor dedicado rodando (`--server --name="Test Dedicated" --password=...`): `DS_SRVTEST=client`
 (com `DS_PW=` para a senha) acha o servidor, é barrado com a senha errada, entra com a certa, conversa
 e depois cria o "Test Host"; `DS_SRVTEST=joiner` noutro jogo entra nele. `DS_BROKERS=` troca os
