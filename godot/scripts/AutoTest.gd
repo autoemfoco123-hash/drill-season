@@ -24,6 +24,7 @@ func run(m):
 	elif OS.get_environment("DS_GUNTEST") != "": call_deferred("_gun_test")
 	elif OS.get_environment("DS_CONSOLETEST") != "": call_deferred("_console_test")
 	elif OS.get_environment("DS_PROMOTEST") != "": call_deferred("_promo_test")
+	elif OS.get_environment("DS_TRAILER") != "": call_deferred("_trailer")
 	else: call_deferred("_go")
 
 func _wait(s):
@@ -1309,6 +1310,13 @@ func _promo_test():
 	yield(_shot("p_%s" % mode), "completed")
 	_log("promo %s: train %s at z %.1f, viewport %s" % [mode, T.state, T.z, str(get_viewport().size)])
 	get_tree().quit()
+
+# trailer shots, frame by frame (Trailer.gd)
+func _trailer():
+	var t = load("res://scripts/Trailer.gd").new()
+	t.name = "Trailer"
+	add_child(t)
+	t.run(main, self)
 
 # an empty street for the key art: no traffic, nobody walking through the shot
 func _promo_clear(X):

@@ -565,13 +565,20 @@ func safe_area(f):
 	root.margin_left = round(vs.x * f); root.margin_right = -round(vs.x * f)
 	root.margin_top = round(vs.y * f); root.margin_bottom = -round(vs.y * f)
 
+func _declutter():
+	for n in [feed, help_box, objective, big_title, big_sub, big_band, sub_box]:
+		if n: n.visible = false
+
 func show():
 	root.visible = true
 func hide():
 	root.visible = false
 
 # ---------- every frame ----------
+var trailer_clean = false   # trailer shots: no toasts, prompts, banners or subtitles
+
 func update(dt):
+	if trailer_clean: call_deferred("_declutter")
 	_wheel_input(dt)
 	fade.color.a = move_toward(fade.color.a, fade_target, dt * fade_speed)
 	if not root.visible: return

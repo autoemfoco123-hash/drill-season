@@ -12,6 +12,7 @@ var RUN = 270.0
 var CYCLE = 96.0
 var HALF = 29.2
 var warned_t = 0.0
+var t_shift = 0.0          # trailer shots move the trains along without touching the time of day
 
 func setup(m):
 	main = m
@@ -73,7 +74,7 @@ func update(dt):
 	var deck = float(G.D["DECK_Y"])
 	for T in TR:
 		var prev = T.state
-		var s = _at(T, G.world_seconds())
+		var s = _at(T, G.world_seconds() + t_shift)
 		T.z = s[0]; T.v = s[1]; T.state = s[2]; T.u = s[3]
 		var vis = T.state != "gone" and abs(T.z) < 330
 		T.node.visible = vis

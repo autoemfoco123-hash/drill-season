@@ -34,6 +34,8 @@ para o app que você usou. Se o Play Protect avisar que o app é desconhecido, t
 - **Duas armas novas** (uma pistola estilo AK e uma metralhadora de mão) e **dois carros novos**
   (um sedã musculoso e um SUV grande), com tiro e recarga animados em todas as armas, clarão no
   cano, cápsulas, e balanço e inclinação da câmera em primeira pessoa.
+- **Site com tudo**: o trailer, screenshots e o download das quatro versões (Windows, Mac, Linux e
+  Android), e o material da Steam em `marketing/steam/` (logo, cápsulas, screenshots).
 - **Modo console** para jogar na TV com controle (Xbox ou PlayStation): tela inicial de console,
   teclado na tela, menu de pausa, tela de controles, os botões do seu controle na tela, mira
   assistida e vibração. E **mais danças**: griddy, shmoney, woah e hit dem folks.

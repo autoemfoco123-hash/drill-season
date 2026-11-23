@@ -155,8 +155,10 @@ func _gen_title(type):
 		if not used.has(t): return t
 	return G.pick(T.fixed) + " Pt. " + str(G.S["tracks"].size() + 2)
 
+var trailer_clock = false    # trailer shots: notes follow the game clock, not the audio
+
 func rh_now():
-	if RH.get("started", false) and player.playing:
+	if RH.get("started", false) and player.playing and not trailer_clock:
 		return player.get_playback_position() + AudioServer.get_time_since_last_mix() - AudioServer.get_output_latency()
 	return G.REAL_T - clock0
 

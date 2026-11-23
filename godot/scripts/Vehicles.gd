@@ -655,8 +655,10 @@ func update(dt):
 		headlight.light_energy = 0
 		headlight.visible = false
 
+var trailer_drive = false   # trailer shots: keep driving while a cutscene camera films the car
+
 func _player_input():
-	if G.MODE != "play":
+	if G.MODE != "play" and not trailer_drive:
 		return { "thr": 0.0, "steer": 0.0, "hand": false }
 	var thr = Input.get_action_strength("move_f") - Input.get_action_strength("move_b") + Input.get_action_strength("fire") - Input.get_action_strength("aim")
 	var steer = Input.get_action_strength("move_l") - Input.get_action_strength("move_r")

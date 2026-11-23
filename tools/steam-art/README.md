@@ -22,3 +22,19 @@ As imagens prontas estão em `marketing/steam/`. Para refazer:
 
 Regras da Steam: nas cápsulas só a arte e a logo (sem "lançamento", notas ou prêmios), e o
 library hero sem texto nenhum.
+
+## Trailer e screenshots
+
+`marketing/steam/screenshots/` tem 13 screenshots em 1920x1080, e o trailer de 53 s em 1080p
+(H.264, 30 fps, AAC, -14 LUFS) é feito pelo `trailer.py`:
+
+1. As legendas: `node shot.js $PWD/caption.html cap/name.png 1920 1080 '#c' "t=MAKE%20YOUR%20NAME..."`
+   (as chaves estão em `CAPTIONS` no script; o cartão final usa `end=...`). Ponha em `work/trailer/cap/`.
+2. `python3 trailer.py` renderiza cada cena dentro do jogo com `DS_TRAILER=<cena>` e
+   `--fixed-fps 30` (`godot/scripts/Trailer.gd`: cada quadro é 1/30 s do jogo, por mais devagar que
+   renderize, e o relógio do mundo anda junto), corta tudo na batida da faixa da WCLD 91.1
+   (139,5 BPM: a logo entra na virada de 44,0 s e o final na de 85,2 s), põe legendas, a entrada
+   da logo, o cartão final, a música e os efeitos (tiros, socos, trovões e o trem nos quadros em
+   que acontecem) e grava `DrillSeason-trailer-1080p.mp4` e uma cópia leve em 720p.
+   `python3 trailer.py walk drive` refaz só essas cenas; a montagem roda sem argumentos.
+3. As screenshots saem dos quadros guardados em `work/trailer/stills/`.
