@@ -1,4 +1,10 @@
-Drill Season (versão Godot)
+Drill Season (versão Godot) 1.9
+
+Novo na 1.9: som de motor de simulador (cinco motores, por dentro e por fora do carro),
+interior completo (painel, retrovisor ao vivo, limpadores, câmbio e pedais), carros com
+pneus de verdade (drift no freio de mão, borrachão com acelerador + freio parado), a
+cidade reconstruída em low poly detalhado, animação em camadas e o app Música no celular.
+Suas músicas: coloque MP3, OGG ou WAV na pasta Música/Drill Season ("Artista - Título").
 
 Linux:   deixe DrillSeason.x86_64 e DrillSeason.pck na mesma pasta e rode
            chmod +x DrillSeason.x86_64

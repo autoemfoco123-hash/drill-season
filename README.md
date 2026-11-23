@@ -18,6 +18,41 @@ para o app que você usou. Se o Play Protect avisar que o app é desconhecido, t
 
 ## O que tem
 
+**Novo na 1.9**
+
+- **Som de motor no nível de simulador:** cinco motores (4 cilindros, V6, seis em linha turbo,
+  V8 crossplane e V8 musculoso com compressor), cada um gravado em escadas de loops por RPM, com
+  e sem carga, cruzados e afinados na rotação como nos simuladores de corrida. Por fora domina o
+  escapamento; no banco do motorista a cabine abafa e sobem a admissão e o ronco pelo assoalho.
+  Turbo enchendo e a válvula de alívio, chiado do câmbio (alto na ré), estalos no alívio e nas
+  trocas rápidas, corte do limitador, "blip" ao reduzir. Os carros da rua também têm motor, com
+  efeito Doppler.
+- **Interior completo:** painel com conta-giros numerado e faixa vermelha, velocímetro, marcha,
+  hodômetro, combustível, temperatura, pressão do turbo e luzes de aviso (freio de mão, injeção,
+  controle de tração piscando quando o pneu patina); alavanca de câmbio e freio de mão que se
+  mexem, pedais, saídas de ar, botões, porta-copos, portas com apoio de braço e alto-falante,
+  banco de trás, cinto, retrovisor com imagem ao vivo, dadinhos pendurados balançando com as
+  curvas e freadas, limpadores tirando a neve e o painel aceso à noite.
+- **Dirigibilidade nova:** pneus com ângulo de deriva, transferência de peso e círculo de atrito,
+  tração traseira, controle de tração e ABS. Puxe o freio de mão para driftar e segure no
+  acelerador. **Borrachão:** acelerador e freio juntos com o carro parado; vire para fazer
+  donuts. Fumaça dos pneus e marcas no asfalto.
+- **Cidade reconstruída em low poly detalhado:** janelas com profundidade (moldura, peitoril com
+  neve, verga), vidros que refletem o céu de dia e mostram as salas acesas à noite, lojas com
+  letreiro e toldo, portas com degraus, cornijas com mísulas e dentículos, platibandas, escadas de
+  incêndio, caixas d'água, ar-condicionado e antenas nos telhados. Na rua: meio-fio, faixas de
+  pedestre, hidrantes, lixeiras, caixas de jornal, pontos de ônibus, placas, árvores e postes com
+  fios nos becos.
+- **Animação em camadas:** a cabeça e o peito seguem para onde você olha, o corpo inclina ao
+  acelerar e frear, troca o peso de perna parado, respira (ofegante depois de correr), dá passos
+  ao girar no lugar, encolhe as pernas no pulo e amortece na queda. O balanço da cabeça em primeira
+  pessoa ficou maior.
+- **App Música** no celular: toque as músicas do jogo e as suas (MP3, OGG ou WAV na pasta
+  Música/Drill Season, com o nome "Artista - Título"), com aleatório, repetir e as teclas de mídia,
+  e um botão que abre o Spotify. Desligue "Game music" no app para ouvir só o Spotify.
+
+**Já tinha**
+
 - A cidade inteira aberta: Calder Ave, o parque e a lagoa, o L, a orla do lago, o pátio de trens.
 - História com trabalhos, cutscenes e quatro finais; o estúdio Basement 808 (jogo de ritmo); a
   rede social Blok; a bancada de armas; carros com interior; o trem passando; frio, neve e vento.
