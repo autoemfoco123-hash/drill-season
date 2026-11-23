@@ -405,7 +405,7 @@ func physics_player(v, dt, inp):
 				var want_x = Fdrive * gas
 				# traction control: never more push than the rear tires have left over from cornering,
 				# except launching straight (muscle cars chirp their tires) or in a drift
-				var launch = abs(vF) < 7.0 and abs(inp.steer) < 0.3 and gas > 0.9
+				var launch = abs(vF) < 7.0 and abs(inp.steer) < 0.3 and gas > 0.9 and float(sp.acc) >= 7.5
 				var cap = Fmax_r
 				if v.drift <= 0.05 and not launch:
 					cap = sqrt(max(0.0, Fmax_r * Fmax_r - v.fyr * v.fyr)) * 0.9

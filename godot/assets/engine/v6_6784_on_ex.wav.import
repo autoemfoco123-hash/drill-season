@@ -1,0 +1,23 @@
+[remap]
+
+importer="wav"
+type="AudioStreamSample"
+path="res://.import/v6_6784_on_ex.wav-5231ead348f8cb8b93f2b870f2c781b7.sample"
+
+[deps]
+
+source_file="res://assets/engine/v6_6784_on_ex.wav"
+dest_files=[ "res://.import/v6_6784_on_ex.wav-5231ead348f8cb8b93f2b870f2c781b7.sample" ]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=0

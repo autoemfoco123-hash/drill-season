@@ -1,0 +1,329 @@
+{
+ "rate": 32000,
+ "profiles": {
+  "i4": {
+   "cyl": 4,
+   "idle": 850,
+   "red": 6800,
+   "ladder": [
+    {
+     "on": "i4_0808_on",
+     "off": "i4_0808_off",
+     "rpm_on": 807.49,
+     "rpm_off": 807.49
+    },
+    {
+     "on": "i4_1062_on",
+     "off": "i4_1062_off",
+     "rpm_on": 1061.63,
+     "rpm_off": 1061.63
+    },
+    {
+     "on": "i4_1396_on",
+     "off": "i4_1396_off",
+     "rpm_on": 1395.77,
+     "rpm_off": 1395.77
+    },
+    {
+     "on": "i4_1835_on",
+     "off": "i4_1835_off",
+     "rpm_on": 1835.05,
+     "rpm_off": 1835.05
+    },
+    {
+     "on": "i4_2413_on",
+     "off": "i4_2413_off",
+     "rpm_on": 2412.57,
+     "rpm_off": 2412.57
+    },
+    {
+     "on": "i4_3172_on",
+     "off": "i4_3172_off",
+     "rpm_on": 3171.83,
+     "rpm_off": 3171.83
+    },
+    {
+     "on": "i4_4170_on",
+     "off": "i4_4170_off",
+     "rpm_on": 4170.12,
+     "rpm_off": 4170.12
+    },
+    {
+     "on": "i4_5483_on",
+     "off": "i4_5483_off",
+     "rpm_on": 5482.5,
+     "rpm_off": 5482.5
+    },
+    {
+     "on": "i4_7208_on",
+     "off": "i4_7208_off",
+     "rpm_on": 7207.95,
+     "rpm_off": 7207.95
+    }
+   ],
+   "turbo": false,
+   "blower": false
+  },
+  "v6": {
+   "cyl": 6,
+   "idle": 750,
+   "red": 6400,
+   "ladder": [
+    {
+     "on": "v6_0712_on",
+     "off": "v6_0712_off",
+     "rpm_on": 712.5,
+     "rpm_off": 712.5
+    },
+    {
+     "on": "v6_0944_on",
+     "off": "v6_0944_off",
+     "rpm_on": 944.32,
+     "rpm_off": 944.32
+    },
+    {
+     "on": "v6_1252_on",
+     "off": "v6_1252_off",
+     "rpm_on": 1251.58,
+     "rpm_off": 1251.58
+    },
+    {
+     "on": "v6_1659_on",
+     "off": "v6_1659_off",
+     "rpm_on": 1658.82,
+     "rpm_off": 1658.82
+    },
+    {
+     "on": "v6_2199_on",
+     "off": "v6_2199_off",
+     "rpm_on": 2198.56,
+     "rpm_off": 2198.56
+    },
+    {
+     "on": "v6_2914_on",
+     "off": "v6_2914_off",
+     "rpm_on": 2913.87,
+     "rpm_off": 2913.87
+    },
+    {
+     "on": "v6_3862_on",
+     "off": "v6_3862_off",
+     "rpm_on": 3861.99,
+     "rpm_off": 3861.99
+    },
+    {
+     "on": "v6_5119_on",
+     "off": "v6_5119_off",
+     "rpm_on": 5118.6,
+     "rpm_off": 5118.6
+    },
+    {
+     "on": "v6_6784_on",
+     "off": "v6_6784_off",
+     "rpm_on": 6783.95,
+     "rpm_off": 6783.95
+    }
+   ],
+   "turbo": false,
+   "blower": false
+  },
+  "i6t": {
+   "cyl": 6,
+   "idle": 900,
+   "red": 7400,
+   "ladder": [
+    {
+     "on": "i6t_0855_on",
+     "off": "i6t_0855_off",
+     "rpm_on": 854.99,
+     "rpm_off": 854.99
+    },
+    {
+     "on": "i6t_1128_on",
+     "off": "i6t_1128_off",
+     "rpm_on": 1127.94,
+     "rpm_off": 1127.94
+    },
+    {
+     "on": "i6t_1488_on",
+     "off": "i6t_1488_off",
+     "rpm_on": 1488.02,
+     "rpm_off": 1488.02
+    },
+    {
+     "on": "i6t_1963_on",
+     "off": "i6t_1963_off",
+     "rpm_on": 1963.06,
+     "rpm_off": 1963.06
+    },
+    {
+     "on": "i6t_2590_on",
+     "off": "i6t_2590_off",
+     "rpm_on": 2589.72,
+     "rpm_off": 2589.72
+    },
+    {
+     "on": "i6t_3416_on",
+     "off": "i6t_3416_off",
+     "rpm_on": 3416.46,
+     "rpm_off": 3416.46
+    },
+    {
+     "on": "i6t_4507_on",
+     "off": "i6t_4507_off",
+     "rpm_on": 4507.04,
+     "rpm_off": 4507.04
+    },
+    {
+     "on": "i6t_5946_on",
+     "off": "i6t_5946_off",
+     "rpm_on": 5945.81,
+     "rpm_off": 5945.81
+    },
+    {
+     "on": "i6t_7844_on",
+     "off": "i6t_7844_off",
+     "rpm_on": 7843.88,
+     "rpm_off": 7843.88
+    }
+   ],
+   "turbo": true,
+   "blower": false
+  },
+  "v8": {
+   "cyl": 8,
+   "idle": 650,
+   "red": 5900,
+   "ladder": [
+    {
+     "on": "v8_0618_on",
+     "off": "v8_0618_off",
+     "rpm_on": 617.5,
+     "rpm_off": 617.5
+    },
+    {
+     "on": "v8_0825_on",
+     "off": "v8_0825_off",
+     "rpm_on": 824.76,
+     "rpm_off": 824.76
+    },
+    {
+     "on": "v8_1102_on",
+     "off": "v8_1102_off",
+     "rpm_on": 1101.59,
+     "rpm_off": 1101.59
+    },
+    {
+     "on": "v8_1471_on",
+     "off": "v8_1471_off",
+     "rpm_on": 1471.33,
+     "rpm_off": 1471.33
+    },
+    {
+     "on": "v8_1965_on",
+     "off": "v8_1965_off",
+     "rpm_on": 1965.16,
+     "rpm_off": 1965.16
+    },
+    {
+     "on": "v8_2625_on",
+     "off": "v8_2625_off",
+     "rpm_on": 2624.74,
+     "rpm_off": 2624.74
+    },
+    {
+     "on": "v8_3506_on",
+     "off": "v8_3506_off",
+     "rpm_on": 3505.72,
+     "rpm_off": 3505.72
+    },
+    {
+     "on": "v8_4682_on",
+     "off": "v8_4682_off",
+     "rpm_on": 4682.33,
+     "rpm_off": 4682.33
+    },
+    {
+     "on": "v8_6254_on",
+     "off": "v8_6254_off",
+     "rpm_on": 6254.07,
+     "rpm_off": 6254.07
+    }
+   ],
+   "turbo": false,
+   "blower": false
+  },
+  "v8s": {
+   "cyl": 8,
+   "idle": 750,
+   "red": 6600,
+   "ladder": [
+    {
+     "on": "v8s_0712_on",
+     "off": "v8s_0712_off",
+     "rpm_on": 712.5,
+     "rpm_off": 712.5
+    },
+    {
+     "on": "v8s_0948_on",
+     "off": "v8s_0948_off",
+     "rpm_on": 947.97,
+     "rpm_off": 947.97
+    },
+    {
+     "on": "v8s_1261_on",
+     "off": "v8s_1261_off",
+     "rpm_on": 1261.24,
+     "rpm_off": 1261.24
+    },
+    {
+     "on": "v8s_1678_on",
+     "off": "v8s_1678_off",
+     "rpm_on": 1678.06,
+     "rpm_off": 1678.06
+    },
+    {
+     "on": "v8s_2233_on",
+     "off": "v8s_2233_off",
+     "rpm_on": 2232.61,
+     "rpm_off": 2232.61
+    },
+    {
+     "on": "v8s_2970_on",
+     "off": "v8s_2970_off",
+     "rpm_on": 2970.5,
+     "rpm_off": 2970.5
+    },
+    {
+     "on": "v8s_3952_on",
+     "off": "v8s_3952_off",
+     "rpm_on": 3952.2,
+     "rpm_off": 3952.2
+    },
+    {
+     "on": "v8s_5258_on",
+     "off": "v8s_5258_off",
+     "rpm_on": 5258.24,
+     "rpm_off": 5258.24
+    },
+    {
+     "on": "v8s_6996_on",
+     "off": "v8s_6996_off",
+     "rpm_on": 6996.06,
+     "rpm_off": 6996.06
+    }
+   ],
+   "turbo": false,
+   "blower": true
+  }
+ },
+ "extras": [
+  "turbo",
+  "whine",
+  "bov",
+  "pop0",
+  "pop1",
+  "pop2",
+  "pop3"
+ ]
+}

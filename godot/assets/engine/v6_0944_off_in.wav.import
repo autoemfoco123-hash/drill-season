@@ -1,0 +1,23 @@
+[remap]
+
+importer="wav"
+type="AudioStreamSample"
+path="res://.import/v6_0944_off_in.wav-87cf0eb316ab02f3bbf13b184fc96739.sample"
+
+[deps]
+
+source_file="res://assets/engine/v6_0944_off_in.wav"
+dest_files=[ "res://.import/v6_0944_off_in.wav-87cf0eb316ab02f3bbf13b184fc96739.sample" ]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=0

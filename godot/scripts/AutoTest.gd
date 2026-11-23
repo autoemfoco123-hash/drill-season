@@ -28,6 +28,8 @@ func run(m):
 	elif OS.get_environment("DS_MUSICTEST") != "": call_deferred("_music_test")
 	elif OS.get_environment("DS_DRIVETEST") != "": call_deferred("_drive_test")
 	elif OS.get_environment("DS_CITYTEST") != "": call_deferred("_city_test")
+	elif OS.get_environment("DS_ENGINETEST") != "": call_deferred("_engine_test")
+	elif OS.get_environment("DS_COCKPITTEST") != "": call_deferred("_cockpit_test")
 	else: call_deferred("_go")
 
 func _wait(s):
@@ -1732,4 +1734,88 @@ func _city_test():
 			if v[0] == "c1_calder" and tod[0] == "day":
 				_log("draw calls %d, vertices %d, fps %d" % [Performance.get_monitor(Performance.RENDER_DRAW_CALLS_IN_FRAME), Performance.get_monitor(Performance.RENDER_VERTICES_IN_FRAME), Engine.get_frames_per_second()])
 			main.cutscene.end()
+	get_tree().quit()
+
+# ---------------------------------------------------------------- engines (DS_ENGINETEST, with DS_AUDIO=1)
+# each engine: idle, full throttle up through the gears, lift off, brake; recorded off the Car bus
+func _engine_test():
+	yield(_wait(1.0), "completed")
+	main.title._close(); main.start_game(G.new_state("enginetest"))
+	yield(_wait(1.5), "completed")
+	G.time_offset += (13 * 60 - G.world_minutes())
+	G.S["settings"]["gameMusic"] = false
+	var V = main.vehicles
+	var only = OS.get_environment("DS_ENGINETEST")
+	for spec in [["hatch", false], ["sedan", false], ["coupe", false], ["pickup", false], ["bruiser", false], ["coupe", true]]:
+		if only != "1" and not spec[0] in only: continue
+		var car = V.spawn(spec[0], -95, -150, 0.0, { "color": 0x8a1c24, "owned": true })
+		V.enter(car)
+		G.S["settings"]["fp"] = spec[1]
+		main.sfx.radio.stop(); main.sfx.radio_st = 0
+		yield(_wait(1.2), "completed")
+		main.sfx.radio.stop()
+		_rec_start()
+		yield(_wait(1.5), "completed")
+		Input.action_press("move_f")
+		var t = 0.0
+		var log_t = 0.0
+		var lines = []
+		while t < 8.0:
+			yield(get_tree(), "idle_frame")
+			var dt = get_process_delta_time()
+			t += dt; log_t -= dt
+			if log_t <= 0:
+				log_t = 1.0
+				var es = main.sfx.engine_state()
+				lines.append("%.0fs %d rpm g%d %.0f m/s" % [t, int(es.rpm), int(es.gear) + 1, car.speed])
+		Input.action_release("move_f")
+		yield(_wait(2.5), "completed")
+		Input.action_press("move_b")
+		yield(_wait(2.0), "completed")
+		Input.action_release("move_b")
+		_rec_stop("eng_%s%s" % [spec[0], "_cabin" if spec[1] else ""])
+		_log("%s%s: %s" % [spec[0], " (cabin)" if spec[1] else "", ", ".join(lines)])
+		V.leave(car); main.player.car = null
+		V.remove(car)
+		yield(_wait(0.5), "completed")
+	get_tree().quit()
+
+# ---------------------------------------------------------------- the driver's seat (DS_COCKPITTEST)
+func _cockpit_test():
+	yield(_wait(1.0), "completed")
+	main.title._close(); main.start_game(G.new_state("cockpittest"))
+	yield(_wait(1.5), "completed")
+	G.S["settings"]["quality"] = "high"; main.set_quality("high")
+	var V = main.vehicles
+	var P = main.player
+	for tod in [["day", 13 * 60], ["night", 22 * 60 + 30]]:
+		G.time_offset += (tod[1] - G.world_minutes())
+		for model in (["sedan", "coupe", "bruiser"] if tod[0] == "day" else ["coupe"]):
+			var car = V.spawn(model, -95, -150, 0.0, { "color": 0x262b33, "owned": true })
+			V.enter(car)
+			G.S["settings"]["fp"] = true
+			_clean_view(true)
+			Input.action_press("move_f")
+			yield(_wait(2.2), "completed")
+			Input.action_release("move_f")
+			P.cam_yaw = car.yaw + PI; P.cam_pitch = -0.05
+			yield(_wait(0.15), "completed")
+			yield(_shot("k_%s_%s_fwd" % [model, tod[0]]), "completed")
+			if model == "coupe":
+				P.cam_pitch = -0.55
+				P.cam_yaw = car.yaw + PI + 0.35
+				Input.action_press("jump")
+				yield(_wait(0.3), "completed")
+				yield(_shot("k_%s_%s_console" % [model, tod[0]]), "completed")
+				Input.action_release("jump")
+				P.cam_pitch = 0.05
+				P.cam_yaw = car.yaw + PI - 0.55
+				yield(_wait(0.2), "completed")
+				yield(_shot("k_%s_%s_side" % [model, tod[0]]), "completed")
+				P.cam_pitch = 0.1; P.cam_yaw = car.yaw + PI - 0.6
+				yield(_wait(0.2), "completed")
+				yield(_shot("k_%s_%s_mirror" % [model, tod[0]]), "completed")
+			V.leave(car); P.car = null
+			V.remove(car)
+			yield(_wait(0.3), "completed")
 	get_tree().quit()

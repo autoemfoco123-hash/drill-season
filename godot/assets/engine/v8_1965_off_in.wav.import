@@ -1,0 +1,23 @@
+[remap]
+
+importer="wav"
+type="AudioStreamSample"
+path="res://.import/v8_1965_off_in.wav-f109b8f28d1613689dc7773da5a90b11.sample"
+
+[deps]
+
+source_file="res://assets/engine/v8_1965_off_in.wav"
+dest_files=[ "res://.import/v8_1965_off_in.wav-f109b8f28d1613689dc7773da5a90b11.sample" ]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=0

@@ -35,12 +35,10 @@ var gun_delay = null
 var gun_rev = null
 var env_t = 0.0
 var muffle = 0.0
-# engine synth
-var eng_player = null
-var eng_pb = null
-var E = { "rpm": 800.0, "gear": 0, "shift_t": 0.0, "start_t": 0.0, "ph": 0.0, "fph": 0.0, "y": 0.0, "y2": 0.0, "seed": 12345, "red": 6200.0, "idle": 750.0, "cyl": 6, "gain": 0.0, "pop_t": 0.0 }
-var eng_table = PoolRealArray()
-var eng_table_cyl = 0
+# your engine (scripts/EngineAudio.gd plays it; here the gearbox and the revs)
+var engine_audio = null
+var car_lp = null
+var E = { "rpm": 800.0, "gear": 0, "shift_t": 0.0, "start_t": 0.0, "red": 6200.0, "idle": 750.0, "blip_t": 0.0, "limiter": false }
 var tires = {}
 # ambience
 var amb = {}
@@ -50,7 +48,6 @@ var far_t = 4.0
 var creak_t = 6.0
 var pass_cd = {}
 const STATIONS = ["", "wcld", "hawk", "northline", "lowend"]
-const ENG_RATE = 16000.0
 
 func setup(m):
 	main = m
@@ -82,11 +79,11 @@ func setup(m):
 	flash_light = OmniLight.new(); flash_light.omni_range = 7; flash_light.light_color = Color(1, 0.8, 0.5); flash_light.light_energy = 0; flash_light.visible = false
 	main.add_child(flash_light)
 	radio = AudioStreamPlayer.new(); radio.bus = "Radio"; add_child(radio)
-	# your engine: a generator we fill every frame
-	eng_player = AudioStreamPlayer.new(); eng_player.bus = "Car"
-	var gen = AudioStreamGenerator.new(); gen.mix_rate = ENG_RATE; gen.buffer_length = 0.12
-	eng_player.stream = gen
-	add_child(eng_player)
+	# engines: yours, and the cars around you
+	engine_audio = load("res://scripts/EngineAudio.gd").new()
+	engine_audio.name = "EngineAudio"
+	add_child(engine_audio)
+	engine_audio.setup(main)
 	for k in ["roll", "slush", "skid", "wind"]:
 		var t2 = AudioStreamPlayer.new(); t2.bus = "Car"; add_child(t2)
 		var st = _loop(k)
@@ -165,7 +162,9 @@ func _make_buses():
 	gun_rev = AudioEffectReverb.new(); gun_rev.room_size = 0.75; gun_rev.damping = 0.45; gun_rev.spread = 1.0; gun_rev.hipass = 0.3; gun_rev.dry = 1.0; gun_rev.wet = 0.2; gun_rev.predelay_msec = 40
 	_bus("Guns", "Out", [gun_delay, gun_rev])
 	_bus("Amb", "Out", [])
-	_bus("Car", "Master", [])
+	# the cabin: in the driver's seat the car's own sounds lose their top end
+	car_lp = AudioEffectLowPassFilter.new(); car_lp.cutoff_hz = 20000; car_lp.resonance = 0.55
+	_bus("Car", "Master", [car_lp])
 	var hp = AudioEffectHighPassFilter.new(); hp.cutoff_hz = 70
 	_bus("Radio", "Master", [hp])
 	_bus("UI", "Master", [])
@@ -334,42 +333,13 @@ func _radio_refresh(announce = false):
 	radio.play(fposmod(G.world_seconds(), st.get_length()))
 	main.hud.toast(G.D["STATIONS"][want].name)
 
-# ---------- your engine, synthesized live ----------
-func _make_table(cyl):
-	if eng_table_cyl == cyl: return
-	eng_table_cyl = cyl
-	var N = 1024
-	eng_table = PoolRealArray(); eng_table.resize(N)
-	var r = RandomNumberGenerator.new(); r.seed = cyl * 977
-	var amps = []
-	var phs = []
-	for n in range(1, 61):
-		var a = 0.0
-		if n % cyl == 0: a = 1.0 / pow(float(n) / cyl, 0.8)
-		elif n % (cyl / 2) == 0: a = 0.3 / pow(float(n) / cyl, 0.9)
-		else: a = 0.1 * r.randf() / (1 + n / 20.0)
-		if cyl == 8 and n % 2 == 1: a += 0.12 * r.randf() / (1 + n / 30.0)
-		a /= 1 + pow(n / 70.0, 2)
-		amps.append(a); phs.append(r.randf() * TAU)
-	var mx = 0.0
-	for i in range(N):
-		var x = 0.0
-		var t = float(i) / N * TAU
-		for n in range(60):
-			x += amps[n] * sin((n + 1) * t + phs[n])
-		eng_table[i] = x
-		mx = max(mx, abs(x))
-	for i in range(N): eng_table[i] /= mx
-
+# ---------- your engine ----------
 func engine_on(v):
 	engine_car = v
-	var spec = G.D["ENGINE_SPEC"].get(v.model, G.D["ENGINE_SPEC"]["sedan"])
-	E.cyl = int(spec.cyl); E.idle = float(spec.idle); E.red = float(spec.red); E.pops = spec.get("pops", false)
-	_make_table(E.cyl)
-	E.rpm = 0.0; E.gear = 0; E.shift_t = 0.0; E.start_t = 0.9
+	engine_audio.start(v.model)
+	E.idle = engine_audio.idle_rpm(); E.red = engine_audio.red_rpm()
+	E.rpm = 0.0; E.gear = 0; E.shift_t = 0.0; E.start_t = 0.9; E.blip_t = 0.0
 	play("starter", 0.55)
-	eng_player.play()
-	eng_pb = eng_player.get_stream_playback()
 	for k in tires.keys():
 		if tires[k].stream:
 			tires[k].volume_db = -80; tires[k].play(randf() * 2)
@@ -378,16 +348,16 @@ func engine_on(v):
 
 func engine_off():
 	engine_car = null
-	eng_player.stop(); eng_pb = null
+	engine_audio.stop()
 	for k in tires.keys(): tires[k].stop()
 	radio_st = -1; radio.stop()
 
 func engine_state():
-	return { "rpm": E.rpm, "red": E.red, "gear": E.gear }
+	return { "rpm": E.rpm, "red": E.red, "gear": E.gear, "idle": E.idle, "boost": engine_audio.boost if engine_audio else 0.0 }
 
 func _engine(dt):
 	var v = engine_car
-	if v == null or v.dead or eng_pb == null: return
+	if v == null or v.dead or engine_audio == null or engine_audio.prof == null: return
 	var inp = main.vehicles._player_input()
 	var sp = abs(v.speed)
 	var thr = clamp(abs(inp.thr), 0, 1)
@@ -399,56 +369,39 @@ func _engine(dt):
 	var old_gear = E.gear
 	if rev: E.gear = 0
 	elif E.shift_t <= 0:
-		if E.gear < GEARS.size() - 1 and wheel_rps * 60 * GEARS[E.gear] * FINAL > (E.red * 0.9 if thr > 0.5 else 3000.0):
-			E.gear += 1; E.shift_t = 0.22
-		elif E.gear > 0 and wheel_rps * 60 * GEARS[E.gear - 1] * FINAL < (E.red * 0.68 if thr > 0.5 else 2200.0):
+		if E.gear < GEARS.size() - 1 and wheel_rps * 60 * GEARS[E.gear] * FINAL > (E.red * 0.92 if thr > 0.5 else 2700.0 + thr * 1800.0):
+			E.gear += 1; E.shift_t = 0.2
+			engine_audio.upshift(thr, E.rpm)
+		elif E.gear > 0 and wheel_rps * 60 * GEARS[E.gear - 1] * FINAL < (E.red * 0.7 if thr > 0.5 else 2000.0):
 			E.gear -= 1; E.shift_t = 0.12
-	if E.gear > old_gear: play("shift", 0.3)
+			# a throttle blip to match the revs on the way down
+			if sp > 6: E.blip_t = 0.22
+	if E.gear > old_gear: play("shift", 0.22)
 	var rpm = max(E.idle, wheel_rps * 60 * GEARS[E.gear] * FINAL)
-	if sp < 5 and thr > 0.05: rpm = max(rpm, E.idle + thr * 2300 * (1 - sp / 6.0))
+	if sp < 5 and thr > 0.05: rpm = max(rpm, E.idle + thr * 2600 * (1 - sp / 6.0))
 	# wheelspin and burnouts: the wheels spin far faster than the car moves
-	if v.slip > 0.2 and thr > 0.3: rpm = max(rpm, E.red * (0.55 + 0.3 * v.slip))
+	if v.slip > 0.2 and thr > 0.3: rpm = max(rpm, E.red * (0.55 + 0.35 * v.slip))
+	var eload = thr
 	if E.shift_t > 0:
-		E.shift_t -= dt; rpm *= 0.88
+		E.shift_t -= dt; rpm *= 0.86; eload = 0.12
+	if E.blip_t > 0:
+		E.blip_t -= dt; rpm *= 1.0 + 0.16 * sin(E.blip_t / 0.22 * PI); eload = max(eload, 0.75)
+	# the idle holds itself up: a little throttle the driver doesn't give
+	var idle_k = clamp(1.0 - (rpm - E.idle) / 700.0, 0.0, 1.0)
+	eload = max(eload, idle_k * 0.32)
+	E.limiter = false
 	if E.start_t > 0:
 		E.start_t -= dt
-		rpm = 0.0 if E.start_t > 0.6 else E.idle + (1 - E.start_t / 0.6) * 900
-	if rpm > E.red: rpm = E.red - randf() * 350
-	E.rpm = lerp(E.rpm, rpm, min(1.0, dt * 9))
-	var on = E.start_t <= 0.6
-	var ld = 0.15 if E.shift_t > 0 else thr
-	var k = E.rpm / E.red
-	var gain = (0.22 + ld * 0.3 + k * 0.16) if on else 0.0
-	var fc = 260 + E.rpm * 0.22 + ld * 2200
-	var a = 1 - exp(-TAU * fc / ENG_RATE)
-	var drive = 0.7 + ld * 1.6
-	var rasp = ld * 0.35 * (0.3 + k)
-	var f0 = max(1.0, E.rpm / 120.0) / ENG_RATE
-	var ff = f0 * E.cyl * 0.5
-	var n = eng_pb.get_frames_available()
-	if n <= 0: return
-	var buf = PoolVector2Array(); buf.resize(n)
-	var ph = E.ph
-	var fph = E.fph
-	var y = E.y
-	var rs = E.seed
-	var g0 = E.gain
-	var tab = eng_table
-	for i in range(n):
-		ph += f0
-		if ph >= 1.0: ph -= 1.0
-		fph += ff
-		if fph >= 1.0: fph -= 1.0
-		rs = (rs * 1103515245 + 12345) & 0x7fffffff
-		var nz = float(rs) / 1073741824.0 - 1.0
-		var am = 1.0 - abs(fph * 2.0 - 1.0)
-		var x = tab[int(ph * 1024) & 1023] * drive + nz * am * rasp
-		y += a * (x - y)
-		g0 += (gain - g0) * 0.002
-		var o = y / (1.0 + abs(y)) * g0
-		buf[i] = Vector2(o, o)
-	eng_pb.push_buffer(buf)
-	E.ph = ph; E.fph = fph; E.y = y; E.seed = rs; E.gain = g0
+		rpm = 0.0 if E.start_t > 0.6 else E.idle + (1 - E.start_t / 0.6) * 1000
+	if rpm >= E.red:
+		rpm = E.red - randf() * 260
+		E.limiter = thr > 0.3
+	# the crank has weight: it spins up fast under power and winds down slower
+	var k = 12.0 if rpm > E.rpm else 7.0
+	E.rpm = lerp(E.rpm, rpm, min(1.0, dt * k))
+	var inside = 1.0 if (main.player.car == v and main.player.fp_on()) else 0.0
+	engine_audio.update(E.rpm, eload, E.start_t <= 0.6, v.speed, inside, E.limiter, dt)
+	if car_lp: car_lp.cutoff_hz = lerp(20000.0, 3200.0, engine_audio.interior)
 	# tyres, slush and wind on the body
 	var l = Vector3(cos(v.yaw), 0, -sin(v.yaw))
 	var lat = abs(v.vel.x * l.x + v.vel.y * l.z)
@@ -456,13 +409,7 @@ func _engine(dt):
 	_set_vol(tires.slush, clamp(sp / 18.0, 0, 1) * 0.16, 1.0)
 	var skid = max(clamp((lat - 2.6) / 5.0, 0, 1) + (0.35 if v.brake and sp > 9 else 0.0), v.slip)
 	_set_vol(tires.skid, min(1.0, skid) * 0.3, 0.9 + sp / 80.0)
-	_set_vol(tires.wind, pow(sp / 35.0, 2) * 0.16, 1.2)
-	# overrun crackle on the sporty ones
-	E.pop_t -= dt
-	if E.get("pops", false) and thr < 0.05 and E.rpm > 3200 and E.pop_t <= 0 and randf() < dt * 6:
-		E.pop_t = 0.08
-		var b = Vector3(sin(v.yaw), 0, cos(v.yaw))
-		play3d("pop", v.pos - b * float(v.sp.len) * 0.5 + Vector3(0, 0.4, 0), 0.35)
+	_set_vol(tires.wind, pow(sp / 35.0, 2) * (0.16 if inside < 0.5 else 0.1), 1.2)
 
 func _set_vol(p, v, pitch):
 	if p.stream == null: return
@@ -573,6 +520,7 @@ func update(dt):
 			flash_light.light_energy = 0
 			flash_light.visible = false
 	_engine(dt)
+	if engine_audio: engine_audio.traffic(dt)
 	_env(dt)
 	if main.player.car == null and radio_st > 0:
 		radio_st = 0; radio.stop()
