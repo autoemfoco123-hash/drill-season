@@ -1,5 +1,6 @@
 // Exports the web build's content into the Godot project (godot/assets):
-//   world/city.glb    every static mesh of the city, split into 128 m chunks (CHUNK=...)
+//   world/city.glb    every static mesh of the city, split into 128 m chunks (CHUNK=...), minus
+//                     the buildings, which Godot builds itself from world/buildings.json
 //   cars/<model>.glb  the eight car models (paint, trim, lights, light bar)
 //   train/train.glb   the L train (guns are built in Godot by scripts/Guns.gd)
 //   data.json         map layout, collision boxes, locations, specs, skins, recruit types,
@@ -70,6 +71,7 @@ const save = (rel, b64) => { const f = path.join(OUT, rel); fs.mkdirSync(path.di
       };
       for (const o of [...scene.children]) {
         if (!o.isMesh || o.isInstancedMesh || skip.has(o) || !o.geometry || !o.geometry.attributes.position) continue;
+        if (o.userData.bld) continue;   // the buildings: Godot builds them in detail (scripts/CityBuild.gd)
         const mat = Array.isArray(o.material) ? o.material[0] : o.material;
         if (!mat || mat.isShaderMaterial || mat.isPointsMaterial || o.visible === false) continue;
         if (!mat.name) mat.name = 'mat_' + (++unnamed);
@@ -107,6 +109,14 @@ const save = (rel, b64) => { const f = path.join(OUT, rel); fs.mkdirSync(path.di
     const tb = await ev(`(() => { const m = TRAINS[0].mesh.clone(); m.position.set(0, 0, 0); m.rotation.set(0, 0, 0); m.visible = true; m.traverse(o => { o.visible = true; if (o.material && !o.material.name) o.material.name = 'train_' + (o.material.color ? o.material.color.getHexString() : 'x'); }); return window.__glb(m); })()`);
     save('train/train.glb', tb);
     console.log('train done');
+  }
+
+  // the buildings' footprints, heights, styles and street sides, plus the places their detail
+  // must keep clear of (shop windows, signs, special doors): godot/assets/world/buildings.json
+  if (want('world') || want('buildings')) {
+    const bj = await ev(`JSON.stringify({ BUILDINGS, KEEP, ALLEYS })`);
+    fs.writeFileSync(path.join(OUT, 'world', 'buildings.json'), bj);
+    console.log('buildings.json', JSON.parse(bj).BUILDINGS.length, 'buildings', (bj.length / 1024).toFixed(0) + ' KB');
   }
 
   if (want('data')) {

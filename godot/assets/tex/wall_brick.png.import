@@ -2,15 +2,15 @@
 
 importer="texture"
 type="StreamTexture"
-path="res://.import/facade_siding_1.png-19a656bb7d93c1adc079b95d898089e9.stex"
+path="res://.import/wall_brick.png-21507a415ade296c2d814dc4db7fc19a.stex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/tex/facade_siding_1.png"
-dest_files=[ "res://.import/facade_siding_1.png-19a656bb7d93c1adc079b95d898089e9.stex" ]
+source_file="res://assets/tex/wall_brick.png"
+dest_files=[ "res://.import/wall_brick.png-21507a415ade296c2d814dc4db7fc19a.stex" ]
 
 [params]
 

@@ -7,7 +7,10 @@ openings. The facades keep the exact window layout of the originals (4 floors x 
 256 px = 12 x 12 m; the warehouse has wide windows on every other bay and floor), so the
 night-time window maps baked into city.glb still line up.
 
-  facade_<style>_<0|1>.png   brick, brown, grey (stone), siding, cream, ware (warehouse)
+  wall_<style>.png           brick, brown, grey (stone), siding, cream, ware (warehouse): plain
+                             wall, 6 x 6 m per tile; the windows, cornices and storefronts are
+                             real geometry (scripts/CityBuild.gd)
+  signs.png                  the shop signs (made-up generic names) and street signs, one atlas
   road.png                   asphalt with slush tracks and the centre dashes, snow at the kerbs
   walk.png                   sidewalk slabs with a dusting of snow and salt
 
@@ -67,7 +70,7 @@ STYLE = {
 }
 
 
-def facade(style, seed):
+def facade(style, seed, wins=True):
     S = STYLE[style]
     rng = np.random.default_rng(seed)
     R = random.Random(seed)
@@ -116,6 +119,9 @@ def facade(style, seed):
     # soft, large-scale variation and grime toward the street
     v = noise(rng, N, 6) - 0.5
     img *= (1.0 + v[..., None] * 0.1)
+    if not wins:
+        # a plain tile: grime comes from the mesh (darker toward the ground), so none baked in
+        return Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), 'RGB')
     grime = np.linspace(0, 1, N)[:, None] ** 2
     img *= (1.0 - grime[..., None] * 0.22)
     trim = hexc(S['trim'])
@@ -180,8 +186,71 @@ def facade(style, seed):
 
 
 for style in STYLE:
-    for v in range(2):
-        save(facade(style, 1000 + v * 77 + sum(map(ord, style))), 'facade_%s_%d' % (style, v))
+    save(facade(style, 1000 + sum(map(ord, style)), wins=False), 'wall_%s' % style)
+
+
+# ---------- signs: 1024 x 1024. Left half: 16 shop signs, 512 x 64 each (made-up, generic
+# names of the kinds of shops on a South Side commercial strip, no real businesses). Right
+# half: street signs in 128 px cells ----------
+from PIL import ImageFont
+FONT = os.path.join(ROOT, 'godot', 'fonts')
+SHOPS = [('FOOD & LIQUOR', '#b3121a', '#ffffff'), ('CURRENCY EXCHANGE', '#0f2f6e', '#ffd84a'), ('BEAUTY SUPPLY', '#e0218a', '#ffffff'),
+         ('FISH & CHICKEN', '#f2c11a', '#b3121a'), ('TAQUERIA', '#1f7a3a', '#ffffff'), ('LAUNDROMAT', '#2a8fd6', '#ffffff'),
+         ('CELL PHONES', '#111111', '#3af06a'), ('TAX SERVICE', '#ffffff', '#1a3a8a'), ('BARBER SHOP', '#1c1c1c', '#ff4040'),
+         ('DOLLAR PLUS', '#2b9a3a', '#ffe94a'), ('PAWN & GOLD', '#1a1208', '#f2c14a'), ('WINGS & FRIES', '#d8461a', '#fff4d0'),
+         ('GOOD NEWS CHURCH', '#f2efe6', '#3a2a6a'), ('AUTO PARTS', '#123a7a', '#ffffff'), ('NAILS & SPA', '#7a2a6a', '#ffd6f0'),
+         ('GROCERY · DELI', '#0e5a52', '#ffffff')]
+
+
+def shop_sign(name, bg, fg):
+    im = Image.new('RGB', (512, 64), bg)
+    d = ImageDraw.Draw(im)
+    f = ImageFont.truetype(os.path.join(FONT, 'Inter-Bold.ttf'), 40)
+    while d.textlength(name, font=f) > 470:
+        f = ImageFont.truetype(os.path.join(FONT, 'Inter-Bold.ttf'), f.size - 2)
+    tw = d.textlength(name, font=f)
+    d.rectangle([3, 3, 508, 60], outline=fg, width=2)
+    d.text(((512 - tw) / 2, 32), name, font=f, fill=fg, anchor='lm')
+    return im
+
+
+def street_signs():
+    im = Image.new('RGBA', (512, 1024), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    fb = os.path.join(FONT, 'Inter-Bold.ttf')
+    # stop: a red octagon, white border, STOP
+    c = 64
+    pts = [(c + 60 * math.cos(math.radians(22.5 + 45 * k)), c + 60 * math.sin(math.radians(22.5 + 45 * k))) for k in range(8)]
+    d.polygon(pts, fill='#ffffff')
+    pts2 = [(c + 54 * math.cos(math.radians(22.5 + 45 * k)), c + 54 * math.sin(math.radians(22.5 + 45 * k))) for k in range(8)]
+    d.polygon(pts2, fill='#c4161c')
+    d.text((c, c + 2), 'STOP', font=ImageFont.truetype(fb, 34), fill='#ffffff', anchor='mm')
+    # bus stop (made-up transit): blue square, white bus pictogram-ish and BUS
+    d.rounded_rectangle([132, 4, 252, 124], 10, fill='#1d4fa8')
+    d.rounded_rectangle([156, 26, 228, 76], 8, fill='#ffffff')
+    d.rectangle([162, 34, 222, 52], fill='#1d4fa8')
+    d.ellipse([164, 70, 178, 84], fill='#ffffff'); d.ellipse([206, 70, 220, 84], fill='#ffffff')
+    d.text((192, 104), 'BUS', font=ImageFont.truetype(fb, 22), fill='#ffffff', anchor='mm')
+    # no parking: white, red ring and slash over a P
+    d.rectangle([260, 4, 380, 124], fill='#f4f4f0')
+    d.ellipse([272, 16, 368, 112], outline='#c4161c', width=9)
+    d.text((320, 66), 'P', font=ImageFont.truetype(fb, 54), fill='#111111', anchor='mm')
+    d.line([(290, 34), (350, 94)], fill='#c4161c', width=9)
+    # one way: black with a white arrow (2:1 in a 128 x 64 cell)
+    d.rectangle([388, 32, 508, 92], fill='#111111')
+    d.polygon([(398, 56), (478, 56), (478, 46), (500, 62), (478, 78), (478, 68), (398, 68)], fill='#ffffff')
+    d.text((438, 62), 'ONE WAY', font=ImageFont.truetype(fb, 11), fill='#111111', anchor='mm')
+    # a street-name blade: green, white letters left blank (the names are in the HUD)
+    d.rounded_rectangle([4, 136, 252, 176], 6, fill='#1f6b3a', outline='#ffffff', width=3)
+    return im
+
+
+atlas = Image.new('RGBA', (1024, 1024), (0, 0, 0, 255))
+for i, (n, bg, fg) in enumerate(SHOPS):
+    atlas.paste(shop_sign(n, bg, fg), (0, i * 64))
+atlas.paste(street_signs(), (512, 0))
+atlas.save(os.path.join(OUT, 'signs.png'), optimize=True)
+print('signs.png')
 
 # ---------- road: u along the road, v across ----------
 rng = np.random.default_rng(7)

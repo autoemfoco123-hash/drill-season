@@ -31,6 +31,7 @@ var camera
 var env
 var sun
 var city
+var city_build
 var facade_mats = []
 var emis_mats = []
 var glow_mats = []
@@ -58,6 +59,11 @@ func _ready():
 	autotest = "--autotest" in OS.get_cmdline_args()
 	_build_environment()
 	_load_city()
+	# the buildings and the street furniture, built in detail (scripts/CityBuild.gd)
+	city_build = load("res://scripts/CityBuild.gd").new()
+	city_build.name = "CityBuild"
+	add_child(city_build)
+	city_build.setup(self)
 	_build_lamps()
 	camera = Camera.new()
 	camera.fov = 62; camera.near = 0.08; camera.far = 190
@@ -117,10 +123,7 @@ func _load_city():
 	add_child(city)
 	_prep(city)
 
-const CITY_TEX = { "road": "road", "walk": "walk",
-	"facade_brick_0": "facade_brick_0", "facade_brick_1": "facade_brick_1", "facade_brown_0": "facade_brown_0", "facade_brown_1": "facade_brown_1",
-	"facade_grey_0": "facade_grey_0", "facade_grey_1": "facade_grey_1", "facade_siding_0": "facade_siding_0", "facade_siding_1": "facade_siding_1",
-	"facade_cream_0": "facade_cream_0", "facade_cream_1": "facade_cream_1", "facade_ware_0": "facade_ware_0", "facade_ware_1": "facade_ware_1" }
+const CITY_TEX = { "road": "road", "walk": "walk" }
 
 func _prep(n):
 	if n is MeshInstance and n.mesh:
@@ -206,6 +209,7 @@ func set_quality(q):
 	lamp_count = 4 if q == "high" else (2 if q == "medium" else 0)
 	camera.far = 240 if q == "high" else (190 if q == "medium" else 160)
 	if fx: fx.set_quality(q)
+	if city_build: city_build.set_quality(q)
 	if sky: sky.set_quality(q)
 
 # ---------- day and night on the shared clock (same curve as the web game) ----------
@@ -254,6 +258,7 @@ func update_day_night(focus):
 	env.ambient_light_energy = lerp(0.85, 0.55, n)
 	for m in facade_mats:
 		m.emission_energy = lerp(0.03, 1.15, n)
+	if city_build: city_build.set_night(n, DN.lamps)
 	var ek = lerp(0.32, 1.0, DN.lamps)
 	for m in emis_mats:
 		m.albedo_color = Color(ek, ek, ek)

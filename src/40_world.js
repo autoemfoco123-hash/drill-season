@@ -120,6 +120,13 @@ const FACADES = ['brick', 'brown', 'grey', 'siding', 'cream', 'ware'].map((s, i)
   return { style: s, mats: [mk(a), mk(b)], batches: [new Batch(), new Batch()] };
 });
 const B_ROOF = new Batch();
+// each building's own trim (cornices, roof cap, bays, fire escapes, rooftop clutter) goes in its
+// own batches, so the Godot export can leave the buildings out and rebuild them in detail there
+const B_BLD = new Batch(), B_BLD_SNOW = new Batch(), B_BLD_ROOF = new Batch();
+const BUILDINGS = [], KEEP = [];
+const keep = (x0, y0, z0, x1, y1, z1) => KEEP.push([+x0.toFixed(2), +y0.toFixed(2), +z0.toFixed(2), +x1.toFixed(2), +y1.toFixed(2), +z1.toFixed(2)]);
+// the box a plane of w x h at (x, y, z) turned ry covers, a little thick
+const keepPlane = (x, y, z, w, h, ry) => { const c = Math.abs(Math.cos(ry)), s = Math.abs(Math.sin(ry)); const hx = (w * c + 0.6 * s) / 2, hz = (w * s + 0.6 * c) / 2; keep(x - hx, y - h / 2, z - hz, x + hx, y + h / 2, z + hz); };
 // simple shapes that real scanned models replace once they load
 const B_BARREL = new Batch(), B_BARREL_FIRE = new Batch(), B_BARRIER = new Batch(), B_VENT = new Batch();
 const FALLBACK = {}, BARRIERS = [], DUMPSTERS = [];
@@ -149,15 +156,16 @@ function facadeBox(F, bt, cx, cy, cz, w, h, d, faces, uo) {
 function building(x0, z0, x1, z1, h, styleIdx, variant, face) {
   const w = x1 - x0, d = z1 - z0, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
   const F = FACADES[styleIdx];
+  BUILDINGS.push([+x0.toFixed(2), +z0.toFixed(2), +x1.toFixed(2), +z1.toFixed(2), +h.toFixed(2), styleIdx, face || '']);
   const uo = Math.floor(Math.random() * 4) * 0.25;
   const bt = F.batches[variant === undefined ? (Math.random() < 0.5 ? 0 : 1) : variant];
   facadeBox(F, bt, cx, h / 2, cz, w, h, d, [0, 1, 4, 5], uo);
   const stone = styleIdx === 2 ? 0x8f887a : styleIdx === 5 ? 0x55585c : 0x7a6e60;
   // roof cap, cornice and a string course at the first floor
-  vbox(B_ROOF, cx, h, cz, w + 0.3, 0.28, d + 0.3, 0xffffff);
-  vbox(B_PROPS, cx, h - 0.55, cz, w + 0.55, 0.55, d + 0.55, stone);
-  vbox(B_PROPS, cx, h - 0.85, cz, w + 0.3, 0.3, d + 0.3, 0x2a2622);
-  if (styleIdx !== 5) vbox(B_PROPS, cx, 2.95, cz, w + 0.14, 0.2, d + 0.14, stone);
+  vbox(B_BLD_ROOF, cx, h, cz, w + 0.3, 0.28, d + 0.3, 0xffffff);
+  vbox(B_BLD, cx, h - 0.55, cz, w + 0.55, 0.55, d + 0.55, stone);
+  vbox(B_BLD, cx, h - 0.85, cz, w + 0.3, 0.3, d + 0.3, 0x2a2622);
+  if (styleIdx !== 5) vbox(B_BLD, cx, 2.95, cz, w + 0.14, 0.2, d + 0.14, stone);
   // street-face details
   if (face) {
     const along = face === 'n' || face === 's' ? 'x' : 'z';
@@ -170,8 +178,8 @@ function building(x0, z0, x1, z1, h, styleIdx, variant, face) {
       for (const o of len > 12 ? [-off, off] : [-off]) {
         const bx = along === 'x' ? cx + o : fx + sgn * bd / 2, bz = along === 'x' ? fz + sgn * bd / 2 : cz + o;
         facadeBox(F, bt, bx, 0.9 + bh / 2, bz, along === 'x' ? bw : bd, bh, along === 'x' ? bd : bw, along === 'x' ? [0, 1, face === 's' ? 4 : 5] : [face === 'e' ? 0 : 1, 4, 5], uo);
-        vbox(B_PROPS, bx, 0.9 + bh, bz, (along === 'x' ? bw : bd) + 0.2, 0.22, (along === 'x' ? bd : bw) + 0.2, stone);
-        vbox(B_ROOF, bx, 1.12 + bh, bz, (along === 'x' ? bw : bd) + 0.2, 0.12, (along === 'x' ? bd : bw) + 0.2, 0xffffff);
+        vbox(B_BLD, bx, 0.9 + bh, bz, (along === 'x' ? bw : bd) + 0.2, 0.22, (along === 'x' ? bd : bw) + 0.2, stone);
+        vbox(B_BLD_ROOF, bx, 1.12 + bh, bz, (along === 'x' ? bw : bd) + 0.2, 0.12, (along === 'x' ? bd : bw) + 0.2, 0xffffff);
       }
     }
     // brick walk-ups get a black fire escape
@@ -180,24 +188,24 @@ function building(x0, z0, x1, z1, h, styleIdx, variant, face) {
       const ex = along === 'x' ? cx + o : fx + sgn * 0.55, ez = along === 'x' ? fz + sgn * 0.55 : cz + o;
       const pw = along === 'x' ? 2.8 : 1.0, pd = along === 'x' ? 1.0 : 2.8;
       for (let y = 3.2; y < h - 1; y += 3) {
-        vbox(B_PROPS, ex, y, ez, pw, 0.07, pd, 0x15171a);
-        vbox(B_SNOW, ex, y + 0.07, ez, pw * 0.94, 0.05, pd * 0.94, 0xffffff);
-        vbox(B_PROPS, ex + (along === 'x' ? 0 : sgn * 0.45), y + 0.5, ez + (along === 'x' ? sgn * 0.45 : 0), along === 'x' ? pw : 0.05, 0.05, along === 'x' ? 0.05 : pd, 0x15171a);
-        B_PROPS.add(GEO.box, mtx(ex, y - 1.4, ez, along === 'x' ? 0.06 : 0.5, 3.1, along === 'x' ? 0.5 : 0.06, along === 'x' ? 0 : 0.5, 0, along === 'x' ? 0.5 : 0), 0x15171a);
+        vbox(B_BLD, ex, y, ez, pw, 0.07, pd, 0x15171a);
+        vbox(B_BLD_SNOW, ex, y + 0.07, ez, pw * 0.94, 0.05, pd * 0.94, 0xffffff);
+        vbox(B_BLD, ex + (along === 'x' ? 0 : sgn * 0.45), y + 0.5, ez + (along === 'x' ? sgn * 0.45 : 0), along === 'x' ? pw : 0.05, 0.05, along === 'x' ? 0.05 : pd, 0x15171a);
+        B_BLD.add(GEO.box, mtx(ex, y - 1.4, ez, along === 'x' ? 0.06 : 0.5, 3.1, along === 'x' ? 0.5 : 0.06, along === 'x' ? 0 : 0.5, 0, along === 'x' ? 0.5 : 0), 0x15171a);
       }
     }
   }
   // rooftop clutter: AC units, chimneys, and the odd water tower on warehouses
   if (w > 6 && d > 6) {
     const R = Math.random;
-    if (R() < 0.7) vbox(B_PROPS, cx + (R() - 0.5) * (w - 4), h, cz + (R() - 0.5) * (d - 4), 1.3, 0.8, 1.7, 0x8a9096);
-    if (styleIdx !== 5 && R() < 0.6) vbox(B_PROPS, cx + (R() - 0.5) * (w - 3), h, cz + (R() - 0.5) * (d - 3), 0.7, 1.5, 0.7, 0x5d3328);
+    if (R() < 0.7) vbox(B_BLD, cx + (R() - 0.5) * (w - 4), h, cz + (R() - 0.5) * (d - 4), 1.3, 0.8, 1.7, 0x8a9096);
+    if (styleIdx !== 5 && R() < 0.6) vbox(B_BLD, cx + (R() - 0.5) * (w - 3), h, cz + (R() - 0.5) * (d - 3), 0.7, 1.5, 0.7, 0x5d3328);
     if (styleIdx === 5 && h > 7 && R() < 0.45) {
       const tx = cx + (R() - 0.5) * (w - 6), tz = cz + (R() - 0.5) * (d - 6);
-      for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) vbox(B_PROPS, tx + a * 1.1, h, tz + b * 1.1, 0.16, 2.6, 0.16, 0x2a2420);
-      vcyl(B_PROPS, tx, h + 2.6, tz, 1.75, 2.6, 0x5a4030);
-      B_PROPS.add(GEO.cone, mtx(tx, h + 5.75, tz, 1.95, 1.1, 1.95), 0x3a2c24);
-      B_SNOW.add(GEO.cone, mtx(tx, h + 5.85, tz, 1.75, 0.95, 1.75), 0xffffff);
+      for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) vbox(B_BLD, tx + a * 1.1, h, tz + b * 1.1, 0.16, 2.6, 0.16, 0x2a2420);
+      vcyl(B_BLD, tx, h + 2.6, tz, 1.75, 2.6, 0x5a4030);
+      B_BLD.add(GEO.cone, mtx(tx, h + 5.75, tz, 1.95, 1.1, 1.95), 0x3a2c24);
+      B_BLD_SNOW.add(GEO.cone, mtx(tx, h + 5.85, tz, 1.75, 0.95, 1.75), 0xffffff);
     }
   }
   addCol(x0, 0, z0, x1, h, z1, 'building');
@@ -380,11 +388,13 @@ function fence(x0, z0, x1, z1, h) {
   addCol(Math.min(x0, x1) - 0.06, 0, Math.min(z0, z1) - 0.06, Math.max(x0, x1) + 0.06, h || 1.6, Math.max(z0, z1) + 0.06, 'fence');
 }
 function shopPane(x, y, z, w, h, ry, dim) {
+  keepPlane(x, y, z, w, h, ry);
   const geo = new THREE.PlaneGeometry(1, 1).toNonIndexed();
   const uv = geo.attributes.uv; const off = Math.random(); for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * w / 8 + off);
   B_SHOP.add(geo, mtx(x, y, z, w, h, 1, 0, ry, 0), dim ? 0x9a8a78 : 0xffffff);
 }
 function signPlane(text, x, y, z, w, h, ry, opts) {
+  keepPlane(x, y, z, w, h, ry);
   const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: signTex(text, opts), transparent: !!opts.transparent }));
   m.position.set(x, y, z); m.rotation.y = ry; scene.add(m); SIGNS.push(m); return m;
 }
@@ -396,14 +406,14 @@ function signPlane(text, x, y, z, w, h, ry, opts) {
   building(-26, -50, -10.5, -34, 9.5, 2, 0, null);
   vbox(B_PROPS, -9.6, 0, -42, 1.8, 0.5, 3.4, 0x8a8478); vbox(B_PROPS, -9.2, 0.5, -42, 1.0, 0.4, 3.0, 0x8a8478);
   addCol(-10.5, 0, -43.7, -8.7, 0.5, -40.3, 'stoop');
-  vbox(B_EMIS, -10.45, 1.0, -42, 0.04, 2.1, 1.1, 0x40301c);
+  vbox(B_EMIS, -10.45, 1.0, -42, 0.04, 2.1, 1.1, 0x40301c); keep(-11, 0, -43.8, -10, 3.8, -40.2);
   vbox(B_EMIS, -10.4, 3.4, -42, 0.1, 0.18, 0.3, 0xffd8a0);
   LAMPS.push({ x: -9.6, y: 3.2, z: -42, porch: true });
   // CORNER STORE: NE corner of Calder & Bishop
   reserve(10, -28, 28, -10);
   building(10.5, -26, 26, -10.5, 7, 1, 1);
   shopPane(18, 1.7, -10.47, 13, 2.6, 0); shopPane(10.47, 1.7, -18, 12, 2.6, -Math.PI / 2);
-  vbox(B_PROPS, 18, 3.1, -10.0, 15.5, 0.25, 1.2, 0x2a1810);
+  vbox(B_PROPS, 18, 3.1, -10.0, 15.5, 0.25, 1.2, 0x2a1810); keep(10.2, 0, -11, 26, 4.6, -9.2); keep(10, 0, -26, 11, 3.2, -10.2);
   signPlane('CALDER MINI MART', 18, 3.85, -10.3, 10, 1.2, 0, { bg: '#1a0705', fg: '#ff5a3a', glow: '#ff3a1a', size: 78, w: 1024, h: 128 });
   signPlane('COFFEE · HAND WARMERS · ATM', 18, 2.75, -10.2, 6, 0.45, 0, { bg: '#0a0a0a', fg: '#ffd27a', glow: '#ffb040', size: 54, w: 1024, h: 80, blur: 8 });
   signPlane('ICE', 12.2, 1.3, -9.4, 1.2, 0.6, 0, { bg: '#e8f4ff', fg: '#1f6fd0', glow: '#1f6fd0', size: 90, w: 256, h: 128, blur: 0 });
@@ -413,7 +423,7 @@ function signPlane(text, x, y, z, w, h, ry, opts) {
   reserve(30, -30, 50, -10);
   building(30.5, -28, 48, -10.5, 8.5, 0, 0, null);
   vbox(B_PROPS, 41, -0.02, -9.8, 2.2, 0.04, 1.4, 0x121418);
-  vbox(B_EMIS, 41, 0.0, -10.46, 1.0, 1.0, 0.05, 0x7a1a14);
+  vbox(B_EMIS, 41, 0.0, -10.46, 1.0, 1.0, 0.05, 0x7a1a14); keep(37.8, -0.5, -11, 43.6, 3.0, -9.5);
   fence(39.8, -10.3, 39.8, -8.9, 0.9); fence(42.2, -10.3, 42.2, -8.9, 0.9);
   signPlane('BASEMENT 808', 41, 2.4, -10.4, 2.6, 0.62, 0, { bg: '#0a0404', fg: '#ff4a3a', glow: '#ff2a1a', size: 80, w: 512, h: 140 });
   signPlane('ON AIR', 38.6, 1.2, -10.4, 0.9, 0.3, 0, { bg: '#220404', fg: '#ff2a2a', glow: '#ff0000', size: 70, w: 256, h: 90 });
@@ -422,7 +432,7 @@ function signPlane(text, x, y, z, w, h, ry, opts) {
   reserve(-40, 48, -10, 80);
   building(-38, 50, -12.5, 78, 8, 4, 1);
   { const geo = GEO.plane; B_GYM.add(geo, mtx(-12.47, 4.3, 64, 18, 3.4, 1, 0, Math.PI / 2, 0), 0xffffff); }
-  vbox(B_EMIS, -12.42, 0.0, 63, 0.06, 2.3, 2.2, 0xe8d2a0);
+  vbox(B_EMIS, -12.42, 0.0, 63, 0.06, 2.3, 2.2, 0xe8d2a0); keep(-13, 0, 54.5, -11, 7.4, 73.5);
   vbox(B_PROPS, -11.8, 2.6, 63, 1.4, 0.18, 3.2, 0x1d3b2a);
   signPlane('CALDER PARK REC CENTER', -12.3, 6.6, 64, 13, 1.1, Math.PI / 2, { bg: '#08140e', fg: '#9ff0c0', glow: '#5fd090', size: 64, w: 1024, h: 96 });
   signPlane('OPEN TILL 10 · ALL AGES', -12.3, 5.6, 64, 6, 0.5, Math.PI / 2, { bg: '#08140e', fg: '#f0f8f4', glow: '#5fd090', size: 54, w: 1024, h: 96, blur: 4 });
@@ -437,7 +447,7 @@ function signPlane(text, x, y, z, w, h, ry, opts) {
   // AREA 7 POLICE station on Garnet St, with cruisers out front
   reserve(92, 50, 128, 80);
   building(95, 56, 125, 79, 9, 5, 0, null);
-  vbox(B_EMIS, 110, 0.3, 79.06, 3.2, 2.4, 0.05, 0xcfe2ff);
+  vbox(B_EMIS, 110, 0.3, 79.06, 3.2, 2.4, 0.05, 0xcfe2ff); keep(106, 0, 78.5, 114, 3.4, 80.5);
   vbox(B_PROPS, 110, 2.9, 79.6, 6, 0.25, 1.4, 0x1a2438);
   signPlane('AREA 7 · POLICE', 110, 5.4, 79.08, 9, 1.1, 0, { bg: '#0a1426', fg: '#e8f0ff', glow: '#5a8aff', size: 78, w: 1024, h: 128 });
   for (const x of [99, 121]) { vcyl(B_PROPS, x, 0, 80.6, 0.1, 6, 0x3a3f46); vbox(B_EMIS, x, 5.6, 80.6, 0.5, 0.35, 0.35, 0x2a5aff); }
@@ -445,7 +455,7 @@ function signPlane(text, x, y, z, w, h, ry, opts) {
   // CALDER GENERAL hospital facing Harlan Ave
   reserve(-146, -66, -104, -24);
   building(-140, -62, -106, -28, 16, 4, 1, null);
-  vbox(B_EMIS, -105.94, 0.3, -45, 0.05, 2.5, 4, 0xe8f4ff);
+  vbox(B_EMIS, -105.94, 0.3, -45, 0.05, 2.5, 4, 0xe8f4ff); keep(-106.5, 0, -48.5, -104.5, 3.2, -41.5);
   vbox(B_PROPS, -105.2, 2.8, -45, 1.8, 0.25, 6, 0xd8dde2);
   signPlane('CALDER GENERAL', -105.9, 13.5, -45, 14, 1.4, Math.PI / 2, { bg: '#f2f6fa', fg: '#1a3a6a', glow: '#1a3a6a', size: 80, w: 1024, h: 110, blur: 0 });
   signPlane('EMERGENCY', -105.9, 3.6, -45, 4.6, 0.7, Math.PI / 2, { bg: '#b0121a', fg: '#ffffff', glow: '#ffffff', size: 70, w: 512, h: 90, blur: 4 });
@@ -780,7 +790,8 @@ const DECALS = [];
   FALLBACK.barrel = B_BARREL.mesh(MAT.props); FALLBACK.barrelFire = B_BARREL_FIRE.mesh(MAT.emis, false, false); FALLBACK.barrier = B_BARRIER.mesh(MAT.props); FALLBACK.vent = B_VENT.mesh(MAT.props, false); B_SNOW.mesh(MAT.snow); B_ROOF.mesh(MAT.snow, false, true);
   MAT.shop.vertexColors = true; B_SHOP.mesh(MAT.shop, false, false); B_GYM.mesh(MAT.gym, false, false);
   const gm = B_GLASS.mesh(MAT.glass, false, false); gm.renderOrder = 3;
-  for (const F of FACADES) F.batches.forEach((b, i) => { if (b.p.length) b.mesh(F.mats[i]); });
+  for (const F of FACADES) F.batches.forEach((b, i) => { if (b.p.length) b.mesh(F.mats[i]).userData.bld = true; });
+  B_BLD.mesh(MAT.props).userData.bld = true; B_BLD_SNOW.mesh(MAT.snow).userData.bld = true; B_BLD_ROOF.mesh(MAT.snow, false, true).userData.bld = true;
   // lamp halos
   const hp = [];
   for (const L of LAMPS) if (!L.fire) hp.push(L.x, L.y + 0.05, L.z);

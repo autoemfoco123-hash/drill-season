@@ -2,15 +2,15 @@
 
 importer="texture"
 type="StreamTexture"
-path="res://.import/facade_cream_0.png-de63c087970497ea9bab8201a1ce8fa3.stex"
+path="res://.import/signs.png-5b0982b2c96a2f99e4f284147aeb90a7.stex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/tex/facade_cream_0.png"
-dest_files=[ "res://.import/facade_cream_0.png-de63c087970497ea9bab8201a1ce8fa3.stex" ]
+source_file="res://assets/tex/signs.png"
+dest_files=[ "res://.import/signs.png-5b0982b2c96a2f99e4f284147aeb90a7.stex" ]
 
 [params]
 

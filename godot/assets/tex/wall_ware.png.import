@@ -2,15 +2,15 @@
 
 importer="texture"
 type="StreamTexture"
-path="res://.import/facade_brown_1.png-88687120679d9833b4916641a3883c26.stex"
+path="res://.import/wall_ware.png-4be5e0d2e90af71307d2ef93f918b848.stex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/tex/facade_brown_1.png"
-dest_files=[ "res://.import/facade_brown_1.png-88687120679d9833b4916641a3883c26.stex" ]
+source_file="res://assets/tex/wall_ware.png"
+dest_files=[ "res://.import/wall_ware.png-4be5e0d2e90af71307d2ef93f918b848.stex" ]
 
 [params]
 

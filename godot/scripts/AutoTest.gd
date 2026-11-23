@@ -27,6 +27,7 @@ func run(m):
 	elif OS.get_environment("DS_TRAILER") != "": call_deferred("_trailer")
 	elif OS.get_environment("DS_MUSICTEST") != "": call_deferred("_music_test")
 	elif OS.get_environment("DS_DRIVETEST") != "": call_deferred("_drive_test")
+	elif OS.get_environment("DS_CITYTEST") != "": call_deferred("_city_test")
 	else: call_deferred("_go")
 
 func _wait(s):
@@ -1698,4 +1699,37 @@ func _drive_test():
 	yield(_wait(0.3), "completed")
 	yield(_shot("d_drift_marks"), "completed")
 	main.cutscene.end()
+	get_tree().quit()
+
+# ---------------------------------------------------------------- the city (DS_CITYTEST)
+# street-level views across the districts, by day and at night, plus what it cost to build
+func _city_test():
+	yield(_wait(1.0), "completed")
+	main.title._close(); main.start_game(G.new_state("citytest"))
+	yield(_wait(1.5), "completed")
+	_clean_view(true)
+	var CB = main.city_build
+	_log("city: %d buildings' worth: %d tris in %d chunks, %d windows, %d street props, built in %d ms" % [CB.bx.size(), CB.info.tris, CB.info.chunks, CB.info.windows, CB.info.props, CB.info.ms])
+	# [name, from, look]
+	var views = [
+		["c1_calder", Vector3(4, 1.7, -2), Vector3(30, 4, -14)],
+		["c2_bishop", Vector3(-4, 1.7, -60), Vector3(-12, 5, -30)],
+		["c3_corner", Vector3(-7, 2.2, 4), Vector3(-30, 6, -14)],
+		["c4_rows", Vector3(-95 + 4, 1.7, 120), Vector3(-95 - 12, 5, 150)],
+		["c5_ware", Vector3(160 - 4, 1.7, -120), Vector3(160 - 14, 6, -150)],
+		["c6_courts", Vector3(-30, 2.0, 170), Vector3(-10, 18, 135)],
+		["c7_alley", Vector3(-150, 1.8, -45), Vector3(-120, 3, -45)],
+		["c8_high", Vector3(30, 28, 40), Vector3(-10, 4, -20)],
+	]
+	for tod in [["day", 13 * 60], ["night", 22 * 60 + 30]]:
+		G.time_offset += (tod[1] - G.world_minutes())
+		for v in views:
+			if tod[0] == "night" and not v[0] in ["c1_calder", "c4_rows", "c6_courts", "c8_high"]: continue
+			main.player.place(v[1].x, 0, v[1].z + 3, 0)
+			_frame(v[1], v[2], 62)
+			yield(_wait(0.7), "completed")
+			yield(_shot("%s_%s" % [v[0], tod[0]]), "completed")
+			if v[0] == "c1_calder" and tod[0] == "day":
+				_log("draw calls %d, vertices %d, fps %d" % [Performance.get_monitor(Performance.RENDER_DRAW_CALLS_IN_FRAME), Performance.get_monitor(Performance.RENDER_VERTICES_IN_FRAME), Engine.get_frames_per_second()])
+			main.cutscene.end()
 	get_tree().quit()
