@@ -16,6 +16,8 @@ var finger = null
 var shadow = null
 var gun_slot = null
 var phase = 0.0
+var foot = 0          # counts footfalls of the walk cycle (the player's footstep sounds follow it)
+var _fc = 0
 var cr = 0.0
 var opts = {}
 var _geo = { "v": [], "n": [], "c": [], "i": [], "b": [] }
@@ -443,6 +445,11 @@ func animate(dt, pose):
 	var amp = clamp(s / 1.3, 0.0, 1.0)                  # 0 standing .. 1 on the move
 	var stride = lerp(1.45, 3.1, run)                   # metres per cycle (two steps)
 	if s > 0.12: phase += dt * TAU * s / stride
+	# a foot lands each time the cycle passes a quarter turn (the thigh at its furthest forward)
+	var fc = int(floor((phase - PI * 0.5) / PI))
+	if first: _fc = fc
+	elif fc != _fc:
+		_fc = fc; foot += 1
 	var ph = phase
 	_idle_t += dt
 	var kl = 1.0 if first else 1 - exp(-dt * 22)        # legs follow fast
@@ -743,6 +750,28 @@ func _emote(em, t):
 		_rot(AR.sh, 0, 0, 1.45 - sin(a + 2.4) * 0.35 * k); _rot(AR.elbow, -0.5 - sin(a + 3.6) * 0.6, 0, 0)
 		_rot(spine, 0.05, 0, sin(a) * 0.09); _rot(head_g, 0, 0, -sin(a) * 0.12)
 		_rot(L.knee, 0.2 + max(0, sin(a * 0.5)) * 0.3, 0, 0); _rot(R.knee, 0.2 + max(0, -sin(a * 0.5)) * 0.3, 0, 0)
+	elif em == "sturdy":
+		# the sturdy: sitting low, chest over the toes, a heavy drop on every beat. The feet trade a
+		# stomp out front, side to side with a little hop between, the hips turn into the stomping
+		# leg while the arms swing the other way; every two bars both fists pump down
+		var u = t * 2.3                                 # beats
+		var f = u - floor(u)
+		var hit = exp(-f * 7.0)                         # the drop as each beat lands
+		var sd = clamp(cos(u * PI) * 1.7, -1.0, 1.0)    # +1 right foot out .. -1 left foot out
+		var r = max(0.0, sd)
+		var l = max(0.0, -sd)
+		var pump = 1.0 if int(floor(u)) % 8 >= 6 else 0.0
+		var pk = 1.0 - pump
+		hips.translation.y = lerp(0.92, 0.79 + (1.0 - abs(sd)) * 0.05 - hit * (0.03 + pump * 0.03), k)
+		hips.translation.x = sd * 0.07 * k
+		_rot(hips, 0, -sd * 0.3 * k, sd * 0.05 * k)
+		_rot(R.thigh, lerp(-0.5, -0.72, r) * k, 0, (0.16 + r * 0.1) * k); _rot(R.knee, (lerp(1.1, 0.25, r) + hit * 0.12 * (1.0 - r)) * k + 0.05, 0, 0)
+		_rot(L.thigh, lerp(-0.5, -0.72, l) * k, 0, -(0.16 + l * 0.1) * k); _rot(L.knee, (lerp(1.1, 0.25, l) + hit * 0.12 * (1.0 - l)) * k + 0.05, 0, 0)
+		var dn = hit * 0.55 * pump
+		_rot(AL.sh, (lerp(-0.25, -1.0, r) + 0.4 * l) * k * pk + (-0.45 + dn) * pump, 0, lerp(-0.2, 0.3, r) * k * pk - 0.35 * pump); _rot(AL.elbow, (-1.2 - 0.3 * r) * pk - 1.7 * pump, 0, 0)
+		_rot(AR.sh, (lerp(-0.25, -1.0, l) + 0.4 * r) * k * pk + (-0.45 + dn) * pump, 0, lerp(0.2, -0.3, l) * k * pk + 0.35 * pump); _rot(AR.elbow, (-1.2 - 0.3 * l) * pk - 1.7 * pump, 0, 0)
+		_rot(spine, (0.3 + hit * 0.06) * k, sd * 0.18 * k, sd * 0.04 * k)
+		_rot(head_g, (0.06 + hit * 0.18) * k, -sd * 0.1 * k, 0)
 	elif em == "dance3":
 		# the robot: snaps between square poses
 		var q = int(floor(t * 3.2)) % 6

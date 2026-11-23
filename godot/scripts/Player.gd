@@ -73,6 +73,7 @@ var pending_hit = null
 var shake = 0.0
 var recoil = 0.0
 var step_acc = 0.0
+var foot_seen = 0
 var vm = null           # first-person hands and gun
 var vm_flip = null      # first-person: the left hand giving the finger
 var vm_flip_key = ""
@@ -311,7 +312,6 @@ func update(dt):
 		step_acc += speed * dt
 		if step_acc > (1.05 if sprinting else 0.8):
 			step_acc = 0
-			main.sfx.step(pos, sprinting)
 		G.S["stats"]["dist"] = G.S["stats"].get("dist", 0) + speed * dt
 	# face where you aim, or where you walk
 	var face_aim = aim_t > 0.2 or G.GAME_T - last_shot < 0.6 or G.GAME_T - last_punch < 0.8 or fp_on()
@@ -330,6 +330,10 @@ func update(dt):
 		"emote": emote_name, "et": emote_t,
 		"reload": _reload_u() if not fists else -1.0, "kick": vm_kick if not fists else 0.0,
 	})
+	# one footstep per footfall of the walk cycle, softer when crouched
+	if human.foot != foot_seen:
+		foot_seen = human.foot
+		if on_ground and speed > 0.6: main.sfx.step(pos, sprinting, crouch, foot_seen)
 	if throw_t > 0:
 		# overhand throw on the right arm
 		var tk = throw_t / 0.45
@@ -415,7 +419,7 @@ func update_camera(dt):
 		# head bob: a step's dip and a little side to side, less when aiming, none in the air
 		var hb = 1.0 if G.S["settings"].get("headbob", true) else 0.0
 		var ab = clamp(speed / 5.5, 0.0, 1.2) * (1.0 - aim_t * 0.75) * (1.0 if on_ground else 0.0) * hb
-		bob_ph += dt * speed * 1.85
+		bob_ph = human.phase   # the head dips as each foot lands, in step with the sound
 		var by = -abs(sin(bob_ph)) * 0.042 * ab
 		var bxl = sin(bob_ph) * 0.02 * ab
 		# a dip when you land, deeper after a longer fall
@@ -977,7 +981,7 @@ func emote(name, dur = 0.0):
 	if car or dead or is_ragdoll(): return
 	emote_name = name; emote_t = 0.0; emote_dur = dur; clap_t = 0
 	G.S["stats"]["emotes"] = int(G.S["stats"].get("emotes", 0)) + 1
-	if name.begins_with("dance") or name == "hype":
+	if name.begins_with("dance") or name == "hype" or name == "sturdy":
 		main.peds.react_to_emote(pos, "dance")
 		main.gang.dance_along(name)
 	elif name == "laugh" or name == "flex" or name == "point":

@@ -334,7 +334,7 @@ func _hurt(f, dmg, from):
 func dance_along(name):
 	for f in FOL:
 		if f.state != "down" and not f.riding and f.pos.distance_to(main.player.pos) < 14:
-			f.emote = name if randf() < 0.6 else G.pick(["dance1", "dance2", "dance3", "clap"])
+			f.emote = name if randf() < 0.6 else G.pick(["dance1", "dance2", "dance3", "sturdy", "clap"])
 			f.emote_t = G.rand(0, 1); f.emote_left = G.rand(4, 8)
 
 func producer_boost():

@@ -120,7 +120,7 @@ func _index(dir):
 		if fn.ends_with(".ogg"):
 			var base = fn.get_basename()
 			var nm = base
-			if base.length() > 2 and base[base.length() - 2] == "_" and base[base.length() - 1] in ["0", "1", "2"] and not base.begins_with("creak"):
+			if base.length() > 2 and base[base.length() - 2] == "_" and base[base.length() - 1] in ["0", "1", "2", "3", "4"] and not base.begins_with("creak"):
 				nm = base.substr(0, base.length() - 2)
 			if not files.has(nm): files[nm] = []
 			var path = dir + "/" + fn
@@ -220,6 +220,7 @@ func play3d_later(delay, name, at, vol = 0.6, pitch = 1.0, bus = "World"):
 
 # ---------- people ----------
 func surface(at):
+	if at.y > 200: return "step_floor"      # the walk-in rooms (they're built up in the sky)
 	if at.y > 5.5: return "step_metal"
 	if at.y > 0.35: return "step_hard"
 	var hw = float(G.D["ROAD_HW"])
@@ -229,14 +230,19 @@ func surface(at):
 		if abs(at.z - z) < hw and at.x < float(G.D["ROAD_X_END"]): return "step_slush"
 	return "step_snow"
 
-func step(at, run):
+# light sneaker steps: quiet, bright and one per footfall (the player calls this when a foot of
+# the walk cycle lands). Left and right are pitched a hair apart so a walk doesn't drone.
+const STEP_VOL = { "step_hard": 0.9, "step_snow": 1.0, "step_slush": 0.85, "step_metal": 0.75, "step_floor": 0.8 }
+func step(at, run, soft = false, foot = 0):
 	var surf = surface(at)
-	play3d(surf, at + Vector3(0, 0.05, 0), (0.34 if run else 0.25) * (0.8 if surf == "step_slush" else 1.0), 1.0 if run else 0.94)
-	if run and randf() < 0.35: play3d("rustle", at + Vector3(0, 1.1, 0), 0.12)
+	var v = (0.2 if run else 0.15) * (0.55 if soft else 1.0) * STEP_VOL.get(surf, 1.0)
+	var p = (1.025 if foot % 2 == 0 else 0.975) * (1.04 if run else 1.0)
+	play3d(surf, at + Vector3(0, 0.05, 0), v, p)
+	if run and randf() < 0.15: play3d("rustle", at + Vector3(0, 1.1, 0), 0.06)
 
 func land(at, fall):
 	play3d("bodyfall", at, clamp(fall * 0.12, 0.15, 0.7), 1.25)
-	play3d(surface(at), at, 0.4)
+	play3d(surface(at), at, 0.28, 0.95)
 
 func thump(at, v):
 	play3d("bodyfall", at, clamp(v * 0.06, 0.1, 0.6), G.rand(0.9, 1.2))

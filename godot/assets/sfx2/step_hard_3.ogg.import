@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/step_hard_3.ogg-2e92a129e513768b8bfff77f55389091.oggstr"
+
+[deps]
+
+source_file="res://assets/sfx2/step_hard_3.ogg"
+dest_files=[ "res://.import/step_hard_3.ogg-2e92a129e513768b8bfff77f55389091.oggstr" ]
+
+[params]
+
+loop=true
+loop_offset=0

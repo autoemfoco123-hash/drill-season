@@ -168,8 +168,10 @@ Tudo do jogo web, mais algumas coisas só daqui:
   fontes de calor, café, aquecedores de mão, ulceração.
 - **Ragdoll** em todo mundo: quem cai baleado, nocauteado, atropelado ou pelo trem cai de verdade.
   Dá para escorregar no gelo correndo e se jogar no chão (J).
-- **Emotes:** três danças, hype, palmas, rir, dar de ombros, continência, apontar, mão na cara,
-  músculo, sentar, anjo na neve e rezar. Quem está perto reage, e a sua gangue dança junto.
+- **Emotes:** quatro danças (two-step, arm wave, robô e a **sturdy**: base baixa, pisão para a
+  frente de um lado e do outro, os braços cruzando, e a cada dois compassos os punhos socando para
+  baixo), hype, palmas, rir, dar de ombros, continência, apontar, mão na cara, músculo, sentar,
+  anjo na neve e rezar. Quem está perto reage, e a sua gangue dança junto (a sturdy também).
 - **Guerra de bolas de neve:** as pessoas riem, devolvem, fogem ou escorregam; a polícia não acha graça.
 - **Online com servidores (Android, Linux, Windows e Mac juntos):** no celular, **Online**:
   - **Servers**: a lista de servidores do mundo inteiro, com nome, jogadores/vagas, região e
@@ -199,7 +201,9 @@ Tudo do jogo web, mais algumas coisas só daqui:
   - pneus, neve, derrapagem e vento na carroceria;
   - por dentro do carro a rua fica abafada;
   - tiros com eco que muda com a distância dos prédios e cartuchos caindo no chão;
-  - balas passando zunindo; passos diferentes na rua, na calçada e na plataforma de metal;
+  - balas passando zunindo; passos leves de tênis, um por pisada da animação (com o pé esquerdo e
+    o direito um pouco diferentes), com som próprio na neve, na lama da rua, na calçada, na
+    escada de metal e no piso dos lugares fechados, cinco variações de cada;
   - vento que acompanha as rajadas, a cidade ao fundo, sirenes, cachorros, aviões e o gelo do lago
     rangendo; fogo crepitando nos barris e vapor nos bueiros;
   - mixagem com compressor e limitador.
@@ -377,7 +381,7 @@ DS_SHOTS=/tmp/shots xvfb-run godot3 --path godot --autotest
 ```
 
 `tools/record-beats.js` grava as batidas do estúdio a partir do jogo web, e `tools/make-sfx.py`
-sintetiza os sons extras (vento, cidade, partida, gelo, fogo, trovões, o coro e as asas das pombas).
+sintetiza os sons extras (vento, cidade, partida, gelo, fogo, trovões, o coro, as asas das pombas e os passos).
 `tools/make-memorial.py` pinta as texturas do jardim memorial (granito, frontão, arabescos das portas, placas, casca e veias da Poison Tree, palmeiras, grama, asas) e
 `tools/make-sky-noise.py` gera o ruído que o shader do céu usa para nuvens e aurora.
 `tools/make-city.py` pinta as texturas da cidade no estilo cel (fachadas, rua e calçada, em `godot/assets/tex/`).
@@ -392,7 +396,7 @@ listener websockets) e aponte o jogo para ele com
 
 Ele grava capturas e um `autotest.log`.
 
-Para ver rostos, barbas, o dedo do meio e o visual cel: `DS_LOOKTEST=1`. Para ver o editor de personagem e todas as telas do celular: `DS_UITEST=1`. Para os lugares de entrar: `DS_ROOMTEST=1`. Para as animações (andar, correr e parado, de lado): `DS_ANIMTEST=1`. Para a morte: `DS_DEATHTEST=1`. Para as armas (tiro e recarga de cada uma, em primeira e terceira pessoa) e os carros novos: `DS_GUNTEST=1`. Para as colisões (carro no muro, batida de frente, corpo contra carro girado, multidão): `DS_COLTEST=1`. Para testar servidores,
+Para ver rostos, barbas, o dedo do meio e o visual cel: `DS_LOOKTEST=1`. Para ver o editor de personagem e todas as telas do celular: `DS_UITEST=1`. Para os lugares de entrar: `DS_ROOMTEST=1`. Para as animações (andar, correr e parado, de lado, mais quantas pisadas por segundo em cada velocidade): `DS_ANIMTEST=1`; só a dança sturdy: `DS_ANIMTEST=sturdy`. Para a morte: `DS_DEATHTEST=1`. Para as armas (tiro e recarga de cada uma, em primeira e terceira pessoa) e os carros novos: `DS_GUNTEST=1`. Para as colisões (carro no muro, batida de frente, corpo contra carro girado, multidão): `DS_COLTEST=1`. Para testar servidores,
 com um servidor dedicado rodando (`--server --name="Test Dedicated" --password=...`): `DS_SRVTEST=client`
 (com `DS_PW=` para a senha) acha o servidor, é barrado com a senha errada, entra com a certa, conversa
 e depois cria o "Test Host"; `DS_SRVTEST=joiner` noutro jogo entra nele. `DS_BROKERS=` troca os

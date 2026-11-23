@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/step_metal_3.ogg-34ce1cf760f647e4d3a4f0646696ab20.oggstr"
+
+[deps]
+
+source_file="res://assets/sfx2/step_metal_3.ogg"
+dest_files=[ "res://.import/step_metal_3.ogg-34ce1cf760f647e4d3a4f0646696ab20.oggstr" ]
+
+[params]
+
+loop=true
+loop_offset=0

@@ -3,7 +3,8 @@
 wind (seamless loop), city (distant city bed, seamless loop), starter (engine start),
 creak_0..2 (lake ice), shift (gear change clunk), whoosh_car (a car passing close),
 crackle (fire barrel loop), thunder_near / thunder_far (thundersnow), heaven (the soft choir
-swell when lightning lights up the memorial wall), wings (doves taking off).
+swell when lightning lights up the memorial wall), wings (doves taking off),
+steps (step_hard/snow/slush/metal/floor_0..4: light sneaker footsteps).
 Needs numpy and ffmpeg. Usage: python3 tools/make-sfx.py [name ...]"""
 import numpy as np, subprocess, os, wave, sys
 
@@ -239,7 +240,85 @@ def wings():
             x[p:p + m] += flap * (0.9 - i / (2.2 * rate)) * (0.6 + rng.random() * 0.4)
     write('wings', norm(reverb(x * np.exp(-t / 1.6), 1.2, 0.25), 0.7))
 
-ALL = [wind, city, starter, creaks, shift, pass_by, crackle, thunders, heaven, wings]
+# ---- footsteps: light sneaker steps, a heel then the ball of the foot, five takes per surface ----
+# Kept bright and short on purpose: almost nothing under 200 Hz, so a walk reads as taps and
+# crunches instead of a stack of thuds.
+def hp(x, fc, order=2):
+    from numpy.fft import rfft, irfft, rfftfreq
+    X = rfft(x); f = rfftfreq(len(x), 1 / SR) + 1e-6
+    return irfft(X / np.sqrt(1 + (fc / f) ** (2 * order)), len(x))
+
+def lp2(x, fc):
+    from numpy.fft import rfft, irfft, rfftfreq
+    X = rfft(x); f = rfftfreq(len(x), 1 / SR)
+    return irfft(X / np.sqrt(1 + (f / fc) ** 4), len(x))
+
+def grains(n, t0, t1, count, f0, q, amp, dec=0.002):
+    # tiny clicks scattered between t0 and t1, thicker near the start: crunch, grit, splats
+    y = np.zeros(n)
+    m = int(dec * 7 * SR)
+    for i in range(count):
+        p = int((t0 + (t1 - t0) * rng.random() ** 1.6) * SR)
+        if p >= n: continue
+        g = rng.standard_normal(m) * env(m, 0.0002, dec * (0.6 + rng.random() * 0.8)) * (0.35 + 0.65 * rng.random())
+        k = min(m, n - p)
+        y[p:p + k] += g[:k]
+    return band(y, f0, q) * amp
+
+def hit(n, at, parts):
+    # a filtered-noise or tone transient starting at `at` seconds; parts = [(kind, freq, q, decay, amp)]
+    y = np.zeros(n); p = int(at * SR); m = n - p
+    if m <= 0: return y
+    t = np.arange(m) / SR
+    for kind, f0, q, dec, a in parts:
+        if kind == 'n':
+            s = band(rng.standard_normal(m), f0, q)
+            s = s / (np.std(s[:int(0.02 * SR)]) + 1e-9) * 0.3
+        else:
+            s = np.sin(2 * np.pi * f0 * t + rng.random() * 6.28)
+        y[p:] += s * env(m, 0.0006, dec) * a
+    return y
+
+def _step(kind):
+    j = lambda v: 1 + (rng.random() - 0.5) * v          # a little jitter per take
+    toe = 0.05 + rng.random() * 0.03                    # heel to ball of the foot
+    if kind == 'hard':                                  # salted sidewalk: a crisp tap and some grit
+        n = int(0.16 * SR)
+        x = hit(n, 0.003, [('n', 2300 * j(0.3), 1.0, 0.006, 1.0), ('n', 1000 * j(0.2), 1.4, 0.010, 0.55), ('t', 240 * j(0.15), 0, 0.008, 0.10)])
+        x += hit(n, 0.003 + toe, [('n', 2700 * j(0.3), 1.0, 0.005, 0.5), ('n', 1200 * j(0.2), 1.4, 0.008, 0.25)])
+        x += grains(n, 0.006, 0.09, 24, 3600, 1.0, 0.22)
+        return norm(lp2(hp(x, 220), 6000), 0.7)
+    if kind == 'snow':                                  # packed snow: a quick dry crunch
+        n = int(0.2 * SR)
+        x = grains(n, 0.002, 0.065, 70, 2300 * j(0.2), 0.9, 1.0, 0.0018)
+        x += grains(n, toe, toe + 0.05, 40, 2800 * j(0.2), 0.9, 0.55, 0.0016)
+        x += hit(n, 0.004, [('n', 520 * j(0.2), 1.3, 0.02, 0.35), ('n', 1100 * j(0.2), 1.2, 0.014, 0.25)])
+        return norm(lp2(hp(x, 260), 5500), 0.65)
+    if kind == 'slush':                                 # grey slush on the road: small wet splats
+        n = int(0.18 * SR)
+        x = grains(n, 0.002, 0.08, 30, 1500 * j(0.25), 0.8, 1.0, 0.005)
+        x += grains(n, 0.01, 0.11, 30, 4200, 0.9, 0.2, 0.0015)
+        x += hit(n, 0.003, [('n', 650 * j(0.2), 1.4, 0.018, 0.2)])
+        x += grains(n, toe, toe + 0.05, 14, 1800 * j(0.25), 0.8, 0.45, 0.004)
+        return norm(lp2(hp(x, 280), 6500), 0.65)
+    if kind == 'metal':                                 # fire escapes and the L stairs: a light grating tink
+        n = int(0.26 * SR)
+        ring = [('t', 1250 * j(0.06), 0, 0.055, 0.30), ('t', 1880 * j(0.06), 0, 0.04, 0.20), ('t', 2740 * j(0.06), 0, 0.03, 0.14), ('t', 3990 * j(0.06), 0, 0.02, 0.09)]
+        x = hit(n, 0.003, [('n', 3200, 1.0, 0.004, 0.9), ('n', 700 * j(0.2), 1.8, 0.012, 0.45)] + ring)
+        x += hit(n, 0.003 + toe, [('n', 3500, 1.0, 0.003, 0.45)] + [(k, f, q, d * 0.8, a * 0.45) for k, f, q, d, a in ring])
+        return norm(hp(x, 350), 0.6)
+    # floor: indoors (the studio, the shops, home), sneakers on boards and tile
+    n = int(0.15 * SR)
+    x = hit(n, 0.003, [('n', 1700 * j(0.3), 1.0, 0.005, 0.8), ('n', 600 * j(0.2), 1.6, 0.013, 0.6), ('t', 280 * j(0.15), 0, 0.008, 0.08)])
+    x += hit(n, 0.003 + toe, [('n', 2000 * j(0.3), 1.0, 0.004, 0.4), ('n', 700 * j(0.2), 1.6, 0.01, 0.3)])
+    return norm(hp(x, 220), 0.65)
+
+def steps():
+    for kind in ['hard', 'snow', 'slush', 'metal', 'floor']:
+        for i in range(5):
+            write('step_%s_%d' % (kind, i), _step(kind), q=4)
+
+ALL = [wind, city, starter, creaks, shift, pass_by, crackle, thunders, heaven, wings, steps]
 
 if __name__ == '__main__':
     pick = sys.argv[1:]

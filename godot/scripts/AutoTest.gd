@@ -1082,6 +1082,32 @@ func _anim_test():
 	var at = Vector3(0, 0, -66)
 	h.translation = at; h.rotation.y = PI / 2
 	_frame(at + Vector3(0, 1.0, 4.2), at + Vector3(0, 0.9, 0), 40)
+	# footfalls per second at crouch, walk and sprint speed (the footstep sounds follow these)
+	for sp in [2.1, 2.7, 4.3, 7.3]:
+		for _j in range(100): h.animate(0.01, { "speed": sp })
+		var f0 = h.foot
+		for _j in range(300): h.animate(0.01, { "speed": sp })
+		_log("footfalls at %.1f m/s: %.2f a second" % [sp, (h.foot - f0) / 3.0])
+	h.animate(0.5, { "speed": 0.0 })
+	if "sturdy" in OS.get_environment("DS_ANIMTEST"):
+		h.rotation.y = 0.55
+		_frame(at + Vector3(0, 1.0, 3.8), at + Vector3(0, 0.75, 0), 40)
+		var et = 0.0
+		for k in range(10):
+			# two beats per stomp pair: ten frames across four beats
+			var target = 0.3 + k * (4.0 / 2.3) / 10.0
+			while et < target:
+				et += 0.016
+				h.animate(0.016, { "speed": 0.0, "emote": "sturdy", "et": et })
+			yield(get_tree(), "idle_frame")
+			yield(_shot("a_sturdy_%d" % k), "completed")
+		# the fist pump on beats 7-8
+		et = 6.0 / 2.3 + 0.02
+		h.animate(0.016, { "speed": 0.0, "emote": "sturdy", "et": et })
+		yield(get_tree(), "idle_frame")
+		yield(_shot("a_sturdy_pump"), "completed")
+		get_tree().quit()
+		return
 	for spec in [["walk", 1.45, 8], ["run", 6.0, 8], ["idle", 0.0, 3]]:
 		var n = spec[2]
 		var cyc = 2.5 if spec[1] <= 0 else (1.45 if spec[1] < 3 else 3.1) / spec[1]

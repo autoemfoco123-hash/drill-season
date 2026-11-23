@@ -34,6 +34,9 @@ para o app que você usou. Se o Play Protect avisar que o app é desconhecido, t
 - **Duas armas novas** (uma pistola estilo AK e uma metralhadora de mão) e **dois carros novos**
   (um sedã musculoso e um SUV grande), com tiro e recarga animados em todas as armas, clarão no
   cano, cápsulas, e balanço e inclinação da câmera em primeira pessoa.
+- **Dança sturdy** na roda de emotes (a gangue e as pessoas na rua dançam junto) e **passos mais
+  leves**: um som curto de tênis por pisada, em sincronia com a animação, diferente na neve, na
+  lama, na calçada, na escada de metal e dentro dos lugares fechados.
 - **Animações novas** de andar, correr e ficar parado, e **morte como num jogo sandbox**: ragdoll,
   câmera em terceira pessoa no corpo e a tela ficando vermelha.
 - **Eras do drill:** visuais de 2012 até hoje no editor e oito personagens originais pelas esquinas.

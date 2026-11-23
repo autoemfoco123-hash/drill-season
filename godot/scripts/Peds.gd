@@ -369,7 +369,7 @@ func react_to_emote(at, kind):
 		var p = near[i]
 		var r = randf()
 		var em = ""
-		if kind == "dance": em = G.pick(["dance1", "dance2", "dance3", "clap"]) if r < 0.75 else "laugh"
+		if kind == "dance": em = G.pick(["dance1", "dance2", "dance3", "sturdy", "clap"]) if r < 0.75 else "laugh"
 		elif kind == "flop": em = "laugh" if r < 0.6 else ("point" if r < 0.85 else "facepalm")
 		elif kind == "flex": em = "clap" if r < 0.5 else "shrug"
 		elif kind == "laugh": em = "laugh"

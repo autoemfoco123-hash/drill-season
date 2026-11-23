@@ -18,7 +18,7 @@ const PEOPLE = [
 	[4, "Garnet Kiki", "court", Vector3(4.0, 0, -3.0), "clap", ["Jersey over the hoodie. That's how we knew who ran the court.", "Durag under everything. Keep the waves right.", "You hoop? Nah? Then you write."]],
 	[5, "Sable Bink", "rec", Vector3(3.0, 0, -3.5), "laugh", ["You see the gold before you hear the voice.", "Shearling coat, fur collar. My grandma's closet, my rules.", "Coach Rec put me on a stage when nobody else would."]],
 	[6, "Pavilion Nia", "pavilion", Vector3(4.0, 0, 3.0), "dance1", ["Headphones on, world off. Everybody's a producer now.", "Made a whole tape on a laptop with one working key.", "Post it, then post it again. Nobody sees it the first time."]],
-	[7, "Bishop Zay", "home", Vector3(4.5, 0, 2.0), "", ["New year, same block. Make your name, then make it last.", "Every era thinks it invented the cold.", "Stay out of trouble. Trouble's got a long memory here."]],
+	[7, "Bishop Zay", "home", Vector3(4.5, 0, 2.0), "sturdy", ["New year, same block. Make your name, then make it last.", "Every era thinks it invented the cold.", "Stay out of trouble. Trouble's got a long memory here."]],
 ]
 const ERA_COL = [Color(1, 0.36, 0.3), Color(0.8, 0.6, 0.4), Color(0.65, 0.85, 1), Color(0.35, 0.65, 1), Color(1, 0.8, 0.25), Color(0.85, 0.7, 0.45), Color(0.45, 0.85, 0.5), Color(0.85, 0.6, 1)]
 

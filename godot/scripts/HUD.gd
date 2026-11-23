@@ -79,7 +79,7 @@ const C_TEXT = Color(0.97, 0.97, 0.98)
 const C_DIM = Color(1, 1, 1, 0.58)
 const C_ACCENT = Color(1.0, 0.62, 0.22)
 const C_CASH = Color(0.6, 0.95, 0.66)
-const EMOTES = [["wave", "Wave"], ["flip", "Finger"], ["dance1", "Two-step"], ["dance2", "Arm wave"], ["dance3", "Robot"], ["hype", "Hype"], ["clap", "Clap"], ["laugh", "Laugh"],
+const EMOTES = [["wave", "Wave"], ["flip", "Finger"], ["dance1", "Two-step"], ["dance2", "Arm wave"], ["dance3", "Robot"], ["sturdy", "Sturdy"], ["hype", "Hype"], ["clap", "Clap"], ["laugh", "Laugh"],
 	["shrug", "Shrug"], ["salute", "Salute"], ["point", "Point"], ["facepalm", "Facepalm"], ["flex", "Flex"], ["sit", "Sit"], ["snowangel", "Snow angel"], ["pray", "Pray"], ["flop", "Flop"]]
 const WEAPONS = [["fists", "Fists"], ["k9", "K9"], ["buzz", "Buzzsaw"], ["draft", "Draft"], ["dragon", "Dragon"], ["plow", "Snowplow"], ["snowball", "Snowball"]]
 

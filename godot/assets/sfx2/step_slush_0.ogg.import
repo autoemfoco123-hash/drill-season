@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/step_slush_0.ogg-16e97214d7a163d273b30d77b044c1de.oggstr"
+
+[deps]
+
+source_file="res://assets/sfx2/step_slush_0.ogg"
+dest_files=[ "res://.import/step_slush_0.ogg-16e97214d7a163d273b30d77b044c1de.oggstr" ]
+
+[params]
+
+loop=true
+loop_offset=0
