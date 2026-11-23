@@ -23,6 +23,7 @@ func run(m):
 	elif OS.get_environment("DS_DEATHTEST") != "": call_deferred("_death_test")
 	elif OS.get_environment("DS_GUNTEST") != "": call_deferred("_gun_test")
 	elif OS.get_environment("DS_CONSOLETEST") != "": call_deferred("_console_test")
+	elif OS.get_environment("DS_PROMOTEST") != "": call_deferred("_promo_test")
 	else: call_deferred("_go")
 
 func _wait(s):
@@ -1233,6 +1234,95 @@ func _console_test():
 	Input.action_release("aim")
 	_log("aim assist, degrees off target over time: %s (assist %.2f)" % [str(angs), P.assist_f])
 	get_tree().quit()
+
+# key art for the store (DS_PROMOTEST=key|wide|tall, run at the size wanted with --resolution):
+# a crew of four era characters on Calder Ave at night, a train sitting on the L overhead, the
+# Kessler Bruiser behind them with its lights on, a cruiser further down, snow coming down
+func _promo_test():
+	var mode = OS.get_environment("DS_PROMOTEST")
+	yield(_wait(1.0), "completed")
+	main.title._close(); main.start_game(G.new_state("promo"))
+	yield(_wait(1.5), "completed")
+	G.S["settings"]["quality"] = "high"; main.set_quality("high")
+	G.S["settings"]["outlines"] = true; G.apply_outlines()
+	_clean_view(true)
+	G.S["settings"]["fp"] = false
+	main.sky.override = { "cover": 0.85, "storm": 0.0, "aurora": 0.0 }
+	# night, with the first train dwelling at the platform over Calder Ave
+	var tod = float(OS.get_environment("DS_PROMOTIME")) if OS.get_environment("DS_PROMOTIME") != "" else 21.6
+	G.time_offset += (tod * 60 - G.world_minutes())
+	var T = main.train.TR[0]
+	var P = main.player
+	var X = float(OS.get_environment("DS_PROMOX")) if OS.get_environment("DS_PROMOX") != "" else 33.0
+	P.place(X - 24, 0, 0.5, 0)      # well behind every camera below
+	# the crew, facing the camera (west), on the road
+	var looks = [5, 7, 4, 2]
+	var poses = [["shmoney", 0.35], ["", 0.0], ["point", 1.0], ["sturdy", 0.3]]
+	var spots = [Vector3(X + 1.0, 0, 2.7), Vector3(X, 0, 0.95), Vector3(X + 0.3, 0, -0.95), Vector3(X + 1.2, 0, -2.6)]
+	if mode == "tall":
+		# portrait: the one pointing right up front, the others close behind him
+		spots = [Vector3(X + 2.6, 0, 1.9), Vector3(X + 1.0, 0, 1.15), Vector3(X - 1.4, 0, 0.05), Vector3(X + 1.3, 0, -1.25)]
+	var crew = []
+	for i in range(4):
+		var sk = G.era_skin(looks[i])
+		sk["tone"] = [5, 2, 4, 1][i]
+		var h = load("res://scripts/Human.gd").new().build(G.skin_opts(sk))
+		main.add_child(h); G.toon_tree(h, true)
+		h.translation = spots[i]
+		h.rotation.y = -PI / 2 + [0.4, 0.08, -0.12, -0.45][i]
+		crew.append(h)
+	main.vehicles.spawn("bruiser", X + 6.5, 1.6, -PI / 2 + 0.55, { "color": 0x8a1c24, "owned": true })
+	main.vehicles.spawn("police", X + 15.0, -2.6, -PI / 2 - 0.4, { "owned": true })
+	# key-art lighting: a warm key from the front left, police red and blue rims from behind
+	var lk = float(OS.get_environment("DS_PROMOLIGHT")) if OS.get_environment("DS_PROMOLIGHT") != "" else 1.0
+	for L in [[Vector3(X - 2.5, 4.2, 3.0), Color(1.0, 0.75, 0.5), 0.55 * lk, 8.0], [Vector3(X + 3, 2.8, -3.2), Color(0.3, 0.5, 1.0), 1.1 * lk, 6.0],
+			[Vector3(X + 3, 2.6, 3.4), Color(1.0, 0.22, 0.28), 1.0 * lk, 6.0], [Vector3(X + 15, 2.2, -2.6), Color(0.25, 0.45, 1.0), 1.6 * lk, 8.0], [Vector3(X + 15.5, 2.2, -1.2), Color(1.0, 0.15, 0.2), 1.4 * lk, 7.0]]:
+		var o = OmniLight.new(); o.translation = L[0]; o.light_color = L[1]; o.light_energy = L[2]; o.omni_range = L[3]; o.omni_attenuation = 1.4
+		main.add_child(o)
+	# no steam vents in the shot
+	G.D["VENTS"] = []
+	_promo_clear(X)
+	for _f in range(12):
+		for i in range(4):
+			crew[i].animate(0.016, { "speed": 0.0, "emote": poses[i][0], "et": poses[i][1], "mug": true })
+		yield(get_tree(), "idle_frame")
+	var cams = {
+		"key": [Vector3(X - 6.2, 0.6, 0.45), Vector3(X + 1, 2.0, 0.0), 42],
+		"wide": [Vector3(X - 9.0, 0.8, 0.35), Vector3(X + 1, 2.5, 0.0), 30],
+		"tall": [Vector3(X - 6.4, 0.5, 0.15), Vector3(X, 2.55, 0.05), 56],
+		"side": [Vector3(X - 8.6, 0.62, 0.5), Vector3(X + 1, 2.1, -2.6), 44],
+	}
+	var c = cams.get(mode, cams["key"])
+	_frame(c[0], c[1], c[2])
+	for _f in range(20):
+		_promo_clear(X)
+		yield(get_tree(), "idle_frame")
+	# the train halfway through its stop at the platform
+	var ph = fposmod(G.world_seconds() + T.off, main.train.CYCLE)
+	G.time_offset += main.train.T1 + main.train.T2 * 0.5 - ph
+	_promo_clear(X)
+	yield(get_tree(), "idle_frame")
+	yield(get_tree(), "idle_frame")
+	main.cutscene.layer.visible = false
+	for i in range(4):
+		crew[i].animate(0.016, { "speed": 0.0, "emote": poses[i][0], "et": poses[i][1], "mug": true })
+	yield(_shot("p_%s" % mode), "completed")
+	_log("promo %s: train %s at z %.1f, viewport %s" % [mode, T.state, T.z, str(get_viewport().size)])
+	get_tree().quit()
+
+# an empty street for the key art: no traffic, nobody walking through the shot
+func _promo_clear(X):
+	for v in main.vehicles.VEH.duplicate():
+		if not v.owned and v.pos.distance_to(Vector3(X, 0, 0)) < 90: main.vehicles.remove(v)
+	for pd in main.peds.PEDS.duplicate():
+		if pd.pos.distance_to(Vector3(X, 0, 0)) < 60: main.peds.remove(pd)
+	# the street's regulars (the eras crew, the story cast) step out of frame too
+	for c in main.eras.CREW:
+		if c.h and is_instance_valid(c.h): c.h.queue_free()
+	main.eras.CREW = []
+	for k in main.story.NPCS.keys():
+		var n = main.story.NPCS[k]
+		if n.h and is_instance_valid(n.h): n.h.translation = Vector3(0, -50, 0)
 
 # dying: the ragdoll, the camera on it, the red screen, then waking up at the hospital
 func _death_test():
