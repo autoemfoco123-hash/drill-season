@@ -7,6 +7,10 @@ extends Node
 #  - Ironside Arms, a gun shop on Calder Ave & Bishop St: a glass counter with the clerk (guns,
 #    ammo, first aid), rifles on the pegboard, ammo shelves, and the workbench (parts and
 #    finishes).
+#  - Home, on Bishop St: the living room (mama asleep on the couch, the TV on), the kitchen
+#    (the fridge, the laptop on the table to save), the bedroom (the bed to lay low, the
+#    closet for the wardrobe).
+#  - The Calder Mini Mart: aisles, the drinks coolers, the coffee machine, the counter.
 # The rooms are built out of sight above the city: the physics keeps everyone on a floor, the
 # camera stops at the walls, the snow stops falling, guns stay holstered, and the light inside
 # is the room's own.
@@ -18,13 +22,20 @@ var inside = ""
 var busy = false
 var clerk = null
 var clerk_t = 0.0
+var cashier = null
+var mama = null
+var tv_mat = null
 var spots = []          # interaction points added to G.D["INTERACT"]
 
 const ROOMS = {
 	"studio": { "o": Vector3(-200, 300, 200), "name": "Basement 808", "addr": "2242 W Calder Ave · downstairs",
-		"door": Vector3(41, 0, -8.0), "spawn": Vector3(3.6, 0, 3.2), "amb": Color(0.46, 0.4, 0.5), "sound": "lock" },
+		"door": Vector3(41, 0, -8.0), "out": Vector3(0, 0, 1.2), "out_yaw": PI, "spawn": Vector3(3.6, 0, 3.2), "amb": Color(0.46, 0.4, 0.5), "sound": "lock" },
 	"gunshop": { "o": Vector3(-168, 300, 200), "name": "Ironside Arms", "addr": "Calder Ave & Bishop St",
-		"door": Vector3(-15.2, 0, -8.2), "spawn": Vector3(0, 0, 3.4), "amb": Color(0.42, 0.41, 0.39), "sound": "shopbell" },
+		"door": Vector3(-15.2, 0, -8.2), "out": Vector3(0, 0, 1.2), "out_yaw": PI, "spawn": Vector3(0, 0, 3.4), "amb": Color(0.42, 0.41, 0.39), "sound": "shopbell" },
+	"home": { "o": Vector3(-136, 300, 200), "name": "Home", "addr": "6127 S Bishop St",
+		"door": Vector3(-8.4, 0, -42), "out": Vector3(1.3, 0, 0), "out_yaw": -PI / 2, "spawn": Vector3(3.8, 0, 3.5), "amb": Color(0.38, 0.34, 0.31), "sound": "lock" },
+	"store": { "o": Vector3(-104, 300, 200), "name": "Calder Mini Mart", "addr": "Calder Ave & Bishop St · open late",
+		"door": Vector3(16, 0, -8.4), "out": Vector3(0, 0, 1.3), "out_yaw": PI, "spawn": Vector3(2.5, 0, 3.4), "amb": Color(0.37, 0.38, 0.37), "sound": "shopbell" },
 }
 
 func setup(m):
@@ -32,6 +43,8 @@ func setup(m):
 	_build_studio()
 	_build_gunshop()
 	_build_gunshop_front()
+	_build_home()
+	_build_store()
 	# the doors and everything you can use inside
 	var I = G.D["INTERACT"]
 	_spot(I, "gunshop", Vector3(-15.2, 0, -8.6), 2.4)
@@ -44,6 +57,17 @@ func setup(m):
 	_spot(I, "in_exit_gunshop", go + Vector3(0, 0, 4.2), 1.3)
 	_spot(I, "in_counter", go + Vector3(-0.5, 0, 0.3), 1.8)
 	_spot(I, "in_bench", go + Vector3(-4.3, 0, 2.4), 1.5)
+	var ho = ROOMS.home.o
+	_spot(I, "in_exit_home", ho + Vector3(3.8, 0, 4.3), 1.2)
+	_spot(I, "in_bed", ho + Vector3(-3.2, 0, -2.4), 1.3)
+	_spot(I, "in_closet", ho + Vector3(-4.4, 0, -1.2), 1.0)
+	_spot(I, "in_fridge", ho + Vector3(-4.4, 0, 0.9), 1.1)
+	_spot(I, "in_laptop", ho + Vector3(-2.4, 0, 3.4), 1.1)
+	_spot(I, "in_tv", ho + Vector3(2.2, 0, -0.4), 1.3)
+	var to = ROOMS.store.o
+	_spot(I, "in_exit_store", to + Vector3(2.5, 0, 4.3), 1.2)
+	_spot(I, "in_register", to + Vector3(-3.6, 0, 3.6), 1.4)
+	_spot(I, "in_coffee", to + Vector3(4.3, 0, 2.0), 1.2)
 
 func _spot(I, id, p, r):
 	var it = { "id": id, "x": p.x, "y": p.y, "z": p.z, "r": r }
@@ -317,6 +341,15 @@ func label(it):
 		"in_couch": return "Sit down · warm up"
 		"in_counter": return "Talk to Vic · guns and ammo"
 		"in_bench": return "Workbench · parts and finishes"
+		"in_exit_home": return "Go out to Bishop St"
+		"in_bed": return "Lay low · sleep it off" + ((" · %ds" % int(ceil(main.story.cd_left("laylow")))) if main.story.cd_left("laylow") > 0 else "")
+		"in_closet": return "Closet · change your fit"
+		"in_fridge": return "Fridge · eat something" + ((" · %ds" % int(ceil(main.story.cd_left("fridge")))) if main.story.cd_left("fridge") > 0 else "")
+		"in_laptop": return "Laptop · save progress"
+		"in_tv": return "Watch TV with mama · warm up"
+		"in_exit_store": return "Leave the store"
+		"in_register": return "Counter · coffee, warmers, first aid, ammo"
+		"in_coffee": return "Coffee machine · $8"
 	return null
 
 func use(it):
@@ -335,6 +368,33 @@ func use(it):
 			main.hud.toast("Warm in here. Warmth +25")
 		"in_counter": counter_menu()
 		"in_bench": main.studio.open_bench()
+		"in_exit_home", "in_exit_store": leave()
+		"in_bed":
+			if main.story.cd_left("laylow") > 0: main.hud.toast("You just slept. Not tired yet.")
+			else: main.story.lay_low()
+		"in_closet": main.wardrobe.open()
+		"in_fridge":
+			if main.story.cd_left("fridge") > 0:
+				main.hud.toast("Nothing left but mustard.")
+			else:
+				main.story.set_cd("fridge", 90)
+				G.S["health"] = min(100, float(G.S["health"]) + 25); G.S["warmth"] = min(100, float(G.S.get("warmth", 100)) + 10)
+				main.hud.toast("Leftover greens from mama. Health +25")
+		"in_laptop":
+			G.save_game(); main.hud.toast("Saved.")
+		"in_tv":
+			main.player.emote("sit", 6.0)
+			G.S["warmth"] = min(100, float(G.S.get("warmth", 100)) + 25)
+			main.hud.toast("Some old movie. Mama's snoring. Warmth +25")
+		"in_register": main.story.store_menu("store")
+		"in_coffee":
+			if G.S["cash"] < 8:
+				main.hud.toast("Not enough cash.")
+			else:
+				main.story.add_cash(-8)
+				G.S["warmth"] = min(100, float(G.S["warmth"]) + 35); G.S["buffs"]["coffee"] = 60
+				main.sfx.play("tap", 0.4)
+				main.hud.toast("Coffee. Black, still hot.")
 	return true
 
 func owns(it):
@@ -369,7 +429,8 @@ func leave():
 	var R = ROOMS[inside]
 	main.hud.fade_to(1.0, 0.22)
 	yield(get_tree().create_timer(0.26), "timeout")
-	main.player.place(R.door.x, 0, R.door.z + 1.2, PI)
+	var op = R.door + R.get("out", Vector3(0, 0, 1.2))
+	main.player.place(op.x, 0, op.z, R.get("out_yaw", PI))
 	main.player.cam_pitch = -0.05
 	inside = ""
 	main.sfx.play(R.sound, 0.4)
@@ -435,10 +496,23 @@ func update(dt):
 	var P = main.player
 	# a save made inside, or a respawn outside: work out where we are from the height
 	if inside == "" and P.pos.y > 200 and not busy:
-		inside = "studio" if P.pos.distance_to(ROOMS.studio.o) < P.pos.distance_to(ROOMS.gunshop.o) else "gunshop"
+		var bd = INF
+		for k in ROOMS.keys():
+			var dd = P.pos.distance_to(ROOMS[k].o)
+			if dd < bd:
+				bd = dd; inside = k
 	elif inside != "" and P.pos.y < 200 and not busy:
 		inside = ""
 	main.fx.snow.visible = inside == ""
+	if tv_mat and inside == "home":
+		# the TV flickers through scenes
+		var f = fmod(G.REAL_T * 0.7, 3.0)
+		var tc = Color(0.35, 0.5, 0.85) if f < 1.0 else (Color(0.85, 0.55, 0.35) if f < 2.0 else Color(0.5, 0.75, 0.5))
+		tv_mat.albedo_color = tc * (0.85 + 0.15 * sin(G.REAL_T * 23.0))
+	if mama: mama.visible = inside == "home"
+	if cashier:
+		cashier.visible = inside == "store"
+		if cashier.visible: cashier.animate(dt, { "speed": 0.0, "mug": true })
 	if clerk:
 		clerk.visible = inside == "gunshop"
 		if clerk.visible:
@@ -457,4 +531,176 @@ func light_inside(env, sun):
 func tags():
 	if inside == "gunshop" and clerk:
 		return [[clerk.translation, "Vic", "IRONSIDE ARMS", Color(0.9, 0.35, 0.3)]]
+	if inside == "store" and cashier:
+		return [[cashier.translation, "Ray", "CALDER MINI MART", Color(1, 0.62, 0.22)]]
 	return []
+
+# ---------------------------------------------------------------- Home, 6127 S Bishop St
+func _build_home():
+	_mb = MB.new(); _mats.clear()
+	_o = ROOMS.home.o
+	var w = 11.0
+	var d = 10.0
+	var h = 2.8
+	_m("floor", Color(0.34, 0.23, 0.15)); _m("plank", Color(0.4, 0.27, 0.17)); _m("ceil", Color(0.74, 0.72, 0.68)); _m("wall", Color(0.55, 0.5, 0.4))
+	_m("trim", Color(0.92, 0.9, 0.85), true); _m("wood", Color(0.36, 0.23, 0.14), true); _m("couch", Color(0.42, 0.24, 0.2), true); _m("blanket", Color(0.24, 0.36, 0.52), true)
+	_m("white", Color(0.92, 0.92, 0.9), true); _m("black", Color(0.07, 0.07, 0.08), true); _m("steel", Color(0.62, 0.64, 0.66), true); _m("rug", Color(0.5, 0.18, 0.16))
+	_m("glass", Color(0.7, 0.82, 0.95), false, true, 0.25); _m("lampw", Color(1, 0.9, 0.7), false, true); _m("sheet", Color(0.86, 0.86, 0.9), true); _m("bedcover", Color(0.32, 0.18, 0.4), true)
+	_m("photo1", Color(0.75, 0.6, 0.45)); _m("photo2", Color(0.45, 0.55, 0.7)); _m("tv", Color(0.35, 0.5, 0.85), false, true); _m("tile", Color(0.82, 0.82, 0.78))
+	_shell(w, d, h)
+	tv_mat = _mats["tv"]
+	# plank floor and baseboards
+	for i in range(22):
+		if i % 2 == 0: _b("plank", Vector3(-w / 2 + 0.25 + i * 0.5, 0.004, 0), Vector3(0.5, 0.008, d))
+	for side in [[Vector3(0, 0.06, -d / 2 + 0.02), Vector3(w, 0.12, 0.03)], [Vector3(0, 0.06, d / 2 - 0.02), Vector3(w, 0.12, 0.03)], [Vector3(-w / 2 + 0.02, 0.06, 0), Vector3(0.03, 0.12, d)], [Vector3(w / 2 - 0.02, 0.06, 0), Vector3(0.03, 0.12, d)]]:
+		_b("trim", side[0], side[1])
+	# the bedroom walls: a partition with a doorway into the living room
+	_b("wall", Vector3(-1.6, h / 2, -3.4), Vector3(0.12, h, 3.2), true)
+	_b("wall", Vector3(-3.55, h / 2, -0.4), Vector3(3.9, h, 0.12), true)
+	_b("trim", Vector3(-1.6, h - 0.15, -1.1), Vector3(0.14, 0.3, 1.4))
+	# the bed, a nightstand with a lamp, the closet, a poster
+	_b("wood", Vector3(-4.3, 0.22, -3.7), Vector3(1.6, 0.44, 2.2), true)
+	_b("sheet", Vector3(-4.3, 0.5, -3.7), Vector3(1.5, 0.14, 2.1))
+	_b("bedcover", Vector3(-4.3, 0.59, -3.35), Vector3(1.52, 0.06, 1.45))
+	_b("sheet", Vector3(-4.3, 0.64, -4.55), Vector3(1.1, 0.14, 0.35))
+	_b("wood", Vector3(-4.3, 0.7, -4.85), Vector3(1.6, 1.0, 0.08))
+	_b("wood", Vector3(-2.95, 0.3, -4.6), Vector3(0.5, 0.6, 0.45), true)
+	_b("lampw", Vector3(-2.95, 0.78, -4.6), Vector3(0.22, 0.26, 0.22))
+	_b("wood", Vector3(-5.2, 1.0, -1.3), Vector3(0.55, 2.0, 1.4), true)
+	_b("black", Vector3(-4.92, 1.0, -1.3), Vector3(0.02, 1.9, 0.02))
+	_b("photo2", Vector3(-1.68, 1.6, -3.4), Vector3(0.02, 0.8, 0.6))
+	# the kitchen: counters, sink, stove, fridge, upper cabinets, a table with a laptop
+	_b("white", Vector3(-5.15, 0.45, 2.7), Vector3(0.65, 0.9, 3.4), true)
+	_b("tile", Vector3(-5.15, 0.92, 2.7), Vector3(0.7, 0.04, 3.45))
+	_b("steel", Vector3(-5.15, 0.93, 3.6), Vector3(0.45, 0.02, 0.6))
+	_b("black", Vector3(-5.15, 0.93, 1.7), Vector3(0.55, 0.02, 0.6))
+	for bz in [1.55, 1.85]:
+		for bx in [-5.3, -5.0]:
+			_b("steel", Vector3(bx, 0.95, bz), Vector3(0.14, 0.01, 0.14))
+	_b("white", Vector3(-5.2, 1.85, 2.7), Vector3(0.45, 0.7, 3.4))
+	_b("white", Vector3(-5.05, 0.95, 0.4), Vector3(0.8, 1.9, 0.75), true)
+	_b("steel", Vector3(-4.63, 1.2, 0.65), Vector3(0.03, 0.5, 0.03))
+	_b("wood", Vector3(-2.6, 0.74, 2.8), Vector3(1.2, 0.05, 0.85), true)
+	for lx in [-3.1, -2.1]:
+		for lz in [2.45, 3.15]:
+			_b("wood", Vector3(lx, 0.36, lz), Vector3(0.05, 0.72, 0.05))
+	for cz in [2.05, 3.55]:
+		_b("wood", Vector3(-2.6, 0.45, cz), Vector3(0.42, 0.05, 0.42))
+		_b("wood", Vector3(-2.6, 0.7, cz + (0.2 if cz > 3 else -0.2)), Vector3(0.42, 0.5, 0.04))
+	_b("black", Vector3(-2.5, 0.78, 2.9), Vector3(0.36, 0.02, 0.25))
+	_b("black", Vector3(-2.5, 0.9, 2.78), Vector3(0.36, 0.24, 0.02), false, Vector3(-0.25, 0, 0))
+	_b("tv", Vector3(-2.5, 0.9, 2.79), Vector3(0.32, 0.2, 0.01), false, Vector3(-0.25, 0, 0))
+	# the living room: rug, couch, coffee table, TV on a stand, windows with a radiator, photos
+	_b("rug", Vector3(2.2, 0.01, -1.2), Vector3(3.2, 0.02, 2.6))
+	_b("couch", Vector3(2.2, 0.22, 0.8), Vector3(2.8, 0.44, 0.9), true)
+	_b("couch", Vector3(2.2, 0.62, 1.15), Vector3(2.8, 0.55, 0.22))
+	for ax in [0.75, 3.65]:
+		_b("couch", Vector3(ax, 0.5, 0.8), Vector3(0.22, 0.3, 0.9))
+	_b("blanket", Vector3(2.9, 0.48, 0.75), Vector3(1.3, 0.08, 0.86))
+	_b("wood", Vector3(2.2, 0.35, -0.8), Vector3(1.2, 0.05, 0.6), true)
+	_b("white", Vector3(2.0, 0.42, -0.8), Vector3(0.1, 0.1, 0.1))
+	_b("wood", Vector3(2.2, 0.3, -4.6), Vector3(1.8, 0.6, 0.5), true)
+	_b("black", Vector3(2.2, 1.05, -4.7), Vector3(1.4, 0.82, 0.08))
+	_b("tv", Vector3(2.2, 1.05, -4.655), Vector3(1.3, 0.72, 0.01))
+	for wz in [-2.2, 1.8]:
+		_b("glass", Vector3(w / 2 - 0.02, 1.55, wz), Vector3(0.03, 1.1, 1.3))
+		_b("trim", Vector3(w / 2 - 0.05, 1.55, wz), Vector3(0.06, 1.2, 0.06))
+		_b("trim", Vector3(w / 2 - 0.05, 2.12, wz), Vector3(0.08, 0.06, 1.42))
+		_b("trim", Vector3(w / 2 - 0.05, 0.98, wz), Vector3(0.12, 0.06, 1.42))
+		for ri in range(8):
+			_b("white", Vector3(w / 2 - 0.15, 0.5, wz - 0.55 + ri * 0.155), Vector3(0.1, 0.6, 0.06))
+	_b("photo1", Vector3(-1.52, 1.6, -2.2), Vector3(0.02, 0.4, 0.5))
+	_b("photo2", Vector3(0.3, 1.7, -4.97), Vector3(0.5, 0.4, 0.02))
+	_b("photo1", Vector3(4.3, 1.7, -4.97), Vector3(0.4, 0.5, 0.02))
+	# the front door and a mat
+	_b("wood", Vector3(3.8, 1.05, d / 2 - 0.03), Vector3(1.0, 2.1, 0.06))
+	_b("steel", Vector3(3.45, 1.0, d / 2 - 0.08), Vector3(0.05, 0.05, 0.06))
+	_b("rug", Vector3(3.8, 0.012, d / 2 - 0.7), Vector3(1.2, 0.02, 0.7))
+	# ceiling lamps
+	for lp in [Vector3(2.2, h - 0.03, -1.0), Vector3(-3.3, h - 0.03, 2.4), Vector3(-3.5, h - 0.03, -2.6)]:
+		_b("lampw", lp, Vector3(0.5, 0.04, 0.5))
+	_commit()
+	_light(Vector3(2.2, 2.4, -0.8), Color(1, 0.8, 0.6), 0.62, 7.0)
+	_light(Vector3(-3.3, 2.4, 2.4), Color(1, 0.86, 0.68), 0.55, 6.0)
+	_light(Vector3(-3.4, 2.2, -2.8), Color(1, 0.74, 0.52), 0.45, 5.0)
+	_light(Vector3(2.2, 1.0, -4.0), Color(0.5, 0.65, 1.0), 0.45, 4.0)
+	# mama, asleep on the couch under the blanket
+	mama = load("res://scripts/Human.gd").new().build(G.skin_opts({ "tone": 3, "hair": "braids", "hairCol": 0x2a1a12, "head": "none", "top": "hoodie", "topCol": 0x6a3a5a, "top2": 0x6a3a5a, "pants": "joggers", "pantsCol": 0x2a2a3a, "shoes": "sneaker", "shoesCol": 0xe8e8ea, "build": 1 }))
+	main.add_child(mama)
+	G.toon_tree(mama, true)
+	mama.animate(0.016, { "speed": 0.0 })
+	# lying on her side along the couch, facing the TV, head on the left arm
+	mama.translation = _o + Vector3(3.35, 0.66, 0.75)
+	mama.rotation = Vector3(0, PI, -PI / 2)
+	if mama.shadow: mama.shadow.visible = false
+	mama.visible = false
+
+# ---------------------------------------------------------------- the Calder Mini Mart
+func _build_store():
+	_mb = MB.new(); _mats.clear()
+	_o = ROOMS.store.o
+	var w = 12.0
+	var d = 10.0
+	var h = 3.2
+	_m("floor", Color(0.62, 0.62, 0.6)); _m("ceil", Color(0.76, 0.76, 0.74)); _m("wall", Color(0.66, 0.64, 0.57))
+	_m("shelf", Color(0.85, 0.86, 0.88), true); _m("cool", Color(0.75, 0.9, 1.0), false, true); _m("glass", Color(0.8, 0.92, 1.0), false, true, 0.2)
+	_m("counter", Color(0.62, 0.12, 0.1), true); _m("top", Color(0.2, 0.2, 0.22), true); _m("black", Color(0.06, 0.06, 0.07), true); _m("lamp", Color(1, 1, 0.97), false, true)
+	_m("red", Color(0.9, 0.18, 0.14), false, true); _m("mat", Color(0.18, 0.2, 0.24)); _m("cup", Color(0.95, 0.95, 0.92), true)
+	var cols = [Color(0.9, 0.25, 0.2), Color(1.0, 0.75, 0.15), Color(0.25, 0.55, 0.9), Color(0.3, 0.7, 0.35), Color(0.95, 0.5, 0.15), Color(0.6, 0.3, 0.7), Color(0.95, 0.95, 0.9), Color(0.15, 0.15, 0.18)]
+	for i in range(cols.size()): _m("p%d" % i, cols[i], true)
+	_shell(w, d, h)
+	for lx in [-3.5, 0.0, 3.5]:
+		for lz in [-2.5, 1.0]:
+			_b("lamp", Vector3(lx, h - 0.03, lz), Vector3(1.4, 0.04, 0.3))
+	# three double-sided aisles of products
+	var R = RandomNumberGenerator.new(); R.seed = 808
+	for ax in [-2.6, 0.2, 3.0]:
+		_b("shelf", Vector3(ax, 0.8, -1.0), Vector3(0.9, 1.6, 4.4), true)
+		for sy in [0.35, 0.8, 1.25]:
+			_b("shelf", Vector3(ax, sy - 0.05, -1.0), Vector3(1.05, 0.04, 4.4))
+			for side in [-1, 1]:
+				var z = -3.0
+				while z < 1.1:
+					var ln = R.randf_range(0.16, 0.34)
+					_b("p%d" % R.randi_range(0, cols.size() - 1), Vector3(ax + side * 0.46, sy + 0.1, z + ln / 2), Vector3(0.12, R.randf_range(0.14, 0.26), ln - 0.03))
+					z += ln
+	# the drinks coolers along the back wall, lit from inside, bottles on the shelves
+	_b("shelf", Vector3(0, 1.1, -d / 2 + 0.4), Vector3(w - 1.0, 2.2, 0.75), true)
+	_b("cool", Vector3(0, 1.1, -d / 2 + 0.78), Vector3(w - 1.2, 2.0, 0.02))
+	for bx in range(22):
+		for by in [0.5, 1.05, 1.6]:
+			_b("p%d" % ((bx + int(by * 10)) % cols.size()), Vector3(-w / 2 + 0.8 + bx * 0.47, by, -d / 2 + 0.72), Vector3(0.12, 0.3, 0.08))
+	_b("glass", Vector3(0, 1.1, -d / 2 + 0.82), Vector3(w - 1.1, 2.1, 0.03))
+	for dx in range(7):
+		_b("black", Vector3(-w / 2 + 0.6 + dx * 1.8, 1.1, -d / 2 + 0.84), Vector3(0.04, 2.1, 0.04))
+	# the counter by the door, the register, the shelf behind it, a lottery stand
+	_b("counter", Vector3(-3.8, 0.5, 2.6), Vector3(2.6, 1.0, 0.7), true)
+	_b("top", Vector3(-3.8, 1.02, 2.6), Vector3(2.7, 0.04, 0.8))
+	_b("black", Vector3(-4.2, 1.15, 2.55), Vector3(0.4, 0.22, 0.3))
+	_b("cool", Vector3(-4.2, 1.2, 2.72), Vector3(0.3, 0.12, 0.01))
+	_b("red", Vector3(-3.0, 1.2, 2.6), Vector3(0.5, 0.3, 0.2))
+	_b("shelf", Vector3(-5.6, 1.4, 1.5), Vector3(0.5, 2.0, 2.6), true)
+	for k in range(18):
+		_b("p%d" % (k % cols.size()), Vector3(-5.4, 0.7 + (k / 6) * 0.45, 0.45 + (k % 6) * 0.38), Vector3(0.1, 0.2, 0.28))
+	# the coffee station
+	_b("top", Vector3(5.5, 0.5, 2.0), Vector3(0.8, 1.0, 1.6), true)
+	_b("black", Vector3(5.6, 1.3, 1.7), Vector3(0.45, 0.6, 0.4))
+	_b("red", Vector3(5.35, 1.45, 1.7), Vector3(0.02, 0.06, 0.06))
+	for cz in [2.3, 2.45, 2.6]:
+		_b("cup", Vector3(5.5, 1.08, cz), Vector3(0.08, 0.12, 0.08))
+	# the door, windows, a mat
+	_b("glass", Vector3(2.5, 1.1, d / 2 - 0.03), Vector3(1.4, 2.2, 0.04))
+	_b("black", Vector3(2.5, 2.25, d / 2 - 0.03), Vector3(1.6, 0.1, 0.06))
+	for wx in [-1.8, 5.0]:
+		_b("glass", Vector3(wx, 1.4, d / 2 - 0.02), Vector3(2.2, 1.6, 0.03))
+	_b("mat", Vector3(2.5, 0.012, d / 2 - 0.7), Vector3(1.6, 0.02, 1.0))
+	_commit()
+	_light(Vector3(-3.0, 2.9, 0.0), Color(1, 1, 0.95), 0.55, 9.0)
+	_light(Vector3(3.0, 2.9, 0.0), Color(1, 1, 0.95), 0.55, 9.0)
+	_light(Vector3(0, 2.0, -3.6), Color(0.7, 0.9, 1.0), 0.6, 5.0)
+	# Ray at the register
+	cashier = load("res://scripts/Human.gd").new().build(G.skin_opts({ "tone": 1, "hair": "short", "hairCol": 0x3a2a1a, "beard": 3, "head": "cap", "headCol": 0xc8202a, "top": "hoodie", "topCol": 0x1e2f4a, "top2": 0x1e2f4a, "pants": "jeans", "pantsCol": 0x262b33, "shoes": "sneaker", "shoesCol": 0x15171a, "build": 1 }))
+	main.add_child(cashier)
+	G.toon_tree(cashier, true)
+	cashier.translation = _o + Vector3(-3.9, 0, 1.75)
+	cashier.visible = false

@@ -10,6 +10,7 @@ var D = {}              # assets/data.json
 var S = {}              # the current save
 var MODE = "title"      # title, play, phone, pause, menu
 var REAL_T = 0.0
+var cam_pos = Vector3()     # where the camera is this frame (far people animate less often)
 var GAME_T = 0.0
 var time_offset = 0.0
 var rng = RandomNumberGenerator.new()

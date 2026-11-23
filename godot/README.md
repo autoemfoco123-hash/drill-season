@@ -203,12 +203,30 @@ Tudo do jogo web, mais algumas coisas só daqui:
   - vento que acompanha as rajadas, a cidade ao fundo, sirenes, cachorros, aviões e o gelo do lago
     rangendo; fogo crepitando nos barris e vapor nos bueiros;
   - mixagem com compressor e limitador.
+- **Animações novas:** andar e correr são dois ciclos diferentes misturados pela velocidade, com
+  a passada casada com o chão (o pé não escorrega). O joelho dobra quando a perna vai para frente
+  (mais na corrida), o quadril sobe e desce, balança e gira, os ombros giram ao contrário, os braços
+  vão contra as pernas (cotovelo dobrado na corrida), o corpo inclina para frente correndo e para
+  dentro nas curvas. Parado, o personagem respira, muda o peso de perna e olha em volta, cada um no
+  seu tempo. Toda troca de pose (mirar, acenar, mãos para cima, emotes) é suave, sem pular. Quem
+  está longe da câmera anima a cada três quadros, então ficou mais barato que antes.
+- **Morte como num jogo sandbox:** o corpo vira ragdoll e cai para longe de onde veio o golpe; a
+  câmera fica em terceira pessoa em cima do corpo, girando devagar e se afastando (dá para girar
+  com o mouse ou o analógico); a imagem perde a cor e fica vermelha, com as bordas escuras, e
+  aparece "YOU DIED". Depois de 4 segundos, Espaço, E ou A acordam você no Calder General (sozinho
+  aos 12 segundos).
 - **Lugares para entrar de verdade:** na porta, aperte E; a tela escurece e você está dentro de uma
   sala onde anda livremente (em terceira ou primeira pessoa, a câmera para nas paredes, a neve
   para de cair e a arma fica no coldre):
   - **Basement 808**, o estúdio no porão da Calder Ave: cabine de voz com vidro, espuma e o
     microfone (grava a sessão), a mesa de som com monitores e tela (o menu do estúdio), o sofá
     debaixo das placas de disco (aquece), fitas de LED e a escada de volta para a rua.
+  - **Casa**, na Bishop St: sala com a mãe dormindo no sofá debaixo do cobertor e a TV ligada
+    (assistir com ela aquece), cozinha com geladeira (comer recupera vida), fogão e a mesa com o
+    notebook (salvar), e o quarto com a cama (ficar na moita: Heat −20) e o armário (o editor de
+    personagem).
+  - **Calder Mini Mart**: corredores de produtos, as geladeiras de bebida acesas, a máquina de
+    café e o balcão com o Ray (café, aquecedores de mão, curativo, munição).
   - **Ironside Arms**, a loja de armas nova na Calder Ave com a Bishop St (placa acesa e janelas
     com grade na fachada): balcão de vidro com as pistolas e o Vic atendendo (comprar armas,
     munição e curativo), fuzis na parede perfurada, prateleiras de munição e a bancada (peças e
@@ -357,7 +375,7 @@ listener websockets) e aponte o jogo para ele com
 
 Ele grava capturas e um `autotest.log`.
 
-Para ver rostos, barbas, o dedo do meio e o visual cel: `DS_LOOKTEST=1`. Para ver o editor de personagem e todas as telas do celular: `DS_UITEST=1`. Para os lugares de entrar: `DS_ROOMTEST=1`. Para as colisões (carro no muro, batida de frente, corpo contra carro girado, multidão): `DS_COLTEST=1`. Para testar servidores,
+Para ver rostos, barbas, o dedo do meio e o visual cel: `DS_LOOKTEST=1`. Para ver o editor de personagem e todas as telas do celular: `DS_UITEST=1`. Para os lugares de entrar: `DS_ROOMTEST=1`. Para as animações (andar, correr e parado, de lado): `DS_ANIMTEST=1`. Para a morte: `DS_DEATHTEST=1`. Para as colisões (carro no muro, batida de frente, corpo contra carro girado, multidão): `DS_COLTEST=1`. Para testar servidores,
 com um servidor dedicado rodando (`--server --name="Test Dedicated" --password=...`): `DS_SRVTEST=client`
 (com `DS_PW=` para a senha) acha o servidor, é barrado com a senha errada, entra com a certa, conversa
 e depois cria o "Test Host"; `DS_SRVTEST=joiner` noutro jogo entra nele. `DS_BROKERS=` troca os

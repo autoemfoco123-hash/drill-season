@@ -38,6 +38,9 @@ var car = null
 var wave_t = 0.0
 var flip_t = 0.0
 var fire_note_t = 0.0
+var death_t = 0.0          # seconds since you died (the death screen)
+var respawning = false
+var last_from = null       # where the last hit came from, for the fall
 var hands_up = 0.0
 var trigger_latch = false
 var combo = 0
@@ -176,6 +179,7 @@ func look(dx, dy):
 
 # ---------- every frame ----------
 func update(dt):
+	if dead: _death(dt)
 	hands_up = max(0, hands_up - dt)
 	wave_t = max(0, wave_t - dt)
 	if Input.is_action_pressed("flip") and G.MODE == "play":
@@ -354,6 +358,21 @@ func update_camera(dt):
 		_hide_vm()
 		return
 	main.cockpit.hide()
+	if dead and human.is_ragdoll():
+		# third person on your body, like after dying in a sandbox game: it drifts slowly
+		# around and pulls back, and you can still turn it
+		_hide_vm()
+		if G.REAL_T - last_look > 1.0: cam_yaw += dt * 0.18
+		cam_pitch += (-0.42 - cam_pitch) * (1 - exp(-dt * 1.5))
+		var c = human.ragdoll_center() + Vector3(0, 0.35, 0)
+		var dfw = Vector3(-sin(cam_yaw) * cos(cam_pitch), sin(cam_pitch), -cos(cam_yaw) * cos(cam_pitch))
+		var dd = 3.2 + min(death_t, 6.0) * 0.35
+		var tt = W.raycast(c, -dfw, dd + 0.3)
+		if tt != INF: dd = max(1.0, tt - 0.3)
+		cam.translation = c - dfw * dd
+		cam.rotation = Vector3(cam_pitch, cam_yaw, 0)
+		cam.fov = lerp(cam.fov, 58.0, 1 - exp(-dt * 2))
+		return
 	var eye = 1.06 if crouch else 1.62
 	pivot_y += (pos.y + eye - pivot_y) * (1 - exp(-dt * 14))
 	var a = aim_t
@@ -679,6 +698,7 @@ func take_punch(dmg, from):
 # ---------- health ----------
 func hurt(dmg, from, silent = false):
 	if dead or G.MODE == "title": return
+	if typeof(from) == TYPE_VECTOR3: last_from = from
 	G.S["health"] -= dmg; last_hurt = G.GAME_T; shake = min(1, shake + dmg * 0.04)
 	main.hud.hurt_flash(dmg)
 	Input.start_joy_vibration(0, min(1, 0.25 + dmg / 30.0), 0.4, 0.16)
@@ -693,12 +713,34 @@ func _downed():
 	dead = true; down_t = 4; emote_name = ""
 	G.S["stats"]["timesDowned"] = G.S["stats"].get("timesDowned", 0) + 1
 	if car: exit_vehicle(true)
+	# the body goes limp and falls away from whatever hit it
+	var push = Vector3(randf() - 0.5, 0, randf() - 0.5)
+	if typeof(last_from) == TYPE_VECTOR3:
+		var dv = Vector3(pos.x - last_from.x, 0, pos.z - last_from.z)
+		if dv.length() > 0.01: push = dv.normalized() * 2.6
 	if not human.is_ragdoll():
-		human.ragdoll_start(Vector3(vel.x, 0, vel.z), Vector3(randf() - 0.5, 0.5, randf() - 0.5) * 2.0, G.rand(-1, 1))
+		human.ragdoll_start(Vector3(vel.x, 0, vel.z), push + Vector3(0, 0.6, 0), G.rand(-1.5, 1.5))
+	else:
+		human.ragdoll_start(Vector3(), push * 0.6)
 	rag_t = 99
+	death_t = 0.0; respawning = false
+	aiming = false; aim_t = 0.0
+	main.hud.close_menu()
+	if main.phone.panel.visible: main.phone.close(true)
 	main.sfx.play("boom", 0.6)
-	yield(get_tree().create_timer(1.2), "timeout")
-	main.cutscene.play(main.cutscene.cut_downed(), self, "_hospital")
+
+# the death screen: the camera stays on your body; after a few seconds any button respawns you
+func _death(dt):
+	death_t += dt
+	if respawning: return
+	var want = death_t > 4.0 and (Input.is_action_just_pressed("jump") or Input.is_action_just_pressed("use") or Input.is_action_just_pressed("fire"))
+	if want or death_t > 12.0:
+		respawning = true
+		main.hud.fade_to(1.0, 0.45)
+		yield(get_tree().create_timer(0.55), "timeout")
+		_hospital()
+		main.hud.fade_to(0.0, 0.8)
+		respawning = false
 
 func _hospital():
 	main.crews.clear(); main.police.clear()
@@ -710,7 +752,7 @@ func _hospital():
 	human.getup = 0.0
 	rag_t = 0; flopped = false
 	place(G.D["LOC"]["hospital"].x, 0, G.D["LOC"]["hospital"].z, PI / 2)
-	dead = false; down_t = 0
+	dead = false; down_t = 0; death_t = 0.0; last_from = null
 	main.hud.banner("Calder General", "Hospital bill " + G.fmt_money(lost))
 	G.save_game()
 

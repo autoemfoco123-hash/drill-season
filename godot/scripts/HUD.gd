@@ -39,6 +39,11 @@ var tr_card
 var br_card
 var car_card
 var help_key
+var death_rect
+var death_mat
+var death_title
+var death_sub
+var death_v = 0.0
 var big_title
 var big_sub
 var big_band
@@ -431,6 +436,31 @@ void fragment() {
 	hit = _lab(G.font_l, Color(1, 1, 1), 0, 0, 0, 0, 0, 0, Label.ALIGN_CENTER); hit.text = "✕"
 	hit.anchor_left = 0.5; hit.anchor_right = 0.5; hit.anchor_top = 0.5; hit.anchor_bottom = 0.5; hit.margin_left = -20; hit.margin_right = 20; hit.margin_top = -18; hit.margin_bottom = 18; hit.modulate.a = 0
 	wheel = Wheel.new(); wheel.hud = self; _full(wheel); root.add_child(wheel)
+	# the death screen: the picture drains to red with a dark vignette, a slim line of text
+	var dl = CanvasLayer.new(); dl.layer = 12; add_child(dl)
+	death_rect = ColorRect.new(); _full(death_rect); death_rect.visible = false
+	var dsh = Shader.new()
+	dsh.code = """shader_type canvas_item;
+uniform float amount = 0.0;
+void fragment() {
+	vec3 c = texture(SCREEN_TEXTURE, SCREEN_UV).rgb;
+	float g = dot(c, vec3(0.299, 0.587, 0.114));
+	vec3 red = vec3(0.16 + g * 0.95, g * 0.13, g * 0.12);
+	float vig = smoothstep(0.32, 0.86, distance(SCREEN_UV, vec2(0.5)));
+	COLOR = vec4(mix(c, red, amount) * (1.0 - vig * 0.7 * amount), 1.0);
+}"""
+	death_mat = ShaderMaterial.new(); death_mat.shader = dsh
+	death_rect.material = death_mat
+	dl.add_child(death_rect)
+	death_title = Label.new(); death_title.add_font_override("font", G.ifont_sp(46, "l", 6)); death_title.add_color_override("font_color", Color(1, 0.92, 0.9))
+	death_title.align = Label.ALIGN_CENTER; death_title.anchor_right = 1; death_title.anchor_top = 0.62; death_title.anchor_bottom = 0.62; death_title.margin_bottom = 60
+	death_title.text = "YOU DIED"; death_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dl.add_child(death_title)
+	death_sub = Label.new(); death_sub.add_font_override("font", G.ifont_sp(11, "s", 3)); death_sub.add_color_override("font_color", Color(1, 1, 1, 0.7))
+	death_sub.align = Label.ALIGN_CENTER; death_sub.anchor_right = 1; death_sub.anchor_top = 0.62; death_sub.anchor_bottom = 0.62; death_sub.margin_top = 66; death_sub.margin_bottom = 86
+	death_sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dl.add_child(death_sub)
+	death_title.modulate.a = 0; death_sub.modulate.a = 0
 	# fade (on its own layer so it covers menus too)
 	var fl = CanvasLayer.new(); fl.layer = 20; add_child(fl)
 	fade = ColorRect.new(); fade.color = Color(0, 0, 0, 0); _full(fade); fl.add_child(fade)
@@ -482,7 +512,20 @@ func update(dt):
 	if not root.visible: return
 	var S = G.S
 	var P = main.player
-	var hud_on = G.MODE in ["play", "phone", "menu"]
+	var hud_on = G.MODE in ["play", "phone", "menu"] and not P.dead
+	# the death screen
+	death_v = move_toward(death_v, 1.0 if P.dead else 0.0, dt * (0.9 if P.dead else 2.5))
+	death_rect.visible = death_v > 0.01
+	if death_rect.visible:
+		death_mat.set_shader_param("amount", death_v * 0.86)
+		var ta = clamp((P.death_t - 0.8) / 1.2, 0, 1) if P.dead else death_v
+		death_title.modulate.a = ta
+		death_sub.modulate.a = ta
+		if P.dead:
+			var left = int(ceil(4.0 - P.death_t))
+			death_sub.text = ("RESPAWN IN %d" % left) if left > 0 else ("PRESS %s TO WAKE UP AT CALDER GENERAL" % ("A" if Input.get_connected_joypads().size() > 0 else "SPACE OR E"))
+	else:
+		death_title.modulate.a = 0; death_sub.modulate.a = 0
 	for c in [minimap, bars, feed, help_box, weapon_icon, lbl_weapon, lbl_ammo, lbl_cash, lbl_cash_delta, stars, meter_buzz, meter_heat, lbl_street, lbl_area, lbl_clock, lbl_speed, lbl_radio, objective, cross, tags, tr_card, br_card]:
 		c.visible = hud_on
 	minimap.material.set_shader_param("size", minimap.rect_size)
@@ -551,7 +594,7 @@ func update(dt):
 	big_title.modulate.a = ba; big_sub.modulate.a = ba; big_band.modulate.a = ba
 	sub_t -= dt
 	sub_box.modulate.a = clamp(sub_t * 2, 0, 1)
-	sub_box.visible = sub_t > 0
+	sub_box.visible = sub_t > 0 and not P.dead
 	hit_t -= dt
 	hit.modulate.a = clamp(hit_t * 4, 0, 1)
 	# hurt and cold at the screen edges

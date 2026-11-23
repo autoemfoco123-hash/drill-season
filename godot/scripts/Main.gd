@@ -290,6 +290,7 @@ func _process(dt):
 	if server_mode: return
 	dt = min(dt, 0.05)
 	G.REAL_T += dt
+	G.cam_pos = camera.global_transform.origin
 	if G.MODE == "title":
 		title.update(dt)
 		vehicles.update(dt)

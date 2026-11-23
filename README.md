@@ -29,8 +29,10 @@ para o app que você usou. Se o Play Protect avisar que o app é desconhecido, t
   modo servidor num PC ou VPS (`servidor.bat` / `servidor.sh` nos zips de PC). Não precisa abrir
   portas. Também há sala pública e sala privada com código. Controles na tela no celular.
 - Dedo do meio em primeira pessoa, andando e dentro do carro (o braço sai pela janela).
-- **Lugares para entrar:** o estúdio Basement 808 (cabine, mesa de som, sofá) e a loja de armas
-  Ironside Arms (balcão, parede de fuzis, bancada).
+- **Lugares para entrar:** a casa (sala, cozinha, quarto), o Calder Mini Mart, o estúdio Basement
+  808 (cabine, mesa de som, sofá) e a loja de armas Ironside Arms (balcão, parede de fuzis, bancada).
+- **Animações novas** de andar, correr e ficar parado, e **morte como num jogo sandbox**: ragdoll,
+  câmera em terceira pessoa no corpo e a tela ficando vermelha.
 - **Eras do drill:** visuais de 2012 até hoje no editor e oito personagens originais pelas esquinas.
 - **Colisões melhores** entre carros, prédios, pessoas e ragdolls.
 - **Celular no estilo de um flagship moderno** (borda de alumínio em 4 cores, ilha pequena, widgets,

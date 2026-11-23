@@ -19,6 +19,8 @@ func run(m):
 	elif OS.get_environment("DS_UITEST") != "": call_deferred("_ui_test")
 	elif OS.get_environment("DS_ROOMTEST") != "": call_deferred("_room_test")
 	elif OS.get_environment("DS_COLTEST") != "": call_deferred("_col_test")
+	elif OS.get_environment("DS_ANIMTEST") != "": call_deferred("_anim_test")
+	elif OS.get_environment("DS_DEATHTEST") != "": call_deferred("_death_test")
 	else: call_deferred("_go")
 
 func _wait(s):
@@ -915,6 +917,52 @@ func _room_test():
 	I.leave()
 	yield(_wait(1.0), "completed")
 	_log("left: inside '%s' at %s" % [I.inside, str(P.pos)])
+	# home
+	var L = G.D["LOC"]["home"]
+	P.place(L.x + 0.6, 0, L.z, -PI / 2)
+	yield(_wait(0.3), "completed")
+	_log("at home's door: %s" % str(main.hud._prompt()))
+	I.enter("home")
+	yield(_wait(1.0), "completed")
+	_log("inside: %s" % I.inside)
+	yield(_shot("r9_home_in"), "completed")
+	var ho = I.ROOMS.home.o
+	_frame(ho + Vector3(4.8, 2.2, 4.2), ho + Vector3(0.5, 0.8, -1.5), 64)
+	yield(_wait(0.5), "completed")
+	yield(_shot("r10_home_living"), "completed")
+	main.cutscene.end()
+	_frame(ho + Vector3(-1.8, 1.9, -0.9), ho + Vector3(-4.4, 0.6, -3.8), 60)
+	yield(_wait(0.5), "completed")
+	yield(_shot("r11_home_bedroom"), "completed")
+	main.cutscene.end()
+	_frame(ho + Vector3(-0.8, 1.9, 4.4), ho + Vector3(-4.8, 0.9, 1.8), 60)
+	yield(_wait(0.5), "completed")
+	yield(_shot("r12_home_kitchen"), "completed")
+	main.cutscene.end()
+	P.place(ho.x - 3.2, ho.y, ho.z - 2.4, 0.0)
+	yield(_wait(0.3), "completed")
+	_log("by the bed: %s" % str(main.hud._prompt()))
+	I.leave()
+	yield(_wait(1.0), "completed")
+	_log("left home: inside '%s' at %s" % [I.inside, str(P.pos)])
+	# the Mini Mart
+	P.place(16, 0, -7.2, PI)
+	yield(_wait(0.3), "completed")
+	_log("at the store's door: %s" % str(main.hud._prompt()))
+	I.enter("store")
+	yield(_wait(1.0), "completed")
+	yield(_shot("r13_store_in"), "completed")
+	var to = I.ROOMS.store.o
+	_frame(to + Vector3(5.2, 2.4, 4.3), to + Vector3(-1.0, 0.9, -2.0), 64)
+	yield(_wait(0.5), "completed")
+	yield(_shot("r14_store_wide"), "completed")
+	main.cutscene.end()
+	P.place(to.x - 3.6, to.y, to.z + 3.6, PI)
+	yield(_wait(0.3), "completed")
+	_log("at the register: %s" % str(main.hud._prompt()))
+	I.leave()
+	yield(_wait(1.0), "completed")
+	_log("left the store: inside '%s' at %s" % [I.inside, str(P.pos)])
 	get_tree().quit()
 
 # collisions: a car into a wall at an angle, two cars head-on, a body against a turned car,
@@ -1017,4 +1065,57 @@ func _col_test():
 		for j in range(i + 1, all.size()):
 			mind = min(mind, Vector2(all[i].pos.x - all[j].pos.x, all[i].pos.z - all[j].pos.z).length())
 	_log("crowd: closest two people %.2f m apart (bodies are about 0.6 m wide)" % mind)
+	get_tree().quit()
+
+# the walk, the run and standing still, seen from the side: frames across one cycle each
+func _anim_test():
+	yield(_wait(1.0), "completed")
+	main.title._close(); main.start_game(G.new_state("animtest"))
+	yield(_wait(1.5), "completed")
+	_clean_view(true); G.S["settings"]["fp"] = false
+	G.time_offset += (13 * 60 - G.world_minutes())
+	var P = main.player
+	P.place(-30, 0, -60, 0)
+	var h = load("res://scripts/Human.gd").new().build(G.skin_opts(G.default_skin()))
+	main.add_child(h); G.toon_tree(h, true)
+	var at = Vector3(0, 0, -66)
+	h.translation = at; h.rotation.y = PI / 2
+	_frame(at + Vector3(0, 1.0, 4.2), at + Vector3(0, 0.9, 0), 40)
+	for spec in [["walk", 1.45, 8], ["run", 6.0, 8], ["idle", 0.0, 3]]:
+		var n = spec[2]
+		var cyc = 2.5 if spec[1] <= 0 else (1.45 if spec[1] < 3 else 3.1) / spec[1]
+		for k in range(n):
+			# run the animation in small steps to the next frame of the cycle
+			var steps = int(ceil(cyc / n / 0.016))
+			for _j in range(steps):
+				h.animate(0.016, { "speed": spec[1] })
+				yield(get_tree(), "idle_frame")
+			yield(_shot("a_%s_%d" % [spec[0], k]), "completed")
+	get_tree().quit()
+
+# dying: the ragdoll, the camera on it, the red screen, then waking up at the hospital
+func _death_test():
+	yield(_wait(1.0), "completed")
+	main.title._close(); main.start_game(G.new_state("deathtest"))
+	yield(_wait(1.5), "completed")
+	G.time_offset += (13 * 60 - G.world_minutes())
+	var P = main.player
+	P.place(2.5, 0, -16, 0)
+	yield(_wait(0.5), "completed")
+	P.hurt(500, P.pos + Vector3(0, 0, -3))
+	yield(_wait(0.5), "completed")
+	yield(_shot("d1_falling"), "completed")
+	yield(_wait(1.5), "completed")
+	yield(_shot("d2_dead"), "completed")
+	yield(_wait(2.5), "completed")
+	yield(_wait(1.0), "completed")
+	yield(_shot("d3_press"), "completed")
+	_log("dead %s, death_t %.1f, mode %s" % [str(P.dead), P.death_t, G.MODE])
+	Input.action_press("jump")
+	yield(get_tree(), "idle_frame")
+	yield(get_tree(), "idle_frame")
+	Input.action_release("jump")
+	yield(_wait(2.0), "completed")
+	_log("after respawn: dead %s at %s, health %d" % [str(P.dead), str(P.pos), int(G.S["health"])])
+	yield(_shot("d4_hospital"), "completed")
 	get_tree().quit()

@@ -593,7 +593,7 @@ func interact_label(it):
 		"court": return "Catch your breath · %ds" % int(ceil(cd_left("hoops"))) if cd_left("hoops") > 0 else "Shoot around · warms you up"
 		"lake": return "The lake is quiet" if cd_left("lake") > 0 else "Look out over the lake · Heat −4"
 		"rec": return "Enter the rec center"
-		"home": return "Go inside (home)"
+		"home": return "Go inside · home"
 		"video": return "Start the video shoot · $150" if job_available("video") and G.S["job"] == null else null
 		"reyes": return "Talk to " + C.reyes.name if job_available("reyes") else null
 		"coach": return "Talk to " + C.coach.name
@@ -606,12 +606,12 @@ func interact(it):
 		main.interiors.use(it); return
 	match it.id:
 		"studio": main.interiors.enter("studio")
-		"store": store_menu("store")
+		"store": main.interiors.enter("store")
 		"gas": store_menu("gas")
 		"court": shoot_around()
 		"lake": lake_view()
 		"rec": rec_menu()
-		"home": home_menu()
+		"home": main.interiors.enter("home")
 		"video": start_video()
 		"reyes": reyes_menu()
 		"garden": main.memorial.pay_respects("garden")
@@ -739,8 +739,13 @@ func lay_low(_a = null):
 	G.S["stats"]["layLows"] = int(G.S["stats"].get("layLows", 0)) + 1
 	main.crews.clear(); set_cd("laylow", 150)
 	if G.S["job"] != null and G.S["job"].id != "kiara": end_job()
-	var L = G.D["LOC"]["home"]
-	main.player.place(L.x + 1.6, 0, L.z, PI * 0.5)
+	if main.interiors.inside == "home":
+		# wake up next to the bed
+		var o = main.interiors.ROOMS.home.o
+		main.player.place(o.x - 3.2, o.y, o.z - 2.2, PI * 0.5)
+	else:
+		var L = G.D["LOC"]["home"]
+		main.player.place(L.x + 1.6, 0, L.z, PI * 0.5)
 	main.hud.fade_to(0.0, 0.6)
 	G.MODE = "play"
 	main.hud.banner("Stayed in", "Heat −20 · " + G.clock_str())
