@@ -37,6 +37,7 @@ var dead = false
 var car = null
 var wave_t = 0.0
 var flip_t = 0.0
+var fire_note_t = 0.0
 var hands_up = 0.0
 var trigger_latch = false
 var combo = 0
@@ -180,6 +181,7 @@ func update(dt):
 	if Input.is_action_pressed("flip") and G.MODE == "play":
 		flip_t = max(flip_t, 0.25)
 	flip_t = max(0, flip_t - dt)
+	fire_note_t = max(0, fire_note_t - dt)
 	if punch_t > 0:
 		punch_t += dt
 		if punch_t > punch_dur: punch_t = 0
@@ -514,6 +516,10 @@ func _cone(base, deg):
 	return (base + side * cos(a) * tan(r) + up * sin(a) * tan(r)).normalized()
 
 func try_fire():
+	if main.interiors and main.interiors.inside != "" and not G.S.get("fists", false):
+		if fire_note_t <= 0:
+			fire_note_t = 4.0; main.hud.toast("Not in here. Keep it holstered.")
+		return
 	if G.S.get("fists", false):
 		punch()
 		return

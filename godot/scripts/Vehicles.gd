@@ -126,6 +126,12 @@ func place(v):
 	var hz = s * W2 + c * L2
 	v.box.x0 = v.pos.x - hx; v.box.x1 = v.pos.x + hx; v.box.z0 = v.pos.z - hz; v.box.z1 = v.pos.z + hz
 	v.cab.x0 = v.pos.x - hx * 0.6; v.cab.x1 = v.pos.x + hx * 0.6; v.cab.z0 = v.pos.z - hz * 0.6; v.cab.z1 = v.pos.z + hz * 0.6
+	# the real, turned outline (W uses it for people, ragdolls, bullets, standing on cars)
+	var cy = cos(v.yaw)
+	var sy = sin(v.yaw)
+	for bx in [[v.box, W2, L2], [v.cab, W2 * 0.92, L2 * 0.5]]:
+		var b = bx[0]
+		b["obb"] = true; b["cx"] = v.pos.x; b["cz"] = v.pos.z; b["c"] = cy; b["s"] = sy; b["hw"] = bx[1]; b["hl"] = bx[2]
 
 func fwd(v): return Vector3(sin(v.yaw), 0, cos(v.yaw))
 
@@ -216,54 +222,63 @@ func physics(v, dt, inp):
 	v.pos.x = clamp(v.pos.x + v.vel.x * dt, -W.BOUND, W.BOUND)
 	v.pos.z = clamp(v.pos.z + v.vel.y * dt, -W.BOUND, W.BOUND)
 
-func collide(v):
+# separating axes between two rectangles on the ground: [normal from b to a, depth] or null
+func _sat(ac, aax, aaz, ah, bc, bax, baz, bh):
+	var d = ac - bc
+	var best = INF
+	var bn = Vector2()
+	for ax in [aax, aaz, bax, baz]:
+		var ra = ah.x * abs(aax.dot(ax)) + ah.y * abs(aaz.dot(ax))
+		var rb = bh.x * abs(bax.dot(ax)) + bh.y * abs(baz.dot(ax))
+		var dist = d.dot(ax)
+		var o = ra + rb - abs(dist)
+		if o <= 0: return null
+		if o < best:
+			best = o; bn = ax if dist >= 0 else -ax
+	return [bn, best]
+
+func _axes(v):
 	var f = fwd(v)
-	var L = v.sp.len
-	var r = v.sp.wid / 2.0
+	return [Vector2(cos(v.yaw), -sin(v.yaw)), Vector2(f.x, f.z), Vector2(v.sp.wid / 2.0, v.sp.len / 2.0)]
+
+# the car against buildings, walls, poles and other cars, as real turned rectangles
+func collide(v):
+	var A = _axes(v)
 	var impact = 0.0
-	for o in [-(L / 2 - r), 0.0, L / 2 - r]:
-		var cx = v.pos.x + f.x * o
-		var cz = v.pos.z + f.z * o
-		for b in W.query(cx - r, cz - r, cx + r, cz + r):
-			if b.y1 < 0.4 or b.y0 > 1.3: continue
-			var px = clamp(cx, b.x0, b.x1)
-			var pz = clamp(cz, b.z0, b.z1)
-			var dx = cx - px
-			var dz = cz - pz
-			var d = Vector2(dx, dz).length()
-			if d >= r: continue
-			if d < 1e-4:
-				dx = cx - (b.x0 + b.x1) / 2; dz = cz - (b.z0 + b.z1) / 2; d = max(Vector2(dx, dz).length(), 1e-3)
-			var nx = dx / d
-			var nz = dz / d
-			var pen = r - min(d, r)
-			v.pos.x += nx * pen; v.pos.z += nz * pen
-			var vn = v.vel.x * nx + v.vel.y * nz
-			if vn < 0:
-				v.vel.x -= 1.3 * vn * nx; v.vel.y -= 1.3 * vn * nz; impact = max(impact, -vn)
+	var R = A[2].length() + 0.2
+	for b in W.query(v.pos.x - R, v.pos.z - R, v.pos.x + R, v.pos.z + R):
+		if b.y1 < 0.4 or b.y0 > 1.3: continue
+		var res = _sat(Vector2(v.pos.x, v.pos.z), A[0], A[1], A[2], Vector2((b.x0 + b.x1) * 0.5, (b.z0 + b.z1) * 0.5), Vector2(1, 0), Vector2(0, 1), Vector2((b.x1 - b.x0) * 0.5, (b.z1 - b.z0) * 0.5))
+		if res == null: continue
+		var n = res[0]
+		v.pos.x += n.x * res[1]; v.pos.z += n.y * res[1]
+		var vn = v.vel.dot(n)
+		if vn < 0:
+			v.vel -= n * vn * 1.3
+			impact = max(impact, -vn)
+			# a glancing hit at the front or back turns the car a little
+			var ahead = A[1].dot(-n)
+			v.yaw += clamp(A[0].dot(n) * ahead * -vn * 0.015, -0.12, 0.12)
 	for o2 in VEH:
 		if o2 == v or o2.dead: continue
-		if Vector2(o2.pos.x - v.pos.x, o2.pos.z - v.pos.z).length() > (L + o2.sp.len) / 2 + 0.5: continue
-		var fo = fwd(o2)
-		var ro = o2.sp.wid / 2.0
-		for a in [-(L / 2 - r), 0.0, L / 2 - r]:
-			for b2 in [-(o2.sp.len / 2 - ro), 0.0, o2.sp.len / 2 - ro]:
-				var ax = v.pos.x + f.x * a
-				var az = v.pos.z + f.z * a
-				var bx = o2.pos.x + fo.x * b2
-				var bz = o2.pos.z + fo.z * b2
-				var dd = Vector2(ax - bx, az - bz)
-				var d2 = dd.length()
-				var mn = r + ro
-				if d2 >= mn or d2 < 1e-4: continue
-				var n = dd / d2
-				var pen2 = (mn - d2) / 2
-				v.pos.x += n.x * pen2; v.pos.z += n.y * pen2; o2.pos.x -= n.x * pen2; o2.pos.z -= n.y * pen2
-				var rel = (v.vel.x - o2.vel.x) * n.x + (v.vel.y - o2.vel.y) * n.y
-				if rel < 0:
-					var j = -rel * 0.6
-					v.vel += n * j; o2.vel -= n * j; impact = max(impact, -rel); o2.parked = false
-					if -rel > 6: o2.hp -= -rel * 1.5
+		if Vector2(o2.pos.x - v.pos.x, o2.pos.z - v.pos.z).length() > (v.sp.len + o2.sp.len) / 2 + 0.5: continue
+		var B = _axes(o2)
+		var res2 = _sat(Vector2(v.pos.x, v.pos.z), A[0], A[1], A[2], Vector2(o2.pos.x, o2.pos.z), B[0], B[1], B[2])
+		if res2 == null: continue
+		var n2 = res2[0]
+		var pen2 = res2[1] * 0.5
+		v.pos.x += n2.x * pen2; v.pos.z += n2.y * pen2
+		if o2.driver != "remote":
+			o2.pos.x -= n2.x * pen2; o2.pos.z -= n2.y * pen2
+			place(o2)
+		var rel = (v.vel - o2.vel).dot(n2)
+		if rel < 0:
+			var j = -rel * 0.6
+			v.vel += n2 * j
+			if o2.driver != "remote": o2.vel -= n2 * j
+			impact = max(impact, -rel); o2.parked = false
+			v.yaw += clamp(A[0].dot(n2) * A[1].dot(-n2) * -rel * 0.012, -0.1, 0.1)
+			if -rel > 6: o2.hp -= -rel * 1.5
 	if impact > 4:
 		v.hp -= impact * 1.6
 		main.sfx.play3d("crash_big" if impact > 10 else "crash_small", v.pos + Vector3(0, 0.7, 0), clamp(impact / 12.0, 0.35, 1.5))
@@ -287,6 +302,14 @@ func hit_people(v):
 			if abs(fd) < v.sp.len / 2 + 0.4 and ld < v.sp.wid / 2 + 0.35:
 				p.vel.x += v.vel.x * 0.8; p.vel.z += v.vel.y * 0.8
 				p.take_hit(sp * 7, false, Vector3(v.vel.x, 0, v.vel.y).normalized(), v.driver == "player", false)
+	# people already down (lying still) get shoved along instead of driven through
+	for list2 in [main.peds.PEDS, main.crews.ENEMIES, main.police.COPS]:
+		for p2 in list2:
+			if not p2.h or not p2.h.is_ragdoll() or p2.h.ragdoll_active(): continue
+			var c = p2.h.ragdoll_center()
+			var d3 = Vector3(c.x - v.pos.x, 0, c.z - v.pos.z)
+			if abs(d3.dot(f)) < v.sp.len / 2 + 0.5 and abs(-d3.x * f.z + d3.z * f.x) < v.sp.wid / 2 + 0.5:
+				p2.h.ragdoll_start(Vector3(v.vel.x, 0, v.vel.y) * 0.6, Vector3(v.vel.x, 0, v.vel.y) * 0.5 + Vector3(0, 1.2, 0), G.rand(-1, 1))
 	if v.driver != "player" and not main.player.car:
 		var d2 = Vector3(main.player.pos.x - v.pos.x, 0, main.player.pos.z - v.pos.z)
 		if abs(d2.dot(f)) < v.sp.len / 2 + 0.4 and abs(-d2.x * f.z + d2.z * f.x) < v.sp.wid / 2 + 0.35 and not main.player.is_ragdoll():
@@ -502,8 +525,11 @@ func update(dt):
 			inp = ai_drive(v, dt)
 		elif abs(v.speed) < 0.05 and v.vel.length() < 0.05:
 			continue
-		physics(v, dt, inp)
-		collide(v)
+		# fast cars move in short steps so they can't pass through a wall or another car
+		var n = int(clamp(ceil(v.vel.length() * dt / 0.45), 1, 4))
+		for _k in range(n):
+			physics(v, dt / n, inp)
+			collide(v)
 		hit_people(v)
 		place(v)
 	# headlight for your car after dark

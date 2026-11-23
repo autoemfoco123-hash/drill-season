@@ -1,6 +1,10 @@
 extends Node
 # Collision world (autoload "W"), ported from the web game: axis-aligned boxes in a
 # uniform grid, ray casts, ground height and the body mover everyone uses.
+# Moving boxes (DYN) can be oriented: a car's box carries its centre, half width and half
+# length and its heading ("obb"), so people, ragdolls, bullets and anyone standing on a car
+# meet the car's real outline, not the bigger square around a car turned at an angle. The
+# x0..z1 bounds still hold the square around it, for quick rejection.
 
 const CELL = 12.0
 var BOXES = []
@@ -74,7 +78,7 @@ func raycast(o, d, max_t, ignore_low = 0.0):
 	for b in DYN:
 		if not b.on:
 			continue
-		var t = _ray_box(o, inv, b)
+		var t = _ray_obb(o, d, b) if b.has("obb") else _ray_box(o, inv, b)
 		if t < best:
 			best = t
 	if d.y < 0:
@@ -82,6 +86,46 @@ func raycast(o, d, max_t, ignore_low = 0.0):
 		if tg >= 0 and tg < best:
 			best = tg
 	return best if best < max_t else INF
+
+# ---------- oriented boxes ----------
+func _local(b, x, z):
+	var dx = x - b.cx
+	var dz = z - b.cz
+	return Vector2(dx * b.c - dz * b.s, dx * b.s + dz * b.c)
+
+func _world_dir(b, lx, lz):
+	return Vector2(b.c * lx + b.s * lz, -b.s * lx + b.c * lz)
+
+func _ray_obb(o, d, b):
+	var lo = _local(b, o.x, o.z)
+	var ld = Vector2(d.x * b.c - d.z * b.s, d.x * b.s + d.z * b.c)
+	var inv = Vector3(1.0 / (ld.x if abs(ld.x) > 1e-9 else 1e-9), 1.0 / (d.y if abs(d.y) > 1e-9 else 1e-9), 1.0 / (ld.y if abs(ld.y) > 1e-9 else 1e-9))
+	var lb = { "x0": -b.hw, "x1": b.hw, "y0": b.y0, "y1": b.y1, "z0": -b.hl, "z1": b.hl }
+	return _ray_box(Vector3(lo.x, o.y, lo.y), inv, lb)
+
+func _inside_obb(b, x, z, m = 0.0):
+	var l = _local(b, x, z)
+	return abs(l.x) <= b.hw + m and abs(l.y) <= b.hl + m
+
+func _push_out_obb(body, b):
+	var r = body.radius
+	var l = _local(b, body.pos.x, body.pos.z)
+	var q = Vector2(clamp(l.x, -b.hw, b.hw), clamp(l.y, -b.hl, b.hl))
+	var dd = l - q
+	var d2 = dd.length_squared()
+	if d2 >= r * r:
+		return false
+	var push = Vector2()
+	if d2 > 1e-8:
+		var d = sqrt(d2)
+		push = dd / d * (r - d)
+	else:
+		var px = b.hw - abs(l.x) + r
+		var pz = b.hl - abs(l.y) + r
+		push = Vector2(sign(l.x) * px, 0) if px < pz else Vector2(0, sign(l.y) * pz)
+	var w = _world_dir(b, push.x, push.y)
+	body.pos.x += w.x; body.pos.z += w.y
+	return true
 
 func seg_clear(a, b):
 	var dv = b - a
@@ -97,6 +141,7 @@ func ground_at(x, z, y):
 			g = b.y1
 	for b in DYN:
 		if b.on and x >= b.x0 and x <= b.x1 and z >= b.z0 and z <= b.z1 and b.y1 <= y + STEP_UP and b.y1 > g:
+			if b.has("obb") and not _inside_obb(b, x, z): continue
 			g = b.y1
 	return g
 
@@ -148,7 +193,7 @@ func move_body(body, dx, dz, dt):
 		for b in DYN:
 			if not b.on or b.y1 <= body.pos.y + STEP_UP or b.y0 >= body.pos.y + body.height:
 				continue
-			if _push_out(body, b):
+			if _push_out_obb(body, b) if b.has("obb") else _push_out(body, b):
 				hit_wall = true
 	body.pos.x = clamp(body.pos.x, -BOUND, BOUND); body.pos.z = clamp(body.pos.z, -BOUND, BOUND)
 	var was_ground = body.on_ground
@@ -184,7 +229,25 @@ func collide_point(p, r):
 		p.y = r; touched = true
 	var cand = query(p.x - r, p.z - r, p.x + r, p.z + r)
 	for b in DYN:
-		if b.on: cand.append(b)
+		if not b.on: continue
+		if b.has("obb"):
+			# a car: work in its own frame
+			if p.x < b.x0 - r or p.x > b.x1 + r or p.z < b.z0 - r or p.z > b.z1 + r or p.y < b.y0 - r or p.y > b.y1 + r: continue
+			var l = _local(b, p.x, p.z)
+			if abs(l.x) > b.hw + r or abs(l.y) > b.hl + r: continue
+			var pen = [l.x + b.hw + r, b.hw + r - l.x, p.y - (b.y0 - r), (b.y1 + r) - p.y, l.y + b.hl + r, b.hl + r - l.y]
+			var m = 0
+			for i in range(1, 6):
+				if pen[i] < pen[m]: m = i
+			if m == 2: p.y = b.y0 - r
+			elif m == 3: p.y = b.y1 + r
+			else:
+				var push = Vector2(-pen[0], 0) if m == 0 else (Vector2(pen[1], 0) if m == 1 else (Vector2(0, -pen[4]) if m == 4 else Vector2(0, pen[5])))
+				var w = _world_dir(b, push.x, push.y)
+				p.x += w.x; p.z += w.y
+			touched = true
+			continue
+		cand.append(b)
 	for b in cand:
 		if p.x < b.x0 - r or p.x > b.x1 + r or p.z < b.z0 - r or p.z > b.z1 + r or p.y < b.y0 - r or p.y > b.y1 + r:
 			continue

@@ -28,17 +28,18 @@ const ACC = Color(1, 0.62, 0.22)
 
 const CATS = [
 	["Presets", []],
+	["Eras", []],
 	["Heritage", ["tone", "build"]],
 	["Hair", ["hair", "hairCol", "beard"]],
 	["Headwear", ["head", "headCol", "pom"]],
 	["Top", ["top", "topCol", "top2"]],
 	["Bottoms", ["pants", "pantsCol", "pants2"]],
 	["Shoes", ["shoes", "shoesCol"]],
-	["Extras", ["chain", "watch", "glasses", "bag", "bagCol"]],
+	["Extras", ["chain", "watch", "glasses", "grill", "bag", "bagCol"]],
 ]
 const NAMES = { "tone": "Skin tone", "build": "Build", "hair": "Hair", "hairCol": "Hair colour", "beard": "Beard", "head": "Headwear", "headCol": "Headwear colour", "pom": "Pom-pom",
 	"top": "Top", "topCol": "Main colour", "top2": "Trim colour", "pants": "Bottoms", "pantsCol": "Colour", "pants2": "Stripe colour", "shoes": "Shoes", "shoesCol": "Colour",
-	"chain": "Chain", "watch": "Watch", "glasses": "Glasses", "bag": "Bag", "bagCol": "Bag colour" }
+	"chain": "Chain", "watch": "Watch", "glasses": "Glasses", "grill": "Gold grill", "bag": "Bag", "bagCol": "Bag colour" }
 const BUILDS = ["Slim", "Regular", "Big"]
 
 class Row extends Button:
@@ -159,7 +160,7 @@ func open(is_new = false):
 	before = edit.duplicate(true)
 	title_l.text = "@" + str(G.S["name"])
 	root.visible = true
-	cat = 0 if is_new else 1
+	cat = 0 if is_new else 2
 	_rebuild_preview()
 	_render()
 
@@ -203,6 +204,12 @@ func _render():
 			b2.connect("pressed", self, "_preset", [i])
 		var r = _row_button("", "Random look", null)
 		r.connect("pressed", self, "randomize")
+	elif CATS[cat][0] == "Eras":
+		# one look per era of drill, 2012 to today (original looks, made-up names)
+		var E = G.D["SKIN"]["ERAS"]
+		for i in range(E.size()):
+			var b3 = _row_button(E[i][0], E[i][1], null)
+			b3.connect("pressed", self, "_era", [i])
 	else:
 		for key in CATS[cat][1]:
 			_field_row(key)
@@ -303,6 +310,11 @@ func step(key, d):
 
 func _set_color(key, c):
 	edit[key] = int(c)
+	main.sfx.play("tap", 0.35)
+	_rebuild_preview(); _render()
+
+func _era(i):
+	edit = G.era_skin(i)
 	main.sfx.play("tap", 0.35)
 	_rebuild_preview(); _render()
 

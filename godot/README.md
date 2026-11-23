@@ -203,6 +203,28 @@ Tudo do jogo web, mais algumas coisas só daqui:
   - vento que acompanha as rajadas, a cidade ao fundo, sirenes, cachorros, aviões e o gelo do lago
     rangendo; fogo crepitando nos barris e vapor nos bueiros;
   - mixagem com compressor e limitador.
+- **Lugares para entrar de verdade:** na porta, aperte E; a tela escurece e você está dentro de uma
+  sala onde anda livremente (em terceira ou primeira pessoa, a câmera para nas paredes, a neve
+  para de cair e a arma fica no coldre):
+  - **Basement 808**, o estúdio no porão da Calder Ave: cabine de voz com vidro, espuma e o
+    microfone (grava a sessão), a mesa de som com monitores e tela (o menu do estúdio), o sofá
+    debaixo das placas de disco (aquece), fitas de LED e a escada de volta para a rua.
+  - **Ironside Arms**, a loja de armas nova na Calder Ave com a Bishop St (placa acesa e janelas
+    com grade na fachada): balcão de vidro com as pistolas e o Vic atendendo (comprar armas,
+    munição e curativo), fuzis na parede perfurada, prateleiras de munição e a bancada (peças e
+    acabamentos).
+- **Eras do drill:** uma seção **Eras** no editor com um visual por era, de 2012 até hoje (dreads
+  longos, high-top, freeform, cornrows, óculos de esqui, jersey, casaco de pele, grill de ouro), e
+  oito personagens originais, um de cada era, pelas esquinas (no estúdio, no Mini Mart, no lago, na
+  escada do L, nas quadras, no rec, no pavilhão e na Bishop St). Eles conversam quando você chega
+  perto e levantam as mãos se você apontar uma arma. Os nomes e as pessoas são inventados; não são
+  pessoas reais. Cerca de um em cada cinco pedestres também usa o visual de uma era.
+- **Colisões melhores:** os carros agora são retângulos girados de verdade contra prédios, muros e
+  outros carros (os cantos não entram mais nas paredes, e carros rápidos andam em passos curtos
+  para não atravessar nada); uma batida de raspão gira o carro um pouco. Pessoas, ragdolls e tiros
+  batem no contorno real do carro, não no quadrado em volta dele. Corpos caídos na rua são
+  empurrados pelo carro em vez de atravessados, e ninguém atravessa ninguém: você, os pedestres,
+  a polícia, as crews e a sua gangue se empurram.
 - **Celular novo**, no estilo de um flagship moderno (tipo um "Pro Max"): borda de alumínio na cor
   que você escolher (Glacier, Silver, Black ou Burgundy, em Settings → **Phone colour**), borda
   preta fina, a ilha da câmera pequena, barra de status com a hora do jogo, sinal, Wi-Fi e bateria
@@ -335,7 +357,7 @@ listener websockets) e aponte o jogo para ele com
 
 Ele grava capturas e um `autotest.log`.
 
-Para ver rostos, barbas, o dedo do meio e o visual cel: `DS_LOOKTEST=1`. Para ver o editor de personagem e todas as telas do celular: `DS_UITEST=1`. Para testar servidores,
+Para ver rostos, barbas, o dedo do meio e o visual cel: `DS_LOOKTEST=1`. Para ver o editor de personagem e todas as telas do celular: `DS_UITEST=1`. Para os lugares de entrar: `DS_ROOMTEST=1`. Para as colisões (carro no muro, batida de frente, corpo contra carro girado, multidão): `DS_COLTEST=1`. Para testar servidores,
 com um servidor dedicado rodando (`--server --name="Test Dedicated" --password=...`): `DS_SRVTEST=client`
 (com `DS_PW=` para a senha) acha o servidor, é barrado com a senha errada, entra com a certa, conversa
 e depois cria o "Test Host"; `DS_SRVTEST=joiner` noutro jogo entra nele. `DS_BROKERS=` troca os

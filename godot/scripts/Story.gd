@@ -585,6 +585,7 @@ func _feed_for_track(tr):
 # ---------- places (E) ----------
 func interact_label(it):
 	var C = G.D["CAST"]
+	if main.interiors and main.interiors.owns(it): return main.interiors.label(it)
 	match it.id:
 		"studio": return "Enter Basement 808"
 		"store": return "Enter Calder Mini Mart"
@@ -601,8 +602,10 @@ func interact_label(it):
 	return null
 
 func interact(it):
+	if main.interiors and main.interiors.owns(it):
+		main.interiors.use(it); return
 	match it.id:
-		"studio": studio_menu()
+		"studio": main.interiors.enter("studio")
 		"store": store_menu("store")
 		"gas": store_menu("gas")
 		"court": shoot_around()

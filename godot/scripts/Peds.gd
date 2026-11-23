@@ -178,7 +178,37 @@ func flip_react(at):
 func _by_dist(a, b):
 	return a.pos.distance_to(main.player.pos) < b.pos.distance_to(main.player.pos)
 
+# people keep their personal space: nobody walks through anybody (you, people on the street,
+# police, rival crews and your own gang push each other apart; you get pushed the least)
+func _crowd():
+	var P = main.player
+	var B = []
+	if G.MODE != "title" and not P.car and not P.is_ragdoll(): B.append(P)
+	for list in [PEDS, main.crews.ENEMIES, main.police.COPS, main.gang.FOL]:
+		for p in list:
+			if p.state == "down" or (p.h and p.h.is_ragdoll()): continue
+			if list == main.gang.FOL and p.riding: continue
+			if abs(p.pos.x - P.pos.x) > 30 or abs(p.pos.z - P.pos.z) > 30: continue
+			B.append(p)
+	for i in range(B.size()):
+		var a = B[i]
+		for j in range(i + 1, B.size()):
+			var b = B[j]
+			var dx = b.pos.x - a.pos.x
+			var dz = b.pos.z - a.pos.z
+			var r = a.radius + b.radius
+			var d2 = dx * dx + dz * dz
+			if d2 >= r * r or d2 < 1e-6 or abs(a.pos.y - b.pos.y) > 1.2: continue
+			var d = sqrt(d2)
+			var pen = r - d
+			var ka = 0.3 if a == P else 0.5
+			var kb = 0.3 if b == P else 0.5
+			var t = ka + kb
+			a.pos.x -= dx / d * pen * ka / t; a.pos.z -= dz / d * pen * ka / t
+			b.pos.x += dx / d * pen * kb / t; b.pos.z += dz / d * pen * kb / t
+
 func update(dt):
+	_crowd()
 	var P = main.player
 	var focus = P.pos if G.MODE != "title" else main.title.spot
 	_spawn_t -= dt

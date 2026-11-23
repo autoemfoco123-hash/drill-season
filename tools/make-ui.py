@@ -360,7 +360,27 @@ def wardrobe():
     save(Image.fromarray(im, 'RGBA'), 'floor_shadow')
 
 
+# ---------------------------------------------------------------- the gun shop's sign
+def sign_gunshop():
+    w, h = 1024, 181
+    im = Image.new('RGBA', (w, h), (22, 22, 26, 255))
+    glow = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+    dr = ImageDraw.Draw(glow)
+    f = ImageFont.truetype(os.path.join(FONTS, 'Inter-Bold.ttf'), 92)
+    fs = ImageFont.truetype(os.path.join(FONTS, 'Inter-SemiBold.ttf'), 26)
+    dr.text((w // 2, 72), 'IRONSIDE ARMS', font=f, fill=(255, 70, 60, 255), anchor='mm')
+    blur = glow.filter(ImageFilter.GaussianBlur(10))
+    im = Image.alpha_composite(im, blur)
+    im = Image.alpha_composite(im, blur)
+    d2 = ImageDraw.Draw(im)
+    d2.text((w // 2, 72), 'IRONSIDE ARMS', font=f, fill=(255, 214, 205, 255), anchor='mm')
+    d2.text((w // 2, 146), 'GUNS  ·  AMMO  ·  REPAIRS  ·  CALDER AVE', font=fs, fill=(220, 220, 225, 255), anchor='mm')
+    d2.rectangle((6, 6, w - 7, h - 7), outline=(90, 90, 96, 255), width=3)
+    save(im, 'sign_gunshop')
+
+
 phone()
+sign_gunshop()
 wallpaper()
 for (nm, c1, c2, fn) in ICONS:
     icon(nm, c1, c2, fn)

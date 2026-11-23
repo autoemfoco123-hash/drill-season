@@ -181,6 +181,8 @@ func _face(o, cS, cHair, cH, skimask):
 	var lz = 0.137 if beard == 1 else 0.126
 	_add(hg, "box", [0.05, 0.011, 0.012], _mixc(lip, 0x000000, 0.25), Vector3(0, -0.011, lz))
 	_add(hg, "box", [0.044, 0.013, 0.012], lip, Vector3(0, -0.024, lz - 0.003))
+	if o.get("grill", false):
+		_add(hg, "box", [0.04, 0.008, 0.006], 0xe2b64a, Vector3(0, -0.0175, lz + 0.004))
 	# the beard
 	var bc = cHair
 	if beard == 1 or beard == 3:
@@ -219,7 +221,7 @@ func build(o):
 	var cHair = o.get("hairCol", 0x0f0d0c)
 	var cDark = 0x0b0b0d
 	var cGold = 0xd4a640
-	var cSleeve = cJ2 if top == "varsity" else cJ
+	var cSleeve = cJ2 if top in ["varsity", "jersey"] else cJ
 	var cHand = o.get("gloves", cS)
 	root = _pivot(self, Vector3())
 	hips = _pivot(root, Vector3(0, 0.92, 0))
@@ -233,6 +235,18 @@ func build(o):
 		_add(spine, "ring", [0.255, 0.045], cJ2, Vector3(0, 0.42, 0), Vector3(PI / 2, 0, 0), Vector3(1.13 * bw, 0.82, 1))
 	if top == "hoodie":
 		_add(spine, "box", [0.075, 0.1, 0.03], cJ2, Vector3(0, 0.2, 0.2 * bw), Vector3(), Vector3(2.2, 1, 1))
+	if top == "jersey":
+		# an oversized jersey over a hoodie: big front numbers, trim at the neck and hem
+		for nx in [-0.045, 0.045]:
+			_add(spine, "box", [0.022, 0.13, 0.01], cJ2, Vector3(nx, 0.34, 0.205 * bw))
+		_add(spine, "ring", [0.14, 0.022], cJ2, Vector3(0, 0.6, 0), Vector3(PI / 2, 0, 0), Vector3(1, 1, 0.7))
+		_add(spine, "ring", [0.255, 0.02], cJ2, Vector3(0, 0.06, 0), Vector3(PI / 2, 0, 0), Vector3(1.13 * bw, 0.82, 1))
+	if top == "shearling":
+		# a long coat with a thick fur collar and fur down the front
+		_add(spine, "cyl", [0.27, 0.35, 0.62], cJ, Vector3(0, 0.04, 0), Vector3(), Vector3(bw, 1, 0.82 * bw))
+		_add(spine, "ring", [0.16, 0.055], cJ2, Vector3(0, 0.6, 0), Vector3(PI / 2, 0, 0), Vector3(1.05, 1, 0.78))
+		for fx in [-0.06, 0.06]:
+			_add(spine, "box", [0.04, 0.5, 0.025], cJ2, Vector3(fx, 0.3, 0.2 * bw))
 	if top in ["track", "leather", "varsity"]:
 		_add(spine, "box", [0.012, 0.42, 0.012], cJ2 if top == "track" else cDark, Vector3(0, 0.36, 0.205 * bw))
 	if top in ["leather", "varsity"]:
@@ -275,6 +289,29 @@ func build(o):
 		if hair == "braids":
 			for s2 in [-1, 1]:
 				_add(head_g, "cyl", [0.024, 0.015, 0.32], cHair, Vector3(s2 * 0.06, -0.06, -0.11), Vector3(0.35, 0, s2 * 0.1))
+		if hair == "dreads":
+			# long dreads around the sides and back, down past the shoulders
+			for k in range(15):
+				var a4 = PI * 0.02 + k / 14.0 * PI * 0.96
+				var ln = 0.36 + (k % 3) * 0.045
+				_add(head_g, "cyl", [0.021, 0.015, ln], cHair, Vector3(cos(a4) * 0.13, 0.11 - ln * 0.5, -sin(a4) * 0.118 - 0.01), Vector3(sin(a4) * 0.16, 0, cos(a4) * 0.16))
+		if hair == "hightop" and not covers and not head in ["cap", "capback"]:
+			_add(head_g, "cyl", [0.118, 0.132, 0.17], cHair, Vector3(0, 0.215, -0.012))
+		if hair == "freeform" and not covers:
+			# chunky locs that stand up and out
+			for k in range(11):
+				var a5 = k / 11.0 * TAU
+				var r5 = 0.065 + (k % 2) * 0.035
+				var ln5 = 0.12 + (k % 3) * 0.035
+				_add(head_g, "cyl", [0.03, 0.022, ln5], cHair, Vector3(cos(a5) * r5, 0.18 + ln5 * 0.3, sin(a5) * r5 - 0.02), Vector3(sin(a5) * 0.55, 0, -cos(a5) * 0.55))
+		if hair == "cornrows" and not covers:
+			# partings between the rows, following the curve of the head
+			var part = _mixc(cS, 0x000000, 0.2)
+			for rx in [-0.06, -0.03, 0.0, 0.03, 0.06]:
+				var rr = sqrt(max(0.0, 0.145 * 0.145 - rx * rx))
+				for j in range(5):
+					var t = -1.0 + j * 0.5
+					_add(head_g, "box", [0.006, 0.005, 0.05], part, Vector3(rx, 0.07 + rr * cos(t) * 1.05, rr * sin(t) * 1.03), Vector3(-t, 0, 0))
 	if head == "beanie":
 		_add(head_g, "hemi", [0.142], cH, Vector3(0, 0.065, 0), Vector3(), Vector3(1, 1.25, 1))
 		if o.get("pom", false):
@@ -291,6 +328,11 @@ func build(o):
 		_add(head_g, "cyl", [0.225, 0.225, 0.016], cH, Vector3(0, 0.115, 0), Vector3(-0.05, 0, 0))
 	elif head == "hood":
 		_add(head_g, "hemi", [0.172], cJ2, Vector3(0, 0.0, -0.035), Vector3(-0.5, 0, 0), Vector3(1, 1.3, 1.05))
+	elif head == "goggles":
+		# ski goggles pushed up on the forehead, strap around the head
+		_add(head_g, "ring", [0.143, 0.011], cH, Vector3(0, 0.13, -0.004), Vector3(PI / 2 - 0.3, 0, 0))
+		_add(head_g, "box", [0.21, 0.07, 0.035], cH, Vector3(0, 0.15, 0.118), Vector3(-0.35, 0, 0))
+		_add(head_g, "box", [0.19, 0.052, 0.02], 0xd8742a, Vector3(0, 0.152, 0.134), Vector3(-0.35, 0, 0))
 	elif head == "headphones":
 		_add(head_g, "box", [0.3, 0.025, 0.04], cH, Vector3(0, 0.2, 0))
 		for s3 in [-1, 1]:

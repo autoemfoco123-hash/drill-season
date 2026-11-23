@@ -322,6 +322,11 @@ class Tags extends Control:
 			if r.h and r.h.visible:
 				var gt = ("[" + str(r.gang[2]) + "] ") if typeof(r.gang) == TYPE_ARRAY else ""
 				items.append([r.pos, gt + "@" + r.name, "ONLINE", Color(1, 1, 1)])
+		if main.interiors:
+			for t in main.interiors.tags(): items.append(t)
+		if main.eras:
+			for t in main.eras.tags():
+				if t[0].distance_to(P.pos) < 16: items.append(t)
 		for cp in main.police.COPS:
 			if not cp.is_down(): items.append([cp.pos, "POLICE", "", Color(0.44, 0.7, 1)])
 		for e in main.crews.ENEMIES:
@@ -481,6 +486,9 @@ func update(dt):
 	for c in [minimap, bars, feed, help_box, weapon_icon, lbl_weapon, lbl_ammo, lbl_cash, lbl_cash_delta, stars, meter_buzz, meter_heat, lbl_street, lbl_area, lbl_clock, lbl_speed, lbl_radio, objective, cross, tags, tr_card, br_card]:
 		c.visible = hud_on
 	minimap.material.set_shader_param("size", minimap.rect_size)
+	var indoors = main.interiors != null and main.interiors.inside != ""
+	if indoors: minimap.visible = false
+	feed.visible = hud_on and G.MODE != "menu"
 	# cash, rolling up or down like a counter
 	var cash = int(S["cash"])
 	if cash_shown < 0: cash_shown = cash
@@ -510,8 +518,8 @@ func update(dt):
 	meter_heat.value = float(S["heat"]); meter_heat.tier = _heat_tier(S["heat"]); meter_heat.update()
 	bars.update()
 	# where you are
-	lbl_street.text = street_name(P.pos)
-	lbl_area.text = _area(P.pos).to_upper()
+	lbl_street.text = street_name(P.pos) if not indoors else main.interiors.room_name()
+	lbl_area.text = (_area(P.pos) if not indoors else main.interiors.room_addr()).to_upper()
 	var tf = main.story.temp_f()
 	lbl_clock.text = "%s · Day %d · %d°F%s" % [G.clock_str(), int(S.get("day", 1)), tf, (" · " + main.story.warm_label) if main.story.warm_label else ""]
 	if P.car:
@@ -535,7 +543,7 @@ func update(dt):
 		objective.text = ob
 		var ow = objective.get_minimum_size().x
 		objective.margin_left = -ow / 2; objective.margin_right = ow / 2
-	objective.visible = hud_on and ob != ""
+	objective.visible = hud_on and ob != "" and not indoors
 	cross.visible = hud_on and not P.car and (P.aim_t > 0.3 or P.fp_on()) and wheel_kind == ""
 	# big message and subtitles
 	banner_t -= dt

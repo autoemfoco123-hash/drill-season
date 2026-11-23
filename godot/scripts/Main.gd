@@ -23,6 +23,8 @@ var cockpit
 var touch
 var memorial
 var sky
+var eras
+var interiors
 var camera
 var env
 var sun
@@ -80,9 +82,12 @@ func _ready():
 	touch = _system("res://scripts/Touch.gd", "Touch")
 	memorial = _system("res://scripts/Memorial.gd", "Memorial")
 	sky = _system("res://scripts/Sky.gd", "Sky")
-	for s in [sfx, vehicles, player, peds, police, crews, gang, hud, phone, title, story, cutscene, studio, blok, train, fx, net, wardrobe, cockpit, touch, memorial, sky]:
+	eras = _system("res://scripts/Eras.gd", "Eras")
+	interiors = _system("res://scripts/Interiors.gd", "Interiors")
+	for s in [sfx, vehicles, player, peds, police, crews, gang, hud, phone, title, story, cutscene, studio, blok, train, fx, net, wardrobe, cockpit, touch, memorial, sky, eras, interiors]:
 		s.setup(self)
 	story.build_npcs()
+	eras.build()
 	# everything built so far (the garden, the train, props) gets the toon lighting too
 	G.toon_tree(self)
 	title.open()
@@ -275,6 +280,7 @@ func update_day_night(focus):
 			o.light_energy = 0
 			o.visible = false
 	if sky: sky.frame()
+	if interiors: interiors.light_inside(env, sun)
 
 func _by_first(a, b):
 	return a[0] < b[0]
@@ -289,6 +295,7 @@ func _process(dt):
 		vehicles.update(dt)
 		peds.update(dt)
 		story.update(dt)
+		eras.update(dt)
 		train.update(dt)
 		fx.update(dt)
 		memorial.update(dt)
@@ -309,8 +316,10 @@ func _process(dt):
 		if G.MODE != "cutscene": player.update_camera(dt)
 	cutscene.update(dt)
 	story.update(dt)
+	eras.update(dt)
 	train.update(dt)
 	fx.update(dt)
+	interiors.update(dt)
 	blok.update(dt)
 	studio.update(dt)
 	wardrobe.update(dt)

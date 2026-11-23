@@ -47,6 +47,7 @@ func _ready():
 						fld.append(0)
 						fld.append(0)
 					fld[2] = 0; fld[3] = 5
+			_add_era_looks()
 	else:
 		push_error("assets/data.json is missing; run tools/export-godot.js")
 	# the whole interface uses Inter now (slim, like the wardrobe and the phone)
@@ -60,6 +61,36 @@ func _ready():
 	font_hud = ifont_o(16, "s", 1)
 	_setup_input()
 	S = new_state("")
+
+# new looks for the drill eras (2012 to today), all original: hair, goggles, jersey, shearling,
+# a gold grill, and one preset per era (made-up names, no real people)
+const ERA_LABELS = { "dreads": "Long dreads", "hightop": "High-top", "freeform": "Freeform", "cornrows": "Cornrows", "goggles": "Ski goggles", "jersey": "Jersey", "shearling": "Shearling" }
+func _add_era_looks():
+	var SK = D["SKIN"]
+	for h in ["dreads", "hightop", "freeform", "cornrows"]:
+		if not h in SK["SKIN_OPTS"]["hair"]: SK["SKIN_OPTS"]["hair"].append(h)
+	if not "goggles" in SK["SKIN_OPTS"]["head"]: SK["SKIN_OPTS"]["head"].append("goggles")
+	for t in ["jersey", "shearling"]:
+		if not t in SK["SKIN_OPTS"]["top"]: SK["SKIN_OPTS"]["top"].append(t)
+	for k in ERA_LABELS.keys(): SK["LABELS"][k] = ERA_LABELS[k]
+	var has = false
+	for f in SK["SKIN_FIELDS"]:
+		if f[0] == "grill": has = true
+	if not has: SK["SKIN_FIELDS"].append(["grill", "b"])
+	SK["ERAS"] = [
+		["2012", "Lowend", { "hair": "dreads", "hairCol": 0x0f0d0c, "head": "capback", "headCol": 0xc8202a, "top": "hoodie", "topCol": 0x15171a, "top2": 0xc8202a, "pants": "jeans", "pantsCol": 0x1e2f4a, "shoes": "high", "shoesCol": 0xc8202a, "chain": 1, "build": 0 }],
+		["2014", "Ironside", { "hair": "braids", "head": "bucket", "headCol": 0x6b4a30, "top": "leather", "topCol": 0x15171a, "top2": 0x3a3f46, "pants": "cargo", "pantsCol": 0x2a3a2a, "shoes": "boot", "shoesCol": 0x6b4a30, "watch": 1 }],
+		["2016", "Ski Trip", { "hair": "short", "head": "goggles", "headCol": 0x15171a, "top": "puffer", "topCol": 0xe8e8ea, "top2": 0x8a9098, "pants": "ski", "pantsCol": 0x15171a, "shoes": "boot", "shoesCol": 0x15171a }],
+		["2018", "Sunshine", { "hair": "freeform", "hairCol": 0x0f0d0c, "head": "none", "top": "track", "topCol": 0x2a5aa8, "top2": 0xe8e8ea, "pants": "joggers", "pantsCol": 0x2a5aa8, "pants2": 0xe8e8ea, "shoes": "sneaker", "shoesCol": 0xe8e8ea, "chain": 1, "build": 0 }],
+		["2020", "Glory Days", { "hair": "cornrows", "head": "durag", "headCol": 0x5a2a6a, "top": "jersey", "topCol": 0xffc832, "top2": 0x5a2a6a, "pants": "jeans", "pantsCol": 0x15171a, "shoes": "high", "shoesCol": 0xe8e8ea, "chain": 1, "grill": 1 }],
+		["2022", "Gold Teeth", { "hair": "hightop", "head": "none", "top": "shearling", "topCol": 0x6b4a30, "top2": 0xe8dcc6, "pants": "cargo", "pantsCol": 0x3a3f46, "shoes": "boot", "shoesCol": 0xc8a878, "grill": 1, "watch": 1, "build": 2 }],
+		["2024", "New Wave", { "hair": "twists", "head": "headphones", "headCol": 0x15171a, "top": "parka", "topCol": 0x4f8a3a, "top2": 0x15171a, "pants": "joggers", "pantsCol": 0x15171a, "shoes": "sneaker", "shoesCol": 0x15171a, "bag": "cross", "bagCol": 0x15171a }],
+		["2026", "Today", { "hair": "dreads", "hairCol": 0x4a2a1a, "head": "beanie", "headCol": 0x15171a, "pom": 0, "top": "varsity", "topCol": 0x5a1a1a, "top2": 0xe8e8ea, "pants": "cargo", "pantsCol": 0x15171a, "shoes": "high", "shoesCol": 0x15171a, "glasses": 1, "chain": 1 }],
+	]
+
+func era_skin(i):
+	var e = D["SKIN"]["ERAS"][i % D["SKIN"]["ERAS"].size()]
+	return clean_skin(e[2].duplicate(true))
 
 # Inter, for the phone and the wardrobe (thin, modern); DejaVu fills in symbols Inter lacks.
 # w: "l" light, "r" regular, "m" medium, "s" semibold, "b" bold
@@ -212,7 +243,7 @@ func apply_outlines():
 
 # ---------- the save ----------
 func default_skin():
-	return { "tone": 4, "hair": "short", "hairCol": 0x0f0d0c, "beard": 0, "head": "beanie", "headCol": 0xff8a2a, "pom": 1, "top": "puffer", "topCol": 0x262b33, "top2": 0x343a44, "pants": "jeans", "pantsCol": 0x1b2533, "pants2": 0xe8e8ea, "shoes": "sneaker", "shoesCol": 0xdedede, "chain": 0, "watch": 0, "glasses": 0, "bag": "none", "bagCol": 0x15171a, "build": 1 }
+	return { "tone": 4, "hair": "short", "hairCol": 0x0f0d0c, "beard": 0, "grill": 0, "head": "beanie", "headCol": 0xff8a2a, "pom": 1, "top": "puffer", "topCol": 0x262b33, "top2": 0x343a44, "pants": "jeans", "pantsCol": 0x1b2533, "pants2": 0xe8e8ea, "shoes": "sneaker", "shoesCol": 0xdedede, "chain": 0, "watch": 0, "glasses": 0, "bag": "none", "bagCol": 0x15171a, "build": 1 }
 
 func new_state(name):
 	var dc = D.get("DEF_CFG", { "optic": "iron", "barrel": "standard", "mag": "std", "muzzle": "none", "finish": "gunmetal", "charm": "none" })
@@ -387,19 +418,26 @@ func skin_opts(s):
 		"skin": tones[clamp(int(s.tone), 0, tones.size() - 1)], "hair": s.hair, "hairCol": s.hairCol, "beard": s.beard, "head": s.head, "hat": s.headCol, "pom": s.pom,
 		"top": s.top, "jacket": s.topCol, "jacket2": s.top2, "pantsStyle": s.pants, "pants": s.pantsCol, "pants2": s.pants2, "shoe": s.shoes, "shoes": s.shoesCol,
 		"chain": bool(s.chain), "watch": bool(s.watch), "glasses": bool(s.glasses), "bag": null if s.bag == "none" else s.bag, "bagCol": s.bagCol, "build": s.build,
+		"grill": bool(s.get("grill", 0)),
 	}
 
 func random_skin(r = null):
 	if r == null:
 		r = rng
+	# about one in five people on the street wears an era's look, in their own colours
+	if D["SKIN"].has("ERAS") and r.randf() < 0.2:
+		var e = era_skin(r.randi_range(0, D["SKIN"]["ERAS"].size() - 1))
+		e["tone"] = r.randi_range(0, 5); e["build"] = r.randi_range(0, 2)
+		if r.randf() < 0.5: e["topCol"] = _rp(r, [0x15171a, 0x262b33, 0x3a3f46, 0x8a9098, 0x1e2f4a, 0x5a1a1a, 0x6b4a30, 0xc8a878])
+		return e
 	var O = D["SKIN"]["SKIN_OPTS"]
 	var muted = [0x15171a, 0x262b33, 0x3a3f46, 0x8a9098, 0x1e2f4a, 0x2a3a2a, 0x4a3a2a, 0x5a1a1a, 0x6b4a30, 0xc8a878, 0xe8e8ea]
 	var pop = [0xc8202a, 0xff8a2a, 0xffc832, 0x2a5aa8, 0x6ab0ff, 0x4f8a3a, 0xff6ab0, 0x5a2a6a]
 	var hc = D["SKIN"]["HAIR_COLS"]
 	return clean_skin({
 		"tone": r.randi_range(0, 5), "hair": _rp(r, O.hair), "hairCol": _rp(r, hc.slice(0, 3)) if r.randf() < 0.8 else _rp(r, hc), "beard": (r.randi_range(1, 5) if r.randf() < 0.5 else 1) if r.randf() < 0.35 else 0,
-		"head": _rp(r, ["none", "beanie", "beanie", "cap", "hood", "bucket", "durag", "headphones", "beanie"]), "headCol": _col(r, muted, pop), "pom": 1 if r.randf() < 0.4 else 0,
-		"top": _rp(r, ["puffer", "puffer", "parka", "parka", "hoodie", "track", "leather", "varsity"]), "topCol": _col(r, muted, pop), "top2": _col(r, muted, pop),
+		"head": _rp(r, ["none", "beanie", "beanie", "cap", "hood", "bucket", "durag", "headphones", "beanie", "goggles"]), "headCol": _col(r, muted, pop), "pom": 1 if r.randf() < 0.4 else 0,
+		"top": _rp(r, ["puffer", "puffer", "parka", "parka", "hoodie", "track", "leather", "varsity", "jersey", "shearling"]), "topCol": _col(r, muted, pop), "top2": _col(r, muted, pop), "grill": 1 if r.randf() < 0.06 else 0,
 		"pants": _rp(r, ["jeans", "jeans", "cargo", "joggers", "ski"]), "pantsCol": _rp(r, muted), "pants2": 0xe8e8ea,
 		"shoes": _rp(r, O.shoes), "shoesCol": _rp(r, [0xe8e8ea, 0x15171a, 0x6b4a30, 0x3a3f46]), "chain": 1 if r.randf() < 0.1 else 0, "watch": 1 if r.randf() < 0.15 else 0,
 		"glasses": 1 if r.randf() < 0.08 else 0, "bag": _rp(r, ["none", "none", "none", "back", "cross"]), "bagCol": _rp(r, muted), "build": r.randi_range(0, 2),

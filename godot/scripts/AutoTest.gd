@@ -17,6 +17,8 @@ func run(m):
 	elif OS.get_environment("DS_LOOKTEST") != "": call_deferred("_look_test")
 	elif OS.get_environment("DS_SRVTEST") != "": call_deferred("_srv_test")
 	elif OS.get_environment("DS_UITEST") != "": call_deferred("_ui_test")
+	elif OS.get_environment("DS_ROOMTEST") != "": call_deferred("_room_test")
+	elif OS.get_environment("DS_COLTEST") != "": call_deferred("_col_test")
 	else: call_deferred("_go")
 
 func _wait(s):
@@ -498,6 +500,24 @@ func _look_test():
 	G.time_offset += (21 * 60 - G.world_minutes())
 	yield(_wait(1.0), "completed")
 	yield(_shot("l9_street_night"), "completed")
+	# the eras crew: a shot of each, framed like a portrait
+	var k2 = 0
+	G.time_offset += (13 * 60 - G.world_minutes())
+	for c in main.eras.CREW:
+		# a camera spot in the open, with a clear view of them
+		var fwd = Vector3(sin(c.yaw), 0, cos(c.yaw))
+		for k3 in range(16):
+			var a3 = c.yaw + k3 * TAU / 16.0 * (1 if k3 % 2 == 0 else -1) * 0.5
+			var f3 = Vector3(sin(a3), 0, cos(a3))
+			var cp = c.pos + f3 * 4.0
+			if not W.is_blocked(cp.x, cp.z, 0.4) and W.seg_clear(cp + Vector3(0, 1.3, 0), c.pos + Vector3(0, 1.2, 0)):
+				fwd = f3; break
+		P.place(c.pos.x + fwd.x * 6, 0, c.pos.z + fwd.z * 6, 0)
+		_frame(c.pos + fwd * 4.0 + Vector3(0, 1.35, 0), c.pos + Vector3(0, 0.95, 0), 40)
+		yield(_wait(0.5), "completed")
+		yield(_shot("e%d_%s" % [k2, c.name.replace(" ", "_")]), "completed")
+		main.cutscene.end()
+		k2 += 1
 	# where a new game starts (the sidewalk ice is there)
 	G.time_offset += (13 * 60 - G.world_minutes())
 	P.place(spawn.x, 0, spawn.z, spawn_yaw); P.cam_yaw = spawn_yaw; P.cam_pitch = -0.12
@@ -776,15 +796,18 @@ func _ui_test():
 	G.S["unread"]["benny"] = 2; G.S["unread"]["kiara"] = 1
 	main.wardrobe.open()
 	yield(_wait(0.8), "completed")
-	main.wardrobe._set_cat(2)
+	main.wardrobe._set_cat(3)
 	yield(_wait(0.5), "completed")
 	yield(_shot("u01_wardrobe_hair"), "completed")
-	main.wardrobe._set_cat(4)
+	main.wardrobe._set_cat(5)
 	yield(_wait(0.4), "completed")
 	yield(_shot("u02_wardrobe_top"), "completed")
-	main.wardrobe._set_cat(0)
+	main.wardrobe._set_cat(1)
 	yield(_wait(0.4), "completed")
-	yield(_shot("u03_wardrobe_presets"), "completed")
+	yield(_shot("u03_wardrobe_eras"), "completed")
+	main.wardrobe._era(4)
+	yield(_wait(0.4), "completed")
+	yield(_shot("u03b_wardrobe_era2020"), "completed")
 	main.wardrobe.cancel()
 	yield(_wait(0.3), "completed")
 	main.hud.menu("Calder Mini Mart · open late", "Mini Mart", "Coffee, hand warmers and snacks. Warm up before you head back out.", [
@@ -821,4 +844,177 @@ func _ui_test():
 	main.phone.close()
 	yield(_wait(0.5), "completed")
 	_log("phone visible after close: %s" % str(main.phone.panel.visible))
+	get_tree().quit()
+
+# the rooms you walk into: Basement 808 and Ironside Arms, then quit
+func _room_test():
+	yield(_wait(1.0), "completed")
+	main.title._close(); main.start_game(G.new_state("roomtest"))
+	yield(_wait(1.5), "completed")
+	G.time_offset += (14 * 60 - G.world_minutes())
+	G.S["cash"] = 9000; G.S["buzz"] = 60; G.S["flags"]["studioCut"] = true
+	var P = main.player
+	var I = main.interiors
+	# the shop front on Calder Ave
+	P.place(-15.2, 0, -3.0, PI); P.cam_yaw = 0.0; P.cam_pitch = 0.08
+	_frame(Vector3(-15.2, 2.2, 2.0), Vector3(-15.2, 2.0, -10.0), 50)
+	yield(_wait(0.6), "completed")
+	yield(_shot("r1_gunshop_front"), "completed")
+	main.cutscene.end()
+	P.place(-15.2, 0, -8.4, PI)
+	yield(_wait(0.3), "completed")
+	_log("at the shop door: %s" % str(main.hud._prompt()))
+	I.enter("gunshop")
+	yield(_wait(1.0), "completed")
+	_log("inside: %s at %s" % [I.inside, str(P.pos)])
+	yield(_shot("r2_gunshop_in"), "completed")
+	var o = I.ROOMS.gunshop.o
+	_frame(o + Vector3(4.5, 2.4, 3.8), o + Vector3(-1.0, 1.0, -2.0), 60)
+	yield(_wait(0.5), "completed")
+	yield(_shot("r3_gunshop_wide"), "completed")
+	main.cutscene.end()
+	P.place(o.x - 0.5, o.y, o.z + 0.3, 0.0)
+	yield(_wait(0.3), "completed")
+	_log("at the counter: %s" % str(main.hud._prompt()))
+	I.counter_menu()
+	yield(_wait(0.4), "completed")
+	yield(_shot("r4_counter_menu"), "completed")
+	main.hud.close_menu()
+	# walk into the back wall for two seconds: still inside?
+	Input.action_press("move_f")
+	yield(_wait(2.0), "completed")
+	Input.action_release("move_f")
+	_log("after walking into the wall: %s (room z %.1f..%.1f)" % [str(P.pos), o.z - 5, o.z + 5])
+	I.leave()
+	yield(_wait(1.0), "completed")
+	_log("left: inside '%s' at %s" % [I.inside, str(P.pos)])
+	# the studio
+	P.place(41, 0, -8.0, PI)
+	yield(_wait(0.3), "completed")
+	_log("at the studio door: %s" % str(main.hud._prompt()))
+	I.enter("studio")
+	yield(_wait(1.0), "completed")
+	_log("inside: %s at %s" % [I.inside, str(P.pos)])
+	yield(_shot("r5_studio_in"), "completed")
+	var so = I.ROOMS.studio.o
+	_frame(so + Vector3(3.8, 2.4, 3.0), so + Vector3(-1.5, 0.9, -3.5), 62)
+	yield(_wait(0.5), "completed")
+	yield(_shot("r6_studio_wide"), "completed")
+	main.cutscene.end()
+	_frame(so + Vector3(0.2, 1.7, -1.2), so + Vector3(-3.4, 1.3, -4.8), 55)
+	yield(_wait(0.5), "completed")
+	yield(_shot("r7_studio_booth"), "completed")
+	main.cutscene.end()
+	_frame(so + Vector3(1.0, 1.5, -2.2), so + Vector3(4.6, 1.4, 0.5), 60)
+	yield(_wait(0.5), "completed")
+	yield(_shot("r8_studio_couch"), "completed")
+	main.cutscene.end()
+	P.place(so.x - 3.3, so.y, so.z - 4.0, 0.0)
+	yield(_wait(0.3), "completed")
+	_log("in the booth: %s" % str(main.hud._prompt()))
+	I.leave()
+	yield(_wait(1.0), "completed")
+	_log("left: inside '%s' at %s" % [I.inside, str(P.pos)])
+	get_tree().quit()
+
+# collisions: a car into a wall at an angle, two cars head-on, a body against a turned car,
+# a car pushing a body lying in the road, people packed into one spot
+func _corner_depth(v, b):
+	var A = main.vehicles._axes(v)
+	var worst = 0.0
+	for sx in [-1, 1]:
+		for sz in [-1, 1]:
+			var c = Vector2(v.pos.x, v.pos.z) + A[0] * A[2].x * sx + A[1] * A[2].y * sz
+			if c.x > b[0] and c.x < b[2] and c.y > b[1] and c.y < b[3]:
+				worst = max(worst, min(min(c.x - b[0], b[2] - c.x), min(c.y - b[1], b[3] - c.y)))
+	return worst
+
+func _col_test():
+	yield(_wait(1.0), "completed")
+	main.title._close(); main.start_game(G.new_state("coltest"))
+	yield(_wait(1.5), "completed")
+	G.time_offset += (13 * 60 - G.world_minutes())
+	var P = main.player
+	var V = main.vehicles
+	# 1. into the Mini Mart wall at an angle, full throttle
+	var car = V.spawn("sedan", 18, -2, atan2(0.55, -1.0), { "color": 0x8a1c24, "owned": true })
+	V.enter(car)
+	yield(_wait(0.5), "completed")
+	Input.action_press("move_f")
+	var worst = 0.0
+	for _i in range(40):
+		yield(_wait(0.05), "completed")
+		worst = max(worst, _corner_depth(car, [10.5, -26, 26, -10.5]))
+	Input.action_release("move_f")
+	_log("wall: car at %s, deepest corner inside the building %.3f m" % [str(car.pos), worst])
+	_frame(car.pos + Vector3(6, 4, 7), car.pos + Vector3(0, 0.5, -1), 50)
+	yield(_wait(0.4), "completed")
+	yield(_shot("c1_wall"), "completed")
+	main.cutscene.end()
+	P.exit_vehicle(true)
+	yield(_wait(0.5), "completed")
+	# 2. head-on into a parked car
+	var a = V.spawn("sedan", 30, 3.2, PI / 2, { "color": 0x2a5aa8, "owned": true })
+	var b = V.spawn("suv", 52, 3.2, -PI / 2, { "color": 0xe8e8ea, "owned": true })
+	V.enter(a)
+	yield(_wait(0.4), "completed")
+	Input.action_press("move_f")
+	var overlap = 0.0
+	for _i2 in range(50):
+		yield(_wait(0.05), "completed")
+		var A = V._axes(a)
+		var B = V._axes(b)
+		var r = V._sat(Vector2(a.pos.x, a.pos.z), A[0], A[1], A[2], Vector2(b.pos.x, b.pos.z), B[0], B[1], B[2])
+		if r != null: overlap = max(overlap, r[1])
+	Input.action_release("move_f")
+	_log("head-on: most overlap between the cars %.3f m, parked car moved to %s" % [overlap, str(b.pos)])
+	P.exit_vehicle(true)
+	yield(_wait(0.5), "completed")
+	# 3. a body falling against a car turned 45 degrees
+	var t = V.spawn("sedan", 0, -62, 0.785, { "color": 0x4f8a3a, "owned": true })
+	V.place(t)
+	P.place(6, 0, -56, 0)
+	var ped = main.peds.make(1.7, -61.2)
+	yield(_wait(0.3), "completed")
+	ped.take_hit(300, false, Vector3(-1, 0, -0.3).normalized(), false, false)
+	yield(_wait(3.0), "completed")
+	var inside = 0
+	var gap = INF
+	for q in ped.h.rag.p:
+		var l = W._local(t.box, q.x, q.z)
+		if abs(l.x) < t.box.hw - 0.02 and abs(l.y) < t.box.hl - 0.02 and q.y < t.box.y1 - 0.02: inside += 1
+		gap = min(gap, max(abs(l.x) - t.box.hw, abs(l.y) - t.box.hl))
+	_log("body vs turned car: %d of %d points inside, closest point %.2f m from the car's side" % [inside, ped.h.rag.p.size(), gap])
+	_frame(t.pos + Vector3(5, 3.5, 4), t.pos + Vector3(0.8, 0.4, 0.3), 50)
+	yield(_wait(0.4), "completed")
+	yield(_shot("c2_body_car"), "completed")
+	main.cutscene.end()
+	# 4. a car rolling into a body lying in the road
+	var ped2 = main.peds.make(0, -82)
+	yield(_wait(0.3), "completed")
+	ped2.take_hit(300, false, Vector3(0, 0, -1), false, false)
+	yield(_wait(3.0), "completed")
+	var before = ped2.h.ragdoll_center()
+	var c3 = V.spawn("sedan", 0, -70, PI, { "color": 0xc8a878, "owned": true })
+	V.enter(c3)
+	yield(_wait(0.4), "completed")
+	Input.action_press("move_f")
+	yield(_wait(1.4), "completed")
+	Input.action_release("move_f")
+	yield(_wait(1.0), "completed")
+	_log("body in the road: from %s to %s (moved %.1f m)" % [str(before), str(ped2.h.ragdoll_center()), before.distance_to(ped2.h.ragdoll_center())])
+	P.exit_vehicle(true)
+	yield(_wait(0.5), "completed")
+	# 5. people packed into one spot
+	P.place(-20, 0, -60, 0)
+	var crowd = []
+	for k in range(4):
+		crowd.append(main.peds.make(-20 + k * 0.05, -60 + k * 0.04))
+	yield(_wait(0.6), "completed")
+	var mind = INF
+	var all = crowd + [P]
+	for i in range(all.size()):
+		for j in range(i + 1, all.size()):
+			mind = min(mind, Vector2(all[i].pos.x - all[j].pos.x, all[i].pos.z - all[j].pos.z).length())
+	_log("crowd: closest two people %.2f m apart (bodies are about 0.6 m wide)" % mind)
 	get_tree().quit()
