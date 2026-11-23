@@ -9,13 +9,14 @@ can tint it to the colour picked in Settings (silver, black, burgundy, glacier).
   phone_front.png   shadow, black border and the island (drawn over the screen)
   phone_edge.png    the aluminium edge and buttons, in grey (tinted in the game)
   wallpaper.png     the home screen: glacier blue, violet and a warm street-light glow
-  icon_<app>.png    the 12 app icons (rounded squares with a white glyph)
+  icon_<app>.png    the 13 app icons (rounded squares with a white glyph)
   wardrobe_bg.png   the wardrobe backdrop: a soft spotlight on dark grey
   floor_shadow.png  the soft round shadow under the character in the wardrobe
 
 The geometry (in UI pixels) must match Phone.gd. Everything is painted at 2x.
 Usage: python3 tools/make-ui.py    (needs numpy and Pillow)
 """
+import sys
 import os, math, random
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
@@ -331,7 +332,17 @@ def g_stats(dr, g):
     dr.line([(110, 398), (404, 398)], fill=(255, 255, 255, 140), width=10)
 
 
+def g_music(dr, g):
+    # two beamed eighth notes
+    dr.ellipse((118, 318, 214, 396), fill=WHITE)
+    dr.ellipse((286, 282, 382, 360), fill=WHITE)
+    dr.rectangle((186, 150, 214, 360), fill=WHITE)
+    dr.rectangle((354, 116, 382, 324), fill=WHITE)
+    dr.polygon([(186, 150), (382, 116), (382, 178), (186, 212)], fill=WHITE)
+
+
 ICONS = [
+    ('music', '#ff5a78', '#d0103e', g_music),
     ('map', '#5ac8fa', '#0a6cff', g_map), ('msgs', '#6fe27a', '#22b04a', g_msgs), ('jobs', '#ffbb3c', '#ff7a00', g_jobs),
     ('blok', '#ff5e9c', '#8f3cff', g_blok), ('camera', '#e5e5ea', '#8e8e93', g_camera), ('gang', '#ff6e5e', '#c81e1e', g_gang),
     ('garage', '#3ad8c8', '#0a8f86', g_garage), ('style', '#d6aaff', '#7c43f2', g_wardrobe), ('online', '#7f7cff', '#3330a8', g_online),
@@ -379,10 +390,15 @@ def sign_gunshop():
     save(im, 'sign_gunshop')
 
 
-phone()
-sign_gunshop()
-wallpaper()
+# no arguments: everything; or just the icons named, e.g. make-ui.py music
+ONLY = sys.argv[1:]
+if not ONLY:
+    phone()
+    sign_gunshop()
+    wallpaper()
 for (nm, c1, c2, fn) in ICONS:
-    icon(nm, c1, c2, fn)
-wardrobe()
+    if not ONLY or nm in ONLY:
+        icon(nm, c1, c2, fn)
+if not ONLY:
+    wardrobe()
 print('ui art done')

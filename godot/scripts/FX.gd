@@ -8,6 +8,12 @@ var fires = []
 var steams = []
 var balls = []
 var _near_t = 0.0
+# tires: smoke when they spin or slide, and the black marks they leave on the road
+var smoke = []
+var skid_mm = null
+var skid_i = 0
+var skid_last = [null, null]
+const SKIDS = 900
 
 func setup(m):
 	main = m
@@ -34,6 +40,7 @@ func setup(m):
 		fires.append(_fire())
 	for i in range(2):
 		steams.append(_steam())
+	_tire_setup()
 
 func _particles(amount, life, col, size, add):
 	var p = CPUParticles.new()
@@ -62,11 +69,91 @@ func _steam():
 	var g = Gradient.new(); g.set_color(0, Color(1, 1, 1, 0.35)); g.set_color(1, Color(1, 1, 1, 0)); p.color_ramp = g
 	return p
 
+func _soft_tex():
+	var n = 32
+	var img = Image.new(); img.create(n, n, false, Image.FORMAT_RGBA8)
+	img.lock()
+	for y in range(n):
+		for x in range(n):
+			var d = Vector2(x - n / 2.0 + 0.5, y - n / 2.0 + 0.5).length() / (n / 2.0)
+			var a = clamp(1.0 - d, 0.0, 1.0)
+			img.set_pixel(x, y, Color(1, 1, 1, a * a * (3.0 - 2.0 * a)))
+	img.unlock()
+	var t = ImageTexture.new(); t.create_from_image(img)
+	return t
+
+func _tire_setup():
+	var soft = _soft_tex()
+	for i in range(2):
+		# lit by the sun and the street lights (not glowing), grey enough to read on snow
+		var p = _particles(64, 2.2, Color(0.74, 0.75, 0.78, 0.8), 1.0, false)
+		p.mesh.material.albedo_texture = soft
+		p.mesh.material.flags_unshaded = false
+		p.mesh.material.params_diffuse_mode = SpatialMaterial.DIFFUSE_LAMBERT_WRAP
+		p.emission_shape = CPUParticles.EMISSION_SHAPE_SPHERE; p.emission_sphere_radius = 0.3
+		p.direction = Vector3(0, 1, 0); p.spread = 80; p.gravity = Vector3(0, 0.45, 0)
+		p.initial_velocity = 1.6; p.initial_velocity_random = 0.6; p.damping = 1.1
+		p.scale_amount = 3.0; p.scale_amount_random = 0.45
+		var cv = Curve.new(); cv.add_point(Vector2(0, 0.3)); cv.add_point(Vector2(0.5, 0.85)); cv.add_point(Vector2(1, 1.25)); p.scale_amount_curve = cv
+		var g = Gradient.new(); g.set_color(0, Color(0.9, 0.9, 0.92, 0.85)); g.set_color(1, Color(0.8, 0.8, 0.84, 0.0))
+		g.add_point(0.35, Color(0.86, 0.86, 0.9, 0.6)); p.color_ramp = g
+		p.emitting = false; p.visible = true
+		smoke.append(p)
+	# skid marks: short dark strips on the road, oldest replaced first
+	var st = SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for q in [Vector3(-0.5, 0, -0.5), Vector3(0.5, 0, -0.5), Vector3(0.5, 0, 0.5), Vector3(-0.5, 0, -0.5), Vector3(0.5, 0, 0.5), Vector3(-0.5, 0, 0.5)]:
+		st.add_normal(Vector3.UP); st.add_vertex(q)
+	var mm = MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = st.commit()
+	mm.instance_count = SKIDS
+	for i in range(SKIDS):
+		mm.set_instance_transform(i, Transform(Basis().scaled(Vector3(0.001, 0.001, 0.001)), Vector3(0, -50, 0)))
+	var mat = SpatialMaterial.new(); mat.flags_unshaded = true; mat.flags_transparent = true
+	mat.albedo_color = Color(0.03, 0.03, 0.04, 0.42); mat.params_cull_mode = SpatialMaterial.CULL_DISABLED
+	var mi = MultiMeshInstance.new(); mi.multimesh = mm; mi.material_override = mat
+	mi.cast_shadow = GeometryInstance.SHADOW_CASTING_SETTING_OFF
+	main.add_child(mi)
+	skid_mm = mm
+
+func _skid_strip(a, b, w):
+	var d = b - a
+	var n = Vector3(-d.z, 0, d.x).normalized() * w
+	skid_mm.set_instance_transform(skid_i, Transform(Basis(d, Vector3.UP, n), (a + b) * 0.5))
+	skid_i = (skid_i + 1) % SKIDS
+
+# called every frame for your car: smoke from the rear wheels and marks on the road
+func tires(v, dt):
+	var V = main.vehicles
+	var f = V.fwd(v)
+	var l = V.side(v)
+	var back = -f * (float(v.sp.wbLen) * 0.5)
+	var half = float(v.sp.wid) * 0.5 - 0.24
+	var wheels = [v.pos + back + l * half, v.pos + back - l * half]
+	var s = v.slip
+	for i in range(2):
+		var p = smoke[i]
+		p.translation = wheels[i] + Vector3(0, 0.3, 0)
+		p.emitting = s > 0.28
+		var w = wheels[i] + Vector3(0, 0.028, 0)
+		if s > 0.22:
+			var last = skid_last[i]
+			if last == null or last.distance_to(w) > 3.0:
+				skid_last[i] = w
+			elif last.distance_to(w) > 0.3:
+				_skid_strip(last, w, 0.23)
+				skid_last[i] = w
+		else:
+			skid_last[i] = null
+
 func set_quality(q):
 	snow.amount = 900 if q == "high" else (650 if q == "medium" else 420)
 
 func update(dt):
 	_brass_update(dt)
+	if main.player.car == null:
+		for p in smoke: p.emitting = false
 	var cam = main.camera.global_transform.origin
 	var st = main.story
 	var w = Vector3(st.WIND.dx, 0, st.WIND.dz) * (0.6 + st.WIND.gust * 2.2)

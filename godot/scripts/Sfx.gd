@@ -310,6 +310,7 @@ func flash(at):
 
 # ---------- car radio ----------
 func next_station():
+	if main.music.active(): main.music.stop()     # back to the radio from the Music app
 	var s2 = int(G.S["settings"].get("radio", 1))
 	s2 = (s2 + 1) % STATIONS.size()
 	G.S["settings"]["radio"] = s2
@@ -317,7 +318,8 @@ func next_station():
 	_radio_refresh(true)
 
 func _radio_refresh(announce = false):
-	var want = int(G.S["settings"].get("radio", 1)) if main.player.car else 0
+	# no radio while the phone's Music app is playing
+	var want = int(G.S["settings"].get("radio", 1)) if main.player.car and not main.music.active() else 0
 	if want == radio_st: return
 	radio_st = want
 	if want <= 0:
@@ -389,6 +391,7 @@ func _engine(dt):
 	var inp = main.vehicles._player_input()
 	var sp = abs(v.speed)
 	var thr = clamp(abs(inp.thr), 0, 1)
+	if v.spin > 0.2: thr = max(thr, float(inp.get("gas", 0.0)))    # a burnout: foot down on both pedals
 	var rev = v.speed < -0.3
 	var wheel_rps = sp / (TAU * float(v.sp.get("r", 0.33)))
 	var GEARS = G.D["GEARS"]
@@ -403,6 +406,8 @@ func _engine(dt):
 	if E.gear > old_gear: play("shift", 0.3)
 	var rpm = max(E.idle, wheel_rps * 60 * GEARS[E.gear] * FINAL)
 	if sp < 5 and thr > 0.05: rpm = max(rpm, E.idle + thr * 2300 * (1 - sp / 6.0))
+	# wheelspin and burnouts: the wheels spin far faster than the car moves
+	if v.slip > 0.2 and thr > 0.3: rpm = max(rpm, E.red * (0.55 + 0.3 * v.slip))
 	if E.shift_t > 0:
 		E.shift_t -= dt; rpm *= 0.88
 	if E.start_t > 0:
@@ -449,7 +454,7 @@ func _engine(dt):
 	var lat = abs(v.vel.x * l.x + v.vel.y * l.z)
 	_set_vol(tires.roll, clamp(sp / 22.0, 0, 1) * 0.32, 0.7 + sp / 45.0)
 	_set_vol(tires.slush, clamp(sp / 18.0, 0, 1) * 0.16, 1.0)
-	var skid = clamp((lat - 2.6) / 5.0, 0, 1) + (0.35 if v.brake and sp > 9 else 0.0)
+	var skid = max(clamp((lat - 2.6) / 5.0, 0, 1) + (0.35 if v.brake and sp > 9 else 0.0), v.slip)
 	_set_vol(tires.skid, min(1.0, skid) * 0.3, 0.9 + sp / 80.0)
 	_set_vol(tires.wind, pow(sp / 35.0, 2) * 0.16, 1.2)
 	# overrun crackle on the sporty ones
@@ -571,4 +576,6 @@ func update(dt):
 	_env(dt)
 	if main.player.car == null and radio_st > 0:
 		radio_st = 0; radio.stop()
+	elif main.player.car and radio_st == -1 and not main.music.active():
+		_radio_refresh()
 	radio.volume_db = linear2db(max(0.0001, 0.55 * float(G.S["settings"].get("music", 0.85)) * float(G.S["settings"].get("vol", 0.8)) * (1.0 if main.player.fp_on() else 0.75)))

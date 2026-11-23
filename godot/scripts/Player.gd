@@ -384,7 +384,11 @@ func update_camera(dt):
 	var jit = Vector3(randf() - 0.5, randf() - 0.5, 0) * shake * 0.03
 	if car:
 		if G.REAL_T - last_look > 1.4:
-			cam_yaw += G.ang_diff(cam_yaw, car.yaw + PI) * (1 - exp(-dt * 2.6))
+			# in a slide the camera swings toward where the car is going, not where it points
+			var vy = car.yaw
+			if car.vel.length() > 4.0 and car.speed > 0:
+				vy = car.yaw + G.ang_diff(car.yaw, atan2(car.vel.x, car.vel.y)) * 0.55
+			cam_yaw += G.ang_diff(cam_yaw, vy + PI) * (1 - exp(-dt * 2.6))
 			cam_pitch += (-0.16 - cam_pitch) * (1 - exp(-dt * 2))
 		if fp_on():
 			main.cockpit.update(car, cam, dt)

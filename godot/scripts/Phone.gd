@@ -73,9 +73,9 @@ const RED = Color(1.0, 0.27, 0.23)
 const GREEN = Color(0.19, 0.82, 0.35)
 
 const APPS = [["map", "Maps"], ["msgs", "Messages"], ["jobs", "Jobs"], ["blok", "Blok"], ["camera", "Camera"], ["gang", "Gang"],
-	["garage", "Garage"], ["style", "Wardrobe"], ["online", "Online"], ["settings", "Settings"], ["pad", "Controller"], ["stats", "Stats"]]
-const GRID = ["jobs", "gang", "garage", "style", "online", "stats", "pad", "settings"]
-const DOCK = ["msgs", "map", "camera", "blok"]
+	["garage", "Garage"], ["style", "Wardrobe"], ["online", "Online"], ["settings", "Settings"], ["pad", "Controller"], ["stats", "Stats"], ["music", "Music"]]
+const GRID = ["jobs", "gang", "garage", "style", "online", "stats", "pad", "settings", "camera"]
+const DOCK = ["msgs", "map", "music", "blok"]
 const PHONE_COLS = { "glacier": ["Glacier", Color(0.7, 0.82, 0.93)], "silver": ["Silver", Color(0.95, 0.95, 0.97)],
 	"black": ["Black", Color(0.3, 0.31, 0.33)], "burgundy": ["Burgundy", Color(0.53, 0.15, 0.2)] }
 const PHONE_ORDER = ["glacier", "silver", "black", "burgundy"]
@@ -512,6 +512,7 @@ func update(dt):
 	if app == "map":
 		var m = body.get_node_or_null("BigMap")
 		if m: m.update()
+	if app == "music": _music_live()
 
 func clock12():
 	var m = int(G.world_minutes())
@@ -1355,6 +1356,165 @@ func _import():
 func _exit():
 	close(true); main.exit_to_title()
 
+# ---------- Music ----------
+# the player's controls, drawn: shuffle, previous, play / pause, next, repeat
+class MediaBtn extends Button:
+	var kind = "play"
+	var lit = false
+	var one = false
+	func _ready():
+		for st in ["normal", "hover", "pressed", "disabled"]: add_stylebox_override(st, StyleBoxEmpty.new())
+		var f = StyleBoxFlat.new(); f.draw_center = false; f.border_color = Color(0.04, 0.52, 1.0); f.set_border_width_all(2)
+		f.set_corner_radius_all(int(rect_min_size.x / 2)); f.anti_aliasing = true
+		add_stylebox_override("focus", f)
+	func _tri(c, w, h, dir, col):
+		draw_colored_polygon(PoolVector2Array([c + Vector2(-w * dir, -h), c + Vector2(w * dir, 0), c + Vector2(-w * dir, h)]), col)
+	func _draw():
+		var c = rect_size / 2
+		var col = Color(1, 1, 1)
+		var dim = Color(1, 1, 1, 0.45)
+		var acc = Color(0.04, 0.52, 1.0)
+		if kind == "play" or kind == "pause":
+			draw_circle(c, rect_size.x / 2 - 2, col)
+			if kind == "play": _tri(c + Vector2(2, 0), 8, 10, 1, Color(0.05, 0.05, 0.06))
+			else:
+				draw_rect(Rect2(c + Vector2(-8, -10), Vector2(6, 20)), Color(0.05, 0.05, 0.06))
+				draw_rect(Rect2(c + Vector2(2, -10), Vector2(6, 20)), Color(0.05, 0.05, 0.06))
+		elif kind == "next" or kind == "prev":
+			var d = 1 if kind == "next" else -1
+			_tri(c + Vector2(-4 * d, 0), 7, 9, d, col)
+			draw_rect(Rect2(c + Vector2(6 * d - (2 if d > 0 else 1), -9), Vector2(3, 18)), col)
+		elif kind == "shuffle":
+			var k = acc if lit else dim
+			draw_line(c + Vector2(-10, -6), c + Vector2(10, 6), k, 2.5, true)
+			draw_line(c + Vector2(-10, 6), c + Vector2(10, -6), k, 2.5, true)
+			_tri(c + Vector2(10, 6), 3, 3.5, 1, k); _tri(c + Vector2(10, -6), 3, 3.5, 1, k)
+		elif kind == "repeat":
+			var k = acc if lit else dim
+			draw_arc(c, 9, -PI * 0.15, PI * 1.6, 20, k, 2.5, true)
+			_tri(c + Vector2(8, -5), 3.5, 3.5, 1, k)
+			if one: draw_string(G.ifont(10, "b"), c + Vector2(-3, 4), "1", k)
+
+var mus_title = null
+var mus_artist = null
+var mus_bar = null
+var mus_t0 = null
+var mus_t1 = null
+var mus_btns = {}
+var mus_lock = false
+
+func _app_music():
+	var M = main.music
+	if not M.is_connected("changed", self, "_music_changed"): M.connect("changed", self, "_music_changed")
+	# now playing
+	var card = _card(null, 16)
+	card.add_constant_override("separation", 6)
+	mus_title = Label.new(); mus_title.clip_text = true; mus_title.add_font_override("font", G.ifont(19, "b")); card.add_child(mus_title)
+	mus_artist = Label.new(); mus_artist.clip_text = true; mus_artist.add_font_override("font", G.ifont(14, "r")); mus_artist.add_color_override("font_color", TXT2); card.add_child(mus_artist)
+	mus_bar = HSlider.new(); mus_bar.min_value = 0; mus_bar.max_value = 1; mus_bar.step = 0.1; mus_bar.rect_min_size = Vector2(0, 22)
+	mus_bar.focus_mode = Control.FOCUS_NONE
+	mus_bar.connect("value_changed", self, "_mus_seek")
+	card.add_child(mus_bar)
+	var tr = HBoxContainer.new(); card.add_child(tr)
+	mus_t0 = Label.new(); mus_t0.add_font_override("font", G.ifont(11, "m")); mus_t0.add_color_override("font_color", TXT2); mus_t0.size_flags_horizontal = Control.SIZE_EXPAND_FILL; tr.add_child(mus_t0)
+	mus_t1 = Label.new(); mus_t1.add_font_override("font", G.ifont(11, "m")); mus_t1.add_color_override("font_color", TXT2); tr.add_child(mus_t1)
+	var row = HBoxContainer.new(); row.alignment = BoxContainer.ALIGN_CENTER; row.add_constant_override("separation", 14); card.add_child(row)
+	mus_btns = {}
+	for k in ["shuffle", "prev", "play", "next", "repeat"]:
+		var b = MediaBtn.new(); b.kind = k
+		b.rect_min_size = Vector2(54, 54) if k == "play" else Vector2(40, 40)
+		b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		b.connect("pressed", self, "_mus_btn", [k])
+		row.add_child(b); mus_btns[k] = b
+	_music_live()
+	# Spotify, for your own playlists over the game
+	_sec("Spotify")
+	_action("Open King Von on Spotify", "_mus_spotify", ["King Von"])
+	_action("Open Spotify", "_mus_spotify", [""])
+	_switch("Game music", G.S["settings"].get("gameMusic", true), "_toggle_on", ["gameMusic"])
+	_foot("Spotify opens in its own app and keeps playing while you're in the game. Turn Game music off to hear only Spotify.")
+	# your own songs
+	_sec("My music")
+	var own = M.album("My music")
+	for j in range(own.size()):
+		var t = M.lib[own[j]]
+		_cell(("▶ " if M.cur == t else "") + t.title, t.artist, "_mus_pick", ["My music", j])
+	_foot("%sAdd songs you own: put MP3, OGG or WAV files in\n%s\nName them \"Artist - Title\" to show the artist." % ["" if own.empty() else "", M.folder()])
+	if OS.get_name() != "Android": _action("Open the folder", "_mus_folder")
+	_action("Refresh", "_mus_scan")
+	if M.skipped.size() > 0:
+		var names = []
+		for sk in M.skipped: names.append("%s (%s)" % [sk[0], sk[1]])
+		_foot("Skipped: " + PoolStringArray(names).join(", "), Color(1, 0.62, 0.04))
+	# the game's own music
+	for al in [["Radio", "Radio sets"], ["Beats", "Basement 808 beats"]]:
+		_sec(al[1])
+		var ids = M.album(al[0])
+		for j in range(ids.size()):
+			var t = M.lib[ids[j]]
+			_cell(("▶ " if M.cur == t else "") + t.title, t.artist, "_mus_pick", [al[0], j])
+
+func _fmt_t(t):
+	t = int(max(0, t))
+	return "%d:%02d" % [t / 60, t % 60]
+
+func _music_live():
+	if mus_title == null or not is_instance_valid(mus_title): return
+	var M = main.music
+	var t = M.cur
+	mus_title.text = t.title if t else "Nothing playing"
+	mus_artist.text = (t.artist if t.artist != "" else t.album) if t else "Pick a song below, or press play"
+	mus_lock = true
+	mus_bar.max_value = max(1.0, M.length)
+	mus_bar.value = M.position()
+	mus_lock = false
+	mus_t0.text = _fmt_t(M.position())
+	mus_t1.text = "-" + _fmt_t(M.length - M.position()) if t else "0:00"
+	var pb = mus_btns.get("play")
+	if pb:
+		var k = "pause" if M.playing() else "play"
+		if pb.kind != k:
+			pb.kind = k; pb.update()
+	var sh = mus_btns.get("shuffle")
+	if sh and sh.lit != M.shuffle_on():
+		sh.lit = M.shuffle_on(); sh.update()
+	var rp = mus_btns.get("repeat")
+	if rp:
+		var lit = M.repeat_mode() != "off"
+		var one = M.repeat_mode() == "one"
+		if rp.lit != lit or rp.one != one:
+			rp.lit = lit; rp.one = one; rp.update()
+
+func _music_changed():
+	if panel.visible and app == "music": show_app("music", true)
+
+func _mus_btn(k):
+	var M = main.music
+	if k == "play": M.toggle()
+	elif k == "next": M.next()
+	elif k == "prev": M.prev()
+	elif k == "shuffle": M.set_shuffle(not M.shuffle_on())
+	elif k == "repeat": M.cycle_repeat()
+	_music_live()
+
+func _mus_seek(v):
+	if not mus_lock: main.music.seek(v)
+
+func _mus_pick(al, j):
+	var M = main.music
+	M.play_from(M.album(al), j)
+
+func _mus_spotify(q):
+	if q == "": OS.shell_open("https://open.spotify.com")
+	else: main.music.open_spotify(q)
+
+func _mus_folder():
+	main.music.open_folder()
+
+func _mus_scan():
+	main.music.scan()
+	show_app("music", true)
+
 # ---------- Controller ----------
 func _app_pad():
 	var pads = Input.get_connected_joypads()
@@ -1368,7 +1528,8 @@ func _app_pad():
 	var L = funcref(G, "pad_label")
 	_kv([["Move · look", "Left stick · right stick"], ["Shoot · aim", "%s · %s" % [L.call_func("RT"), L.call_func("LT")]], ["Jump · crouch · reload", "%s · %s · %s" % [L.call_func("A"), L.call_func("B"), L.call_func("X")]],
 		["Car · use · weapon", "%s · %s · %s" % [L.call_func("Y"), L.call_func("RB"), L.call_func("LB")]], ["Sprint · view", "%s · %s" % [L.call_func("LS"), L.call_func("RS")]],
-		["Phone · bandage", "D-pad ↑ · ↓"], ["Emotes · finger", "D-pad ← · →"], ["Pause · map", "%s · %s" % [L.call_func("MENU"), L.call_func("VIEW")]], ["Gas · brake · handbrake", "%s · %s · %s" % [L.call_func("RT"), L.call_func("LT"), L.call_func("A")]]])
+		["Phone · bandage", "D-pad ↑ · ↓"], ["Emotes · finger", "D-pad ← · →"], ["Pause · map", "%s · %s" % [L.call_func("MENU"), L.call_func("VIEW")]], ["Gas · brake · handbrake", "%s · %s · %s" % [L.call_func("RT"), L.call_func("LT"), L.call_func("A")]],
+		["Burnout · donuts", "%s + %s standing still, steer to spin" % [L.call_func("RT"), L.call_func("LT")]]])
 
 func _show_controls():
 	close(true); main.console.controls()

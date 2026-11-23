@@ -46,6 +46,16 @@ class Car:
 	var flip_k = 0.0
 	var box = {}
 	var cab = {}
+	var yr = 0.0          # yaw rate (your car's tire model)
+	var ax = 0.0          # forward acceleration last step (weight transfer)
+	var ay = 0.0
+	var pitch = 0.0       # the body leaning on its springs
+	var roll = 0.0
+	var slip = 0.0        # 0..1: how hard the tires are sliding or spinning (smoke, marks, sound)
+	var spin = 0.0        # burnout
+	var drift = 0.0       # 1 after a handbrake pull, while the tail is out (traction control steps aside)
+	var drift_dir = 0.0   # which way the tail went out
+	var fyr = 0.0         # last step's rear side force (traction control leaves grip for it)
 
 func setup(m):
 	main = m
@@ -228,7 +238,7 @@ func remove(v):
 
 func place(v):
 	v.node.translation = v.pos
-	v.node.rotation = Vector3(0, v.yaw, 0)
+	v.node.rotation = Vector3(v.pitch, v.yaw, v.roll)
 	var c = abs(cos(v.yaw))
 	var s = abs(sin(v.yaw))
 	var W2 = v.sp.wid / 2.0
@@ -332,6 +342,162 @@ func physics(v, dt, inp):
 	v.speed = vF
 	v.pos.x = clamp(v.pos.x + v.vel.x * dt, -W.BOUND, W.BOUND)
 	v.pos.z = clamp(v.pos.z + v.vel.y * dt, -W.BOUND, W.BOUND)
+
+# ---------- your car: tires with slip angles, weight on the springs, and the friction circle ----------
+# Rear-wheel drive. Each axle grips up to a limit set by the weight on it (braking puts weight
+# on the nose, throttle on the tail) and by the road (slush, ice), and the push and the side
+# grip share that limit. So: floor it mid-corner and the tail steps out, the handbrake locks the
+# rears for a drift (counter-steer and feed the throttle to hold it), and gas plus brake at a
+# standstill is a burnout: steer while doing it to spin donuts. Below jogging pace it blends into
+# the simple model, so parking and reversing stay easy.
+func physics_player(v, dt, inp):
+	var sp = v.sp
+	var m = 1450.0 * float(sp.len) / 4.6
+	var L = float(sp.wbLen)
+	var a = L * 0.47                 # nose-heavy, like a front-engined car
+	var b = L - a
+	var h = 0.55
+	var wd = float(sp.wid)
+	var Iz = m * a * b * 1.1                                    # yaw inertia of a real sedan (about m·a·b)
+	var g = 9.8
+	var f = fwd(v)
+	var l = side(v)
+	var vF = v.vel.x * f.x + v.vel.y * f.z
+	var vL = v.vel.x * l.x + v.vel.y * l.z
+	var yr0 = v.yr
+	var dead = v.hp <= 0
+	var gas = 0.0 if dead else float(inp.get("gas", max(0.0, inp.thr)))
+	var brk = float(inp.get("brk", max(0.0, -inp.thr)))
+	var hand = inp.hand and abs(vF) > 0.5
+	var ice = on_ice(v.pos.x, v.pos.z, 0)
+	var mu = (0.24 if ice else 0.95) * float(sp.get("grip", 1.0))
+	var top = float(sp.top)
+	var beta0 = atan2(vL, max(abs(vF), 1.0))
+	# a drift: pull the handbrake at speed, then keep the tail out on the throttle
+	if hand and abs(vF) > 7.0:
+		v.drift = 1.0
+		if abs(beta0) > 0.05: v.drift_dir = sign(beta0)
+	elif v.drift > 0 and abs(beta0) > 0.08 and sign(beta0) != v.drift_dir: v.drift = 0.0     # it snapped the other way: grip back
+	elif abs(beta0) < 0.16 or abs(vF) < 4.0 or (gas < 0.25 and abs(beta0) < 0.3): v.drift = max(0.0, v.drift - dt * 1.5)
+	# the engine: full push off the line, then its power runs out as the speed climbs
+	var v0 = 11.0
+	var pw = 0.75
+	var Fdrive = float(sp.acc) * m * min(1.0, pow(v0 / max(abs(vF), 0.1), pw))
+	var roll_k = 0.16
+	var cd = max(0.0, float(sp.acc) * m * pow(v0 / top, pw) - m * roll_k) / (top * top)
+	# weight on each axle, from last step's acceleration
+	var Nf = m * g * b / L - m * v.ax * h / L
+	var Nr = m * g * a / L + m * v.ax * h / L
+	var Fmax_f = mu * max(Nf, 0.0)
+	var Fmax_r = mu * max(Nr, 0.0) * 1.1                      # wider rear tires: it understeers before it oversteers
+	var Fx_f = 0.0
+	var Fx_r = 0.0
+	var wheelspin = 0.0
+	var abs_on = false
+	var burnout = gas > 0.4 and brk > 0.4 and abs(vF) < 4.0 and not dead
+	if burnout:
+		v.spin = min(1.0, v.spin + dt * 3.0)
+	else:
+		v.spin = max(0.0, v.spin - dt * 2.5)
+		if gas > 0:
+			if vF < -0.6: Fx_f += min(m * g * 0.6 * gas, Fmax_f * 0.9)     # rolling back: gas brakes first
+			else:
+				var want_x = Fdrive * gas
+				# traction control: never more push than the rear tires have left over from cornering,
+				# except launching straight (muscle cars chirp their tires) or in a drift
+				var launch = abs(vF) < 7.0 and abs(inp.steer) < 0.3 and gas > 0.9
+				var cap = Fmax_r
+				if v.drift <= 0.05 and not launch:
+					cap = sqrt(max(0.0, Fmax_r * Fmax_r - v.fyr * v.fyr)) * 0.9
+					want_x = min(want_x, max(cap, Fmax_r * 0.25))
+				if want_x > Fmax_r:
+					wheelspin = clamp((want_x - Fmax_r) / max(Fmax_r, 1.0) * 2.0, 0.0, 1.0)
+					want_x = Fmax_r * 0.92
+				Fx_r = want_x
+		if brk > 0:
+			if vF > 0.8:
+				# ABS: hard braking stops you without locking the wheels, so you can still steer
+				var bf = m * g * 1.0 * brk
+				Fx_f -= min(bf * 0.68, Fmax_f * 0.88)
+				Fx_r -= min(bf * 0.32, Fmax_r * 0.8)
+				abs_on = bf * 0.68 > Fmax_f * 0.88
+			else:
+				Fx_r -= min(float(sp.acc) * m * 0.55 * brk, Fmax_r * 0.9)   # reverse
+	# the front wheels follow the slide when you let them (caster), so a drift is easy to catch
+	var spd = max(abs(vF), 3.0)
+	var max_steer = min(0.62, L * mu * g / (spd * spd) * 1.15 + 0.15)
+	if v.drift > 0.05 or v.spin > 0: max_steer = max(max_steer, 0.45)       # full opposite lock to catch a slide
+	var slide = atan2(vL, spd) if vF > 2.0 else 0.0
+	var want = inp.steer * max_steer
+	if abs(slide) > 0.12:
+		want = clamp(want + slide * 0.85 * (1.0 - abs(inp.steer) * 0.5), -0.7, 0.7)
+	v.steer += (want - v.steer) * min(1, dt * 8)
+	# slip angles and side forces: grip builds to a peak near 7 degrees, then a sliding tire lets go a little
+	var dirs = 1.0 if vF >= 0 else -1.0
+	var af = atan2(vL + a * yr0, spd) - v.steer * dirs
+	var ar = atan2(vL - b * yr0, spd)
+	var lat_f = sqrt(max(0.0, Fmax_f * Fmax_f - Fx_f * Fx_f))
+	var lat_r = sqrt(max(0.0, Fmax_r * Fmax_r - Fx_r * Fx_r))
+	var Fyf = -lat_f * tanh(8.0 * af) * (1.0 - 0.15 * clamp((abs(af) - 0.14) / 0.4, 0.0, 1.0))
+	var Fyr = -lat_r * tanh(9.0 * ar) * (1.0 - (0.08 + 0.12 * v.drift) * clamp((abs(ar) - 0.14) / 0.4, 0.0, 1.0))
+	if v.drift > 0.05:
+		Fyr *= 1.0 - 0.22 * v.drift * clamp((abs(ar) - 0.1) / 0.3, 0.0, 1.0)     # a sliding tire grips less
+	var Fxr_lock = 0.0
+	if hand:
+		# the rear wheels lock: they just slide, against the way they're moving
+		var vr = Vector2(vF, vL - b * yr0)
+		var fr = -vr.normalized() * mu * max(Nr, 0.0) * 0.6
+		Fxr_lock = fr.x; Fyr = fr.y; Fx_r = 0.0
+	v.fyr = Fyr
+	var Fres = -cd * vF * abs(vF) - sign(vF) * m * (roll_k + (0.9 if gas == 0 and brk == 0 else 0.0)) * min(1.0, abs(vF))
+	var cs = cos(v.steer)
+	var sn = sin(v.steer)
+	var Fx = Fx_r + Fxr_lock + Fx_f * cs - Fyf * sn + Fres
+	var Fy = Fyr + Fyf * cs + Fx_f * sn
+	var torque = a * (Fyf * cs + Fx_f * sn) - b * Fyr
+	var yr_dyn = yr0 + torque / Iz * dt
+	yr_dyn -= yr_dyn * 0.4 * dt                               # a little stability, like a real chassis
+	# a light hand on the wheel: past a big slide (and off the handbrake) the spin is reined in
+	var lim = 0.75 if v.drift > 0.05 else 0.4
+	if abs(beta0) > lim and yr_dyn * vL < 0:
+		yr_dyn *= max(0.0, 1.0 - (abs(beta0) - lim) * (3.0 if hand else 7.0) * dt)
+	var vF_new = vF + (Fx / m + vL * yr0) * dt
+	var vL_dyn = vL + (Fy / m - vF * yr0) * dt
+	# slow or reversing: the simple model (rolling wheels, no sliding)
+	var k = 1.0 - clamp((abs(vF) - 2.0) / 3.0, 0.0, 1.0)
+	if vF < -0.5: k = 1.0
+	var yr_kin = vF_new / L * tan(v.steer)
+	var vL_kin = vL - vL * min(1.0, 6.0 * dt)
+	v.yr = lerp(yr_dyn, yr_kin, k)
+	vL = lerp(vL_dyn, vL_kin, k)
+	vF = vF_new
+	if v.spin > 0:
+		# burnout: the fronts hold the car, the rears spin; steer and the tail swings round the nose
+		var turn = inp.steer * 2.4 if burnout else 0.0
+		var yb = yr0 + (turn - yr0) * min(1.0, dt * (2.5 if burnout else 4.0))
+		v.yr = lerp(v.yr, yb, v.spin)
+		if burnout:
+			vF *= max(0.0, 1.0 - 4.0 * dt)
+			vL = -a * v.yr * 0.9
+	vF = clamp(vF, -9.0, top * (0.0 if dead else 1.05))
+	v.ax = lerp(v.ax, Fx / m, min(1.0, dt * 10.0))           # what the springs feel (not the frame turning)
+	v.ay = lerp(v.ay, Fy / m, min(1.0, dt * 10.0))
+	v.yaw += v.yr * dt
+	f = fwd(v); l = side(v)
+	v.vel = Vector2(f.x * vF + l.x * vL, f.z * vF + l.z * vL)
+	v.speed = vF
+	v.brake = brk > 0 and vF > 0.6 or hand
+	v.pos.x = clamp(v.pos.x + v.vel.x * dt, -W.BOUND, W.BOUND)
+	v.pos.z = clamp(v.pos.z + v.vel.y * dt, -W.BOUND, W.BOUND)
+	# how much the tires are sliding: smoke, marks and the screech
+	var side_slide = clamp((abs(ar) - 0.12) / 0.35, 0.0, 1.0) * clamp(abs(vF) / 6.0, 0.0, 1.0)
+	var lock = (0.6 if hand and abs(vF) > 3.0 else 0.0) + (0.3 if abs_on and vF > 12.0 else 0.0)
+	v.slip = clamp(max(max(side_slide, wheelspin * 0.9), max(v.spin, lock)), 0.0, 1.0)
+	# the body on its springs: nose dips under braking, squats under power, leans out of turns
+	var tp = clamp(v.ax * 0.007, -0.07, 0.07)
+	var tr = clamp(-v.ay * 0.009, -0.075, 0.075)
+	v.pitch += (tp - v.pitch) * min(1.0, dt * 7.0)
+	v.roll += (tr - v.roll) * min(1.0, dt * 7.0)
 
 # separating axes between two rectangles on the ground: [normal from b to a, depth] or null
 func _sat(ac, aax, aaz, ah, bc, bax, baz, bh):
@@ -638,9 +804,13 @@ func update(dt):
 			continue
 		# fast cars move in short steps so they can't pass through a wall or another car
 		var n = int(clamp(ceil(v.vel.length() * dt / 0.45), 1, 4))
+		if v.driver == "player": n = int(max(n, ceil(dt / 0.0125)))
 		for _k in range(n):
-			physics(v, dt / n, inp)
+			if v.driver == "player": physics_player(v, dt / n, inp)
+			else: physics(v, dt / n, inp)
 			collide(v)
+		if v.driver == "player": main.fx.tires(v, dt)
+		elif v.slip > 0: v.slip = 0.0
 		hit_people(v)
 		place(v)
 	# headlight for your car after dark
@@ -659,7 +829,8 @@ var trailer_drive = false   # trailer shots: keep driving while a cutscene camer
 
 func _player_input():
 	if G.MODE != "play" and not trailer_drive:
-		return { "thr": 0.0, "steer": 0.0, "hand": false }
-	var thr = Input.get_action_strength("move_f") - Input.get_action_strength("move_b") + Input.get_action_strength("fire") - Input.get_action_strength("aim")
+		return { "thr": 0.0, "gas": 0.0, "brk": 0.0, "steer": 0.0, "hand": false }
+	var gas = Input.get_action_strength("move_f") + Input.get_action_strength("fire")
+	var brk = Input.get_action_strength("move_b") + Input.get_action_strength("aim")
 	var steer = Input.get_action_strength("move_l") - Input.get_action_strength("move_r")
-	return { "thr": clamp(thr, -1, 1), "steer": clamp(steer, -1, 1), "hand": Input.is_action_pressed("jump") }
+	return { "thr": clamp(gas - brk, -1, 1), "gas": clamp(gas, 0, 1), "brk": clamp(brk, 0, 1), "steer": clamp(steer, -1, 1), "hand": Input.is_action_pressed("jump") }

@@ -25,6 +25,8 @@ func run(m):
 	elif OS.get_environment("DS_CONSOLETEST") != "": call_deferred("_console_test")
 	elif OS.get_environment("DS_PROMOTEST") != "": call_deferred("_promo_test")
 	elif OS.get_environment("DS_TRAILER") != "": call_deferred("_trailer")
+	elif OS.get_environment("DS_MUSICTEST") != "": call_deferred("_music_test")
+	elif OS.get_environment("DS_DRIVETEST") != "": call_deferred("_drive_test")
 	else: call_deferred("_go")
 
 func _wait(s):
@@ -1311,6 +1313,61 @@ func _promo_test():
 	_log("promo %s: train %s at z %.1f, viewport %s" % [mode, T.state, T.z, str(get_viewport().size)])
 	get_tree().quit()
 
+# the Music app (run with tone files in the music folder): the library, playing your own MP3,
+# OGG and WAV files, next / previous / pause / seek / shuffle / repeat, and the car radio
+# stepping aside while it plays
+func _music_test():
+	yield(_wait(1.0), "completed")
+	main.title._close(); main.start_game(G.new_state("musictest"))
+	yield(_wait(1.5), "completed")
+	var M = main.music
+	M.scan()
+	var own = M.album("My music")
+	_log("music folder %s · own %d · radio %d · beats %d · skipped %s" % [M.folder(), own.size(), M.album("Radio").size(), M.album("Beats").size(), str(M.skipped)])
+	for i in own: _log("  own: %s / %s" % [M.lib[i].title, M.lib[i].artist])
+	main.phone.open("music")
+	yield(_wait(0.9), "completed")
+	yield(_shot("m1_music_app"), "completed")
+	M.play_from(own, 0)
+	yield(_wait(1.5), "completed")
+	_log("playing %s · %s, %.1f s long, at %.1f s, playing %s" % [M.cur.title, M.cur.artist, M.length, M.position(), str(M.playing())])
+	yield(_shot("m2_now_playing"), "completed")
+	for k in range(own.size()):
+		M.next()
+		yield(_wait(0.4), "completed")
+		_log("next -> %s (%.1f s)" % [M.cur.title if M.cur else "none", M.length])
+	M.prev()
+	yield(_wait(0.3), "completed")
+	_log("prev -> %s" % M.cur.title)
+	M.seek(2.0)
+	yield(_wait(0.3), "completed")
+	_log("seek 2.0 -> at %.1f" % M.position())
+	M.toggle()
+	yield(_wait(0.3), "completed")
+	var p0 = M.position()
+	yield(_wait(0.6), "completed")
+	_log("paused: playing %s, position held %s" % [str(M.playing()), str(abs(M.position() - p0) < 0.05)])
+	M.toggle()
+	M.set_shuffle(true); M.cycle_repeat()
+	_log("shuffle %s repeat %s" % [str(M.shuffle_on()), M.repeat_mode()])
+	M.set_shuffle(false); M.cycle_repeat(); M.cycle_repeat()
+	# the game's music: a beat
+	M.play_from(M.album("Beats"), 2)
+	yield(_wait(0.6), "completed")
+	_log("beat: %s · %s, %.1f s" % [M.cur.title, M.cur.artist, M.length])
+	main.phone.close(true)
+	# in a car: the radio stays off while the app plays, and comes back after
+	var P = main.player
+	var v = main.vehicles.spawn("sedan", P.pos.x + 2.4, P.pos.z, 0, { "owned": true })
+	main.vehicles.enter(v)
+	yield(_wait(1.0), "completed")
+	_log("in car with music on: radio playing %s, music playing %s" % [str(main.sfx.radio.playing), str(M.playing())])
+	yield(_shot("m3_car_music"), "completed")
+	M.stop()
+	yield(_wait(1.0), "completed")
+	_log("music stopped: radio playing %s (station %d)" % [str(main.sfx.radio.playing), main.sfx.radio_st])
+	get_tree().quit()
+
 # trailer shots, frame by frame (Trailer.gd)
 func _trailer():
 	var t = load("res://scripts/Trailer.gd").new()
@@ -1431,4 +1488,166 @@ func _gun_test():
 	yield(_shot("g_cars_back"), "completed")
 	main.cutscene.end()
 	_log("cars: %s %s" % [str(a != null), str(b != null)])
+	get_tree().quit()
+
+# ---------------------------------------------------------------- driving physics (DS_DRIVETEST)
+# steps the player-car model by hand with scripted pedals and steering, on open dry road, and
+# logs what a driver would feel: launch times, top speed, braking distance, how far the tail
+# swings in corners, drifts and burnouts. Then drives for real for screenshots of smoke and marks.
+var _dv = null
+func _dstep(V, inp, secs, log_every = 0.0, tag = ""):
+	var dt = 1.0 / 60.0
+	var n = int(round(secs / dt))
+	var out = { "beta": 0.0, "yr": 0.0, "slip": 0.0, "dist": 0.0, "spun": false }
+	var t = 0.0
+	for i in range(n):
+		_dv.pos.x = 0.0; _dv.pos.z = 0.0
+		V.physics_player(_dv, dt, inp)
+		out.dist += _dv.vel.length() * dt
+		var f = V.fwd(_dv)
+		var vF = _dv.vel.x * f.x + _dv.vel.y * f.z
+		var b = atan2(_dv.vel.x * V.side(_dv).x + _dv.vel.y * V.side(_dv).z, abs(vF)) if _dv.vel.length() > 2 else 0.0
+		out.beta = max(out.beta, abs(b)); out.yr = max(out.yr, abs(_dv.yr)); out.slip = max(out.slip, _dv.slip)
+		if abs(b) > 1.2: out.spun = true
+		t += dt
+		if log_every > 0 and fmod(i, int(log_every * 60)) == 0:
+			_log("  %s t=%.2f v=%.1f beta=%.2f yr=%.2f slip=%.2f steer=%.2f ax=%.1f ay=%.1f" % [tag, t, _dv.speed, b, _dv.yr, _dv.slip, _dv.steer, _dv.ax, _dv.ay])
+	return out
+
+func _dreset(speed = 0.0):
+	_dv.vel = Vector2(sin(_dv.yaw), cos(_dv.yaw)) * speed
+	_dv.speed = speed; _dv.yr = 0.0; _dv.ax = 0.0; _dv.ay = 0.0; _dv.steer = 0.0; _dv.spin = 0.0; _dv.slip = 0.0
+
+func _drive_test():
+	yield(_wait(1.0), "completed")
+	main.title._close(); main.start_game(G.new_state("drivetest"))
+	yield(_wait(1.5), "completed")
+	G.time_offset += (13 * 60 - G.world_minutes())
+	var V = main.vehicles
+	var I = { "thr": 0.0, "gas": 0.0, "brk": 0.0, "steer": 0.0, "hand": false }
+	for model in ["hatch", "sedan", "coupe", "boulder", "van"]:
+		_dv = V.spawn(model, 0, -40, 0.0, { "color": 0x8a1c24, "owned": true })
+		_dv.driver = "remote"           # the test drives it, not the game loop
+		_log("== %s (acc %.1f, top %d)" % [model, float(_dv.sp.acc), int(_dv.sp.top)])
+		# launch
+		_dreset()
+		var gas = I.duplicate(); gas.gas = 1.0; gas.thr = 1.0
+		var t100 = -1.0
+		var tt = 0.0
+		var sl = 0.0
+		for _i in range(60 * 25):
+			_dstep(V, gas, 1.0 / 60.0)
+			tt += 1.0 / 60.0
+			sl = max(sl, _dv.slip) if tt < 3 else sl
+			if t100 < 0 and _dv.speed >= 27.8: t100 = tt
+		_log("launch: 0-100 %.1f s, top after 25 s %.1f m/s (spec %d), launch slip %.2f" % [t100, _dv.speed, int(_dv.sp.top), sl])
+		# brake from 30 m/s (or top)
+		var v0 = min(30.0, float(_dv.sp.top) - 1)
+		_dreset(v0)
+		var brk = I.duplicate(); brk.brk = 1.0; brk.thr = -1.0
+		var d = 0.0
+		for _i in range(600):
+			if _dv.speed < 0.3: break
+			var r = _dstep(V, brk, 1.0 / 60.0); d += r.dist
+		_log("brake %.0f->0: %.1f m" % [v0, d])
+		# full lock with the throttle held, at 12, 20, 30 m/s
+		for sp0 in [12.0, 20.0, 30.0]:
+			if sp0 > float(_dv.sp.top): continue
+			_dreset(sp0)
+			var turn = I.duplicate(); turn.gas = 0.6; turn.thr = 0.6; turn.steer = 1.0
+			var r = _dstep(V, turn, 4.0, 0.4 if model == "sedan" and sp0 == 20.0 else 0.0, "lock20")
+			_log("full lock + gas @%d: max beta %.2f, max yaw %.2f, slip %.2f, spun %s, end v %.1f" % [int(sp0), r.beta, r.yr, r.slip, str(r.spun), _dv.speed])
+			_dreset(sp0)
+			var turn2 = I.duplicate(); turn2.gas = 1.0; turn2.thr = 1.0; turn2.steer = 0.5
+			r = _dstep(V, turn2, 4.0)
+			_log("half lock + full gas @%d: max beta %.2f, max yaw %.2f, slip %.2f, spun %s, end v %.1f" % [int(sp0), r.beta, r.yr, r.slip, str(r.spun), _dv.speed])
+		# lane change at 25
+		_dreset(min(25.0, float(_dv.sp.top) - 2))
+		var lc = I.duplicate(); lc.gas = 0.5; lc.thr = 0.5; lc.steer = 1.0
+		var r1 = _dstep(V, lc, 0.45)
+		lc.steer = -1.0
+		var r2 = _dstep(V, lc, 0.9)
+		lc.steer = 0.0
+		var r3 = _dstep(V, lc, 2.0)
+		_log("lane change: beta %.2f/%.2f/%.2f spun %s, yaw rate left %.2f" % [r1.beta, r2.beta, r3.beta, str(r1.spun or r2.spun or r3.spun), _dv.yr])
+		# handbrake drift at 20: pull it, then counter-steer on the gas
+		_dreset(20.0)
+		var hb = I.duplicate(); hb.steer = 1.0; hb.hand = true; hb.gas = 0.0
+		var h1 = _dstep(V, hb, 0.6, 0.2 if model == "sedan" else 0.0, "hb")
+		hb.hand = false; hb.steer = -0.4; hb.gas = 0.7; hb.thr = 0.7
+		var h2 = _dstep(V, hb, 1.5, 0.25 if model == "sedan" else 0.0, "cs")
+		hb.steer = 0.0
+		var h3 = _dstep(V, hb, 2.0, 0.5 if model == "sedan" else 0.0, "out")
+		_log("handbrake drift: beta %.2f -> %.2f -> %.2f, slip %.2f, spun %s, end v %.1f" % [h1.beta, h2.beta, h3.beta, max(h1.slip, h2.slip), str(h1.spun or h2.spun), _dv.speed])
+		# burnout, then donuts
+		_dreset()
+		var bo = I.duplicate(); bo.gas = 1.0; bo.brk = 1.0; bo.thr = 0.0
+		var b1 = _dstep(V, bo, 2.0)
+		_log("burnout: v %.2f dist %.2f slip %.2f spin %.2f" % [_dv.speed, b1.dist, b1.slip, _dv.spin])
+		bo.steer = 1.0
+		var p0 = Vector2()
+		var pts = []
+		var yaw0 = _dv.yaw
+		for _i in range(240):
+			_dstep(V, bo, 1.0 / 60.0)
+			p0 += _dv.vel / 60.0
+			pts.append(p0)
+		var c = Vector2()
+		for q in pts: c += q
+		c /= pts.size()
+		var rad = 0.0
+		for q in pts: rad += q.distance_to(c)
+		_log("donut: yaw rate %.2f, turned %.0f deg in 4 s, path radius %.1f m, v %.2f" % [_dv.yr, rad2deg(_dv.yaw - yaw0), rad / pts.size(), _dv.speed])
+		# reverse
+		_dreset()
+		var rv = I.duplicate(); rv.brk = 1.0; rv.thr = -1.0
+		_dstep(V, rv, 3.0)
+		_log("reverse after 3 s: %.1f m/s" % _dv.speed)
+		V.remove(_dv)
+	if OS.get_environment("DS_DRIVETEST") == "num":
+		get_tree().quit(); return
+	# for real: burnout, donuts, then a handbrake drift, with the game's own camera
+	var P = main.player
+	var car = V.spawn("bruiser", -95, 60, 0.0, { "color": 0x8a1c24, "owned": true })
+	V.enter(car)
+	yield(_wait(0.8), "completed")
+	Input.action_press("move_f"); Input.action_press("move_b")
+	yield(_wait(1.6), "completed")
+	yield(_shot("d_burnout"), "completed")
+	_log("burnout: speed %.2f slip %.2f spin %.2f rpm %d smoke %s" % [car.speed, car.slip, car.spin, int(main.sfx.engine_state().rpm), str(main.fx.smoke[0].emitting)])
+	Input.action_press("move_l")
+	yield(_wait(2.6), "completed")
+	yield(_shot("d_donut"), "completed")
+	_log("donut: yaw rate %.2f pos %s" % [car.yr, str(Vector2(car.pos.x, car.pos.z))])
+	Input.action_release("move_b"); Input.action_release("move_f"); Input.action_release("move_l")
+	yield(_wait(1.0), "completed")
+	_frame(Vector3(-95 + 7, 9, 60 + 7), Vector3(-95, 0, 60), 55)
+	yield(_wait(0.3), "completed")
+	yield(_shot("d_marks"), "completed")
+	main.cutscene.end()
+	# down the avenue, then a handbrake drift
+	V.remove(car)
+	car = V.spawn("bruiser", -95, -60, 0.0, { "color": 0x262b33, "owned": true })
+	V.enter(car)
+	yield(_wait(0.5), "completed")
+	Input.action_press("move_f")
+	var t0 = 0.0
+	while car.speed < 19.0 and t0 < 8.0:
+		yield(get_tree(), "idle_frame"); t0 += get_process_delta_time()
+	_log("to 19 m/s in %.1f s, at z %.1f" % [t0, car.pos.z])
+	Input.action_press("move_l"); Input.action_press("jump")
+	yield(_wait(0.45), "completed")
+	Input.action_release("jump"); Input.action_release("move_l"); Input.action_press("move_r")
+	yield(_wait(0.35), "completed")
+	yield(_shot("d_drift"), "completed")
+	_log("drift: speed %.1f slip %.2f drift %.2f yr %.2f" % [car.speed, car.slip, car.drift, car.yr])
+	Input.action_release("move_r")
+	yield(_wait(1.2), "completed")
+	Input.action_release("move_f")
+	_log("after: speed %.1f slip %.2f" % [car.speed, car.slip])
+	yield(_wait(0.5), "completed")
+	_frame(car.pos + Vector3(8, 10, -6), car.pos + Vector3(0, 0, -8), 60)
+	yield(_wait(0.3), "completed")
+	yield(_shot("d_drift_marks"), "completed")
+	main.cutscene.end()
 	get_tree().quit()
