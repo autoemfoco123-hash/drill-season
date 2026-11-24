@@ -3,7 +3,6 @@
 game (Trailer.gd e_finale with DS_KEYCAM / DS_FACEOFF / DS_NOMUG, see README.md):
   key_right.png   3840x2160  the crew right of centre under the L, a wreck burning, room for the logo
   key_center.png  3840x2160  the crew in the middle
-  key_tall.png    1800x2700  portrait
   key_faceoff.png 3840x2160  your crew and Halo facing off across Calder Ave
 Each is graded like the trailer (split tone, bloom, vignette), with embers and snow, then cut
 to every size Steam asks for. Usage: compose_epic.py <keyart dir> <out dir> [trailer stills dir]"""
@@ -127,25 +126,23 @@ def key(name, fire, exp=1.08, bottom=0.45, seed=1):
 
 R = key('key_right', (0.38, 0.62), 1.1, 0.5, 1)
 C = key('key_center', (0.3, 0.62), 1.1, 0.5, 2)
-T = key('key_tall', (0.42, 0.7), 1.1, 0.45, 3)
-F = key('key_faceoff', None, 1.05, 0.6, 4)
 
 # ---------------------------------------------------------------- store capsules
 m = cover(R, 1232, 706, 0.5, 0.52); m = shade(m, 'left', 0.55, 0.6)
 save(put(m, logo(560), 330, 230), 'main_capsule_1232x706.png')
 
-hd = cover(R, 920, 430, 0.5, 0.56); hd = shade(hd, 'left', 0.6, 0.6)
-save(put(hd, logo(400), 235, 205), 'header_capsule_920x430.png')
-save(put(hd, logo(400), 235, 205), 'library_header_920x430.png')
+hd = cover(R, 920, 430, 0.33, 0.56); hd = shade(hd, 'left', 0.62, 0.62)
+save(put(hd, logo(370), 215, 200), 'header_capsule_920x430.png')
+save(put(hd, logo(370), 215, 200), 'library_header_920x430.png')
 
-sm = cover(R, 462, 174, 0.62, 0.56); sm = shade(sm, 'left', 0.7, 0.7)
-save(put(sm, logo(265, glow=False), 150, 88), 'small_capsule_462x174.png')
+sm = cover(R, 462, 174, 0.5, 0.56); sm = shade(sm, 'left', 0.75, 0.75)
+save(put(sm, logo(250, glow=False), 140, 88), 'small_capsule_462x174.png')
 
-vc = cover(T, 748, 896, 0.5, 0.55); vc = shade(vc, 'top', 0.55, 0.45)
-save(put(vc, logo(600), 374, 190), 'vertical_capsule_748x896.png')
+vc = cover(C, 748, 896, 0.51, 0.5); vc = shade(vc, 'top', 0.5, 0.42)
+save(put(vc, logo(620), 374, 200), 'vertical_capsule_748x896.png')
 
-lc = cover(T, 600, 900, 0.5, 0.55); lc = shade(lc, 'top', 0.55, 0.45)
-save(put(lc, logo(500), 300, 175), 'library_capsule_600x900.png')
+lc = cover(C, 600, 900, 0.51, 0.5); lc = shade(lc, 'top', 0.5, 0.42)
+save(put(lc, logo(520), 300, 190), 'library_capsule_600x900.png')
 
 # library hero: no logo, no text (Steam puts the library logo over it, bottom left)
 save(cover(R, 3840, 1240, 0.5, 0.6), 'library_hero_3840x1240.png')
@@ -157,14 +154,14 @@ pb = ImageEnhance.Color(ImageEnhance.Brightness(pb.filter(ImageFilter.GaussianBl
 save(shade(pb, 'bottom', 0.75, 0.5), 'page_background_1438x810.png')
 
 # ---------------------------------------------------------------- the update post (events) and the trailer thumbnail
-eh = cover(F, 1920, 622, 0.5, 0.56); eh = shade(eh, 'bottom', 0.4, 0.5)
-eh = put(eh, logo(470), 300, 300)
-eh = eh.convert('RGBA'); eh.alpha_composite(text(1920, 622, t='THE TURF WARS UPDATE', f='anton', size=86, sp=8, x='right', y=0.46, pad=90, rule=420, s='TAKE CORNERS · HOLD THEM · RUN THE CITY', ssize=30, ssp=8))
+eh = cover(R, 1920, 622, 0.3, 0.6); eh = shade(eh, 'left', 0.7, 0.62)
+eh = put(eh, logo(420), 330, 215)
+eh = eh.convert('RGBA'); eh.alpha_composite(text(1920, 622, t='THE TURF WARS UPDATE', f='anton', size=62, sp=6, x='left', y=0.78, pad=110, rule=360, s='TAKE CORNERS · HOLD THEM · RUN THE CITY', ssize=24, ssp=7))
 save(eh, 'event_header_1920x622.png')
 
-ec = cover(F, 800, 450, 0.5, 0.55); ec = shade(ec, 'bottom', 0.7, 0.6)
-ec = put(ec, logo(300), 400, 130)
-ec = ec.convert('RGBA'); ec.alpha_composite(text(800, 450, t='THE TURF WARS UPDATE', f='anton', size=54, sp=5, x='center', y=0.74, rule=240))
+ec = cover(R, 800, 450, 0.42, 0.55); ec = shade(ec, 'left', 0.7, 0.65)
+ec = put(ec, logo(290), 190, 120)
+ec = ec.convert('RGBA'); ec.alpha_composite(text(800, 450, t='THE TURF WARS UPDATE', f='anton', size=40, sp=4, x='left', y=0.76, pad=36, rule=200))
 save(ec, 'event_cover_800x450.png')
 
 th = cover(R, 1920, 1080, 0.5, 0.52); th = shade(th, 'left', 0.55, 0.6)
@@ -174,7 +171,6 @@ save(th, 'trailer_thumbnail_1920x1080.png')
 
 # the key art on its own, for social posts and the store's "about" section
 save(cover(R, 1920, 1080), 'keyart_crew_1920x1080.png')
-save(cover(F, 1920, 1080), 'keyart_faceoff_1920x1080.png')
 save(put(cover(C, 3840, 2160).convert('RGB'), logo(1500), 1920, 520), 'keyart_logo_3840x2160.png')
 
 # ---------------------------------------------------------------- screenshots, from the trailer's graded frames (no titles)
