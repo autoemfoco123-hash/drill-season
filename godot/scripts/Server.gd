@@ -21,8 +21,13 @@ extends Node
 # address). On a VPS the address is the machine's own; behind a router that won't do UPnP,
 # forward the UDP port and pass --addr. Players who come in through the relay and players
 # who connect directly see each other: the server passes their messages across.
+#
+# Turf: the server keeps this server's turf map (which gang or crew holds each block, see
+# Turf.gd), sends it to everyone who joins and every 30 seconds, and saves it to
+# turf_<id>.json in the user folder, so taken blocks stay taken across restarts.
 
 const Net = preload("res://scripts/Net.gd")
+const Turf = preload("res://scripts/Turf.gd")
 
 var links = []
 var sid = ""
@@ -47,6 +52,8 @@ var pub_addr = ""
 var lan_addr = ""
 var upnp = null
 var upnp_thread = null
+var turf = []               # who holds which block (Turf.gd), saved next to the log
+var turf_t = 10.0
 
 func _ready():
 	Engine.target_fps = 20
@@ -55,6 +62,7 @@ func _ready():
 	_open_log()
 	sid = cfg.id
 	room = ("d" + sid).substr(0, 20)
+	_turf_load()
 	if OS.get_name() != "Server":
 		# a plain window on desktops: the status and the log
 		var bg = ColorRect.new(); bg.color = Color(0.05, 0.06, 0.08); bg.anchor_right = 1; bg.anchor_bottom = 1; add_child(bg)
@@ -185,6 +193,8 @@ remote func msg(kind, d):
 		return
 	elif kind == "ev" and str(d.get("t", "")) == "chat":
 		_log("@%s: %s" % [p.name, Net.clean_text(d.get("m", ""), 120)])
+	elif kind == "ev" and str(d.get("t", "")) == "turf":
+		_turf_in(d, p.name)
 	if p.ok and kind in ["hi", "st", "ev"]:
 		# across to the players on the relay
 		var out = d.duplicate()
@@ -207,7 +217,7 @@ func _admit_direct(id, d):
 		return
 	enet[id].ok = true; enet[id].name = nm
 	_log("@%s joined (direct)" % nm)
-	rpc_id(id, "msg", "ev", { "t": "welcome", "name": cfg.name, "motd": cfg.motd, "pvp": cfg.pvp, "max": cfg.max, "to": "e%d" % id, "q": _q() })
+	rpc_id(id, "msg", "ev", { "t": "welcome", "name": cfg.name, "motd": cfg.motd, "pvp": cfg.pvp, "max": cfg.max, "tf": turf, "to": "e%d" % id, "q": _q() })
 	announce_t = min(announce_t, 1.0)
 
 func _q():
@@ -271,6 +281,13 @@ func _process(dt):
 	announce_t -= dt
 	if online and announce_t <= 0:
 		announce_t = 10.0; _announce()
+	turf_t -= dt
+	if turf_t <= 0:
+		turf_t = 30.0
+		if online: _send("ev", { "t": "turfmap", "m": turf })
+		if peer:
+			for id in enet.keys():
+				if enet[id].ok: rpc_id(id, "msg", "ev", { "t": "turfmap", "m": turf, "q": _q() })
 	for id in drop_at.keys():
 		if G.REAL_T > drop_at[id]:
 			drop_at.erase(id)
@@ -330,6 +347,8 @@ func _relay_in(topic, payload):
 		if players.has(from): players[from].seen = G.REAL_T
 	elif kind == "ev" and str(d.get("t", "")) == "chat" and players.has(from):
 		_log("@%s: %s" % [players[from].name, Net.clean_text(d.get("m", ""), 120)])
+	elif kind == "ev" and str(d.get("t", "")) == "turf" and players.has(from):
+		_turf_in(d, players[from].name)
 	if players.has(from): _to_direct(kind, d, from)
 
 # across to the players connected directly (who see relay players as "r" + their id)
@@ -356,8 +375,38 @@ func _admit(from, p):
 	rejected.erase(from)
 	players[from] = { "name": nm, "seen": G.REAL_T }
 	_log("@%s joined" % nm)
-	_send("ev", { "t": "welcome", "name": cfg.name, "motd": cfg.motd, "pvp": cfg.pvp, "max": cfg.max }, from)
+	_send("ev", { "t": "welcome", "name": cfg.name, "motd": cfg.motd, "pvp": cfg.pvp, "max": cfg.max, "tf": turf }, from)
 	announce_t = min(announce_t, 1.0)
+
+# ---------- turf: the server keeps the map and saves it, so blocks stay taken across restarts
+func _turf_path():
+	return "user://turf_%s.json" % sid
+
+func _turf_load():
+	var f = File.new()
+	if f.open(_turf_path(), File.READ) == OK:
+		var m = Turf.clean_map(parse_json(f.get_as_text()))
+		f.close()
+		if m != null:
+			turf = m
+			return
+	turf = Turf.default_map()
+
+func _turf_save():
+	var f = File.new()
+	if f.open(_turf_path(), File.WRITE) == OK:
+		f.store_string(JSON.print(turf)); f.close()
+
+func _turf_in(d, who):
+	var bv = d.get("b")
+	if not typeof(bv) in [TYPE_INT, TYPE_REAL]: return
+	var b = int(bv)
+	if b < 0 or b >= Turf.N or b == Turf.COPS: return
+	var o = Turf.clean_owner(d.get("o"))
+	if o == null or Turf.same(turf[b], o): return
+	turf[b] = o
+	_turf_save()
+	_log("@%s: block %d now %s" % [who, b, ("[%s] %s" % [o[2], o[1]]) if typeof(o) == TYPE_ARRAY else (o if o != "" else "nobody")])
 
 func _open_log():
 	var f = File.new()

@@ -463,6 +463,7 @@ func _update_economy(dt):
 	var m = G.world_minutes()
 	if last_min >= 0 and last_min < 360 and m >= 360:
 		G.S["day"] = int(G.S.get("day", 1)) + 1; main.hud.banner("Day " + str(G.S["day"]), "Sun is coming up over the lake")
+		if main.turf: main.turf.payday()
 	if last_min >= 0 and last_min < 990 and m >= 990: main.hud.banner("Sundown", "The Hawk gets colder at night")
 	last_min = m
 

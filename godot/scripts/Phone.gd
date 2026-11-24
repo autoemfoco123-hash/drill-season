@@ -182,6 +182,23 @@ class BigMap extends Control:
 		var k = min(s.x, s.y) / (H * 2.15)
 		var o = s / 2
 		draw_rect(Rect2(o + Vector2(G.D["LAKE_X"], -H) * k, Vector2(H - G.D["LAKE_X"], H * 2) * k), Color(0.2, 0.42, 0.62, 0.55))
+		# turf: the blocks in their owners' colours, a dot on each corner
+		var T = main.turf
+		if T and not T.rings.empty():
+			var tm = T.cur()
+			for b in range(T.N):
+				var ow = tm[b]
+				var r = T.rect(b)
+				var oc = T.o_col(ow)
+				var nobody = typeof(ow) == TYPE_STRING and ow == ""
+				draw_rect(Rect2(o + Vector2(r[0] + 7, r[1] + 7) * k, Vector2(r[2] - r[0] - 14, r[3] - r[1] - 14) * k), Color(oc.r, oc.g, oc.b, 0.04 if nobody else (0.3 if T.is_mine(ow) else 0.18)))
+				if T.is_mine(ow):
+					draw_rect(Rect2(o + Vector2(r[0] + 7, r[1] + 7) * k, Vector2(r[2] - r[0] - 14, r[3] - r[1] - 14) * k), Color(oc.r, oc.g, oc.b, 0.9), false, 1.5)
+				var tg = T.o_tag(ow)
+				if tg != "":
+					var tf = G.ifont(10, "b")
+					var mid = o + Vector2((r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0) * k
+					draw_string(tf, mid - Vector2(tf.get_string_size(tg).x / 2, -14), tg, Color(oc.r, oc.g, oc.b, 0.85))
 		for x in G.D["XL"]: draw_line(o + Vector2(x, -H) * k, o + Vector2(x, H) * k, Color(0.3, 0.31, 0.34), 3)
 		for z in G.D["ZL"]: draw_line(o + Vector2(-H, z) * k, o + Vector2(G.D["ROAD_X_END"], z) * k, Color(0.3, 0.31, 0.34), 3)
 		var f = G.ifont(11, "m")
@@ -207,6 +224,11 @@ class BigMap extends Control:
 		draw_circle(pp, 3.6, Color(0.04, 0.52, 1.0))
 		for cp in main.police.COPS:
 			draw_circle(o + Vector2(cp.pos.x, cp.pos.z) * k, 3, Color(1, 0.27, 0.23))
+		if T and T.raid != null:
+			var rc = T.corners[T.raid.b]
+			var rp = o + Vector2(rc.x, rc.z) * k
+			draw_circle(rp, 7 + 3 * (0.5 + 0.5 * sin(G.REAL_T * 6.0)), Color(1, 1, 1, 0.9))
+			draw_circle(rp, 6, T.CREWS[T.raid.fac].col)
 
 # ---------------------------------------------------------------- building the phone
 func setup(m):
@@ -1193,8 +1215,10 @@ func _app_gang():
 	var gl = Label.new(); gl.text = "[%s] %s" % [g.tag, g.name]; gl.add_font_override("font", G.ifont(19, "b")); gl.add_color_override("font_color", GA.gang_color()); hv.add_child(gl)
 	var gs = Label.new(); gs.text = "%s · Rep %d · %d/%d recruits" % ["You run it" if g.get("role", "leader") == "leader" else "Member", int(g.get("rep", 0)), G.S["recruits"].size(), GA.MAX_RECRUITS]
 	gs.add_font_override("font", G.ifont(12, "r")); gs.add_color_override("font_color", TXT2); hv.add_child(gs)
-	_segmented([["crew", "Crew"], ["hire", "Recruit"], ["types", "Types"]], gang_tab, "_tab")
-	if gang_tab == "crew":
+	_segmented([["crew", "Crew"], ["turf", "Turf"], ["hire", "Recruit"], ["types", "Types"]], gang_tab, "_tab")
+	if gang_tab == "turf":
+		_turf_tab()
+	elif gang_tab == "crew":
 		if G.S["recruits"].size() == 0: _foot("Nobody yet. Walk up to people marked RECRUIT and press E, or use the Recruit tab.")
 		for r in G.S["recruits"]:
 			var T = G.D["RTYPES"][r.type]
@@ -1218,6 +1242,41 @@ func _app_gang():
 			_sec("%s %s" % [T3.icon, T3.name])
 			_kv([["Cost", G.fmt_money(T3.cost)], ["Buzz needed", str(T3.buzz)]])
 			_foot(T3.perk)
+
+func _turf_tab():
+	var T = main.turf
+	var mine = T.my_blocks()
+	var tv = _card()
+	var tl = Label.new(); tl.text = "%d of 15 blocks" % mine.size(); tl.add_font_override("font", G.ifont(19, "b")); tv.add_child(tl)
+	var left = T.payday_in()
+	var td = Label.new(); td.autowrap = true; td.add_font_override("font", G.ifont(12, "r")); td.add_color_override("font_color", TXT2)
+	td.text = ("%s a day · payday at 6:00 AM, in %dh %02dm" % [G.fmt_money(T.daily()), int(left) / 60, int(left) % 60]) if mine.size() > 0 else "Take a corner and it pays you every morning."
+	tv.add_child(td)
+	if T.shared(): _foot("Online: this server's map. Every gang here plays on it.", Color(0.85, 0.85, 0.9))
+	if T.raid != null:
+		var R = T.raid
+		var what = ("%d:%02d to get there" % [int(R.left) / 60, int(R.left) % 60]) if R.stage == "warn" else "Fighting now"
+		_sec("Raid")
+		_kv([[T.CREWS[R.fac].name + " on " + T.block_name(R.b), what]])
+	var m = BigMap.new(); m.name = "BigMap"; m.main = main; m.rect_min_size = Vector2(SW - 34, 300)
+	body.add_child(m)
+	if mine.size() > 0:
+		_sec("Yours")
+		var rows = []
+		for b in mine: rows.append([T.block_name(b), G.fmt_money(T.VAL[b]) + " a day"])
+		_kv(rows)
+		_foot("%d of your people hold your blocks when you're not there (everyone not rolling with you). The more, the better the odds when rivals raid at night." % T.home_recruits())
+	_sec("The map")
+	var cm = T.cur()
+	var all = []
+	for b in range(T.N):
+		if b == T.COPS: continue
+		if T.is_mine(cm[b]): continue
+		var on = T.o_name(cm[b])
+		if typeof(cm[b]) == TYPE_ARRAY: on = "[%s] %s" % [cm[b][2], cm[b][1]]
+		all.append([T.block_name(b), on])
+	_kv(all)
+	_foot("To take a block, go to its corner (the ring on the sidewalk where its two streets meet) and hold E. Their people come in waves: hold the corner and clear the block. Area 7, the police station's block, can't be taken.")
 
 func _form(text, key):
 	form[key] = text

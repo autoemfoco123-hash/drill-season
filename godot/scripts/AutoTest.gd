@@ -35,6 +35,7 @@ func run(m):
 	elif OS.get_environment("DS_CARTEST") != "": call_deferred("_car_test")
 	elif OS.get_environment("DS_DIRECTTEST") != "": call_deferred("_direct_test")
 	elif OS.get_environment("DS_BLURTEST") != "": call_deferred("_blur_test")
+	elif OS.get_environment("DS_TURFTEST") != "": call_deferred("_turf_test")
 	else: call_deferred("_go")
 
 func _wait(s):
@@ -1968,9 +1969,17 @@ func _direct_test():
 		_log("joining %s as %s: %s" % [a[0], a[2], str(net.join_addr(a[0], a[1]))])
 	var t = 0.0
 	var said = false
+	# DS_TURFGIVE=<block>: this player's gang takes that block once it is on the server
+	var give = OS.get_environment("DS_TURFGIVE")
+	var given = false
+	if give != "": _log("gang: " + main.gang.create("Crew " + a[2], (a[2] + "XX").substr(0, 3), 1 + (a[2].ord_at(0) % 6)))
 	while t < float(a[3]):
 		yield(_wait(0.5), "completed")
 		t += 0.5
+		if give != "" and not given and net.welcomed and t > 3.0:
+			given = true
+			main.turf.give(int(give), main.turf.my_gang())
+			_log("%s took block %s" % [a[2], give])
 		if net.welcomed and not said:
 			said = true
 			_log("%s welcomed by %s (motd %s) after %.1f s" % [a[2], net.server.name, net.server.motd, t])
@@ -1981,6 +1990,9 @@ func _direct_test():
 	var names = []
 	for r in net.R.values(): names.append(r.name)
 	_log("%s sees %d players: %s; chat lines %d; mode %s" % [a[2], net.R.size(), str(names), net.chat.size(), net.mode])
+	var tm = []
+	for o in main.turf.cur(): tm.append(("[" + str(o[2]) + "]") if typeof(o) == TYPE_ARRAY else (o if o != "" else "-"))
+	_log("%s turf map (shared %s): %s" % [a[2], str(main.turf.shared()), str(tm)])
 	main.phone.open("online")
 	yield(_wait(0.6), "completed")
 	yield(_shot("n_" + a[2]), "completed")
@@ -2020,4 +2032,170 @@ func _blur_test():
 	yield(_shot("mb_speed"), "completed")
 	_log("at %.0f km/h: blur on %s zoom %.3f" % [car.speed * 3.6, str(main.motion_blur.rect.visible), main.motion_blur.zoom])
 	Input.action_release("move_f")
+	get_tree().quit()
+
+# ---------------------------------------------------------------- turf (DS_TURFTEST)
+# guards on a Halo corner, taking it (waves), the phone, payday, a raid you defend, raids you
+# miss, a neutral block, walking off a corner, and the save. The takeovers run with shorter
+# timers so the test doesn't take all day on a software renderer.
+func _kill_turf(b, after):
+	for e in main.crews.ENEMIES:
+		if e.is_down() or e.crew.get("turf", -1) != b: continue
+		if not e.has_meta("seen"): e.set_meta("seen", OS.get_ticks_msec())
+		if OS.get_ticks_msec() - int(e.get_meta("seen")) > after * 1000:
+			e.take_hit(999, false, Vector3(1, 0, 0), true, false)
+
+func _face(p):
+	var P = main.player
+	P.cam_yaw = atan2(P.pos.x - p.x, P.pos.z - p.z); P.cam_pitch = -0.12; P.last_look = G.REAL_T
+
+func _real():
+	return OS.get_ticks_msec() / 1000.0
+
+func _turf_test():
+	yield(_wait(1.0), "completed")
+	main.title._close(); main.start_game(G.new_state("turfboss"))
+	yield(_wait(1.5), "completed")
+	G.time_offset += (13 * 60 - G.world_minutes())
+	G.S["settings"]["quality"] = "high"; main.set_quality("high")
+	var T = main.turf
+	var P = main.player
+	for i in range(T.N): _log("block %d %s corner %s owner %s pays %d" % [i, T.block_name(i), str(T.corners[i]), str(T.cur()[i]), T.VAL[i]])
+	var b = 6
+	var c = T.corners[b]
+	# walk up to a Halo corner: people on it
+	P.place(c.x + 45, 0, c.z + 1.5, 0)
+	yield(_wait(1.5), "completed")
+	_log("fps %d" % Engine.get_frames_per_second())
+	_log("guards on %s: %s (%d)" % [T.block_name(b), str(T.guards.has(b)), T.guards[b].members.size() if T.guards.has(b) else 0])
+	P.place(c.x + 9, 0, c.z + 1.2, 0); _face(c)
+	yield(_wait(1.2), "completed")
+	yield(_shot("t_guards"), "completed")
+	P.place(c.x + 1.5, 0, c.z + 1.5, 0)
+	yield(_wait(0.4), "completed")
+	_log("prompt without a gang: " + T.prompt("[E]").replace("\n", " / "))
+	var GA = main.gang
+	GA.create("Frostline", "FRL", 4)
+	G.S["cash"] = 999999; G.S["buzz"] = 999
+	GA.hire("shooter", 501, "Ace"); GA.hire("brawler", 502, "Bo"); GA.hire("medic", 503, "Rae"); GA.hire("lookout", 504, "Kiki")
+	GA.set_with(G.S["recruits"][2], false); GA.set_with(G.S["recruits"][3], false)
+	G.S["cash"] = 1000
+	_log("prompt with a gang: " + T.prompt("[E]"))
+	yield(_wait(0.3), "completed")
+	Input.action_press("use")
+	var t0 = _real()
+	while T.take == null and _real() - t0 < 6:
+		yield(get_tree(), "idle_frame")
+	Input.action_release("use")
+	_log("takeover started: %s after %.1f s held, need %.0f s, waves %s" % [str(T.take != null), _real() - t0, T.take.need if T.take else 0.0, str(T.take.waves) if T.take else "-"])
+	var shot_mid = false
+	var heat0 = G.S["heat"]
+	var waves = 0
+	if T.take: T.take.need = 18.0
+	t0 = _real()
+	while T.take != null and _real() - t0 < 200:
+		G.S["health"] = 100
+		if Vector2(P.pos.x - c.x, P.pos.z - c.z).length() > 10: P.place(c.x + 1.5, 0, c.z + 1.5, P.cam_yaw)
+		_kill_turf(b, 2.0)
+		if T.take: waves = T.take.w
+		if not shot_mid and T.take and T.take.p > 0.3 and T.take.foes > 0:
+			shot_mid = true
+			for e in main.crews.ENEMIES:
+				if not e.is_down() and e.crew.get("turf", -1) == b:
+					_face(e.pos); break
+			yield(_wait(0.3), "completed")
+			yield(_shot("t_wave"), "completed")
+			_log("mid takeover: %s" % str(T.card()))
+		yield(_wait(0.2), "completed")
+	_log("takeover over after %.0f s real, %d waves: owner %s, mine %s, cash %d, heat %.0f -> %.0f, taken %s" % [_real() - t0, waves, str(T.cur()[b]), str(T.is_mine(T.cur()[b])), G.S["cash"], heat0, G.S["heat"], str(G.S["stats"].get("turfTaken", 0))])
+	yield(_wait(2.0), "completed")
+	P.place(c.x + 7, 0, c.z + 4, 0); _face(c)
+	yield(_wait(0.6), "completed")
+	yield(_shot("t_taken"), "completed")
+	main.phone.open("gang")
+	main.phone.gang_tab = "turf"; main.phone.show_app("gang")
+	yield(_wait(0.8), "completed")
+	yield(_shot("t_phone_turf"), "completed")
+	main.phone.scroll.scroll_vertical = 420
+	yield(_wait(0.4), "completed")
+	yield(_shot("t_phone_turf2"), "completed")
+	main.phone.show_app("map")
+	yield(_wait(0.6), "completed")
+	yield(_shot("t_phone_map"), "completed")
+	main.phone.close(true)
+	yield(_wait(0.3), "completed")
+	# payday
+	var c0 = G.S["cash"]
+	T.payday()
+	_log("payday: +%d (daily %d)" % [G.S["cash"] - c0, T.daily()])
+	# a raid you get to
+	G.S["heat"] = 10
+	T.safe.clear()
+	P.place(c.x - 150, 0, c.z + 1.5, 0)
+	yield(_wait(0.3), "completed")
+	T.start_raid(b, "halo")
+	yield(_wait(1.5), "completed")
+	_log("raid warning: %s" % str(T.card()))
+	yield(_shot("t_raid_warn"), "completed")
+	P.place(c.x + 20, 0, c.z + 1.5, 0)
+	yield(_wait(1.0), "completed")
+	_log("raid stage %s, raiders %d" % [T.raid.stage if T.raid else "-", T.raid.n if T.raid else 0])
+	for e in main.crews.ENEMIES:
+		if not e.is_down() and e.crew.get("turf", -1) == b:
+			_face(e.pos); break
+	yield(_wait(1.0), "completed")
+	yield(_shot("t_raid_fight"), "completed")
+	t0 = _real()
+	while T.raid != null and _real() - t0 < 60:
+		G.S["health"] = 100
+		_kill_turf(b, 1.0)
+		yield(_wait(0.2), "completed")
+	_log("raid defended: owner mine %s, held %s, cash %d" % [str(T.is_mine(T.cur()[b])), str(G.S["stats"].get("raidsHeld", 0)), G.S["cash"]])
+	# raids you miss: two at home, so it can go either way
+	var kept = 0
+	var lost = 0
+	for k in range(8):
+		T.give(b, T.my_gang())
+		T.start_raid(b, "lowend")
+		T.raid.left = 0.2
+		P.place(c.x - 200, 0, c.z + 1.5, 0)
+		t0 = _real()
+		while T.raid != null and _real() - t0 < 10:
+			yield(get_tree(), "idle_frame")
+		if T.is_mine(T.cur()[b]): kept += 1
+		else: lost += 1
+	_log("missed raids with %d at home: kept %d, lost %d, owner now %s" % [T.home_recruits(), kept, lost, str(T.cur()[b])])
+	# a neutral block (Harlan & Low End, home): one small wave
+	var b2 = 5
+	var c2 = T.corners[b2]
+	P.place(c2.x + 1.5, 0, c2.z + 1.5, 0)
+	yield(_wait(0.5), "completed")
+	T.begin(b2)
+	T.take.need = 10.0
+	t0 = _real()
+	while T.take != null and _real() - t0 < 120:
+		G.S["health"] = 100
+		if Vector2(P.pos.x - c2.x, P.pos.z - c2.z).length() > 10: P.place(c2.x + 1.5, 0, c2.z + 1.5, P.cam_yaw)
+		_kill_turf(b2, 1.5)
+		yield(_wait(0.2), "completed")
+	_log("neutral block after %.0f s real: mine %s" % [_real() - t0, str(T.is_mine(T.cur()[b2]))])
+	# walking off a corner mid-takeover fails it
+	var b3 = 10
+	P.place(T.corners[b3].x + 1.5, 0, T.corners[b3].z + 1.5, 0)
+	yield(_wait(0.3), "completed")
+	T.begin(b3)
+	P.place(T.corners[b3].x - 120, 0, T.corners[b3].z + 1.5, 0)
+	t0 = _real()
+	while T.take != null and _real() - t0 < 150:
+		G.S["health"] = 100
+		yield(_wait(0.5), "completed")
+	_log("left the corner: takeover still on %s after %.0f s real, owner %s" % [str(T.take != null), _real() - t0, str(T.cur()[b3])])
+	# the minimap with turf, near a corner you own
+	P.place(T.corners[b2].x + 3, 0, T.corners[b2].z + 3, 0)
+	yield(_wait(1.0), "completed")
+	yield(_shot("t_minimap"), "completed")
+	# saved?
+	G.save_game()
+	var st = G.load_save()
+	_log("saved turf: %s" % str(st.get("turf")))
 	get_tree().quit()

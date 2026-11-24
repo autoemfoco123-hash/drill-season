@@ -52,6 +52,7 @@ var sub_box
 var sub_who
 var sub_text
 var objective
+var turf_card
 var cross
 var hit
 var vignette
@@ -128,6 +129,17 @@ class MiniMap extends Control:
 			draw_colored_polygon(pts, Color(0.16, 0.3, 0.42))
 		var pond = G.D["POND"]
 		draw_circle(_w2m(Vector3(pond.x, 0, pond.z), P, c, s, ctr), float(pond.r) * zoom, Color(0.2, 0.34, 0.46))
+		# turf: each block tinted in its owner's colour
+		var T = main.turf
+		if T and not T.rings.empty():
+			var tm = T.cur()
+			for b in range(T.N):
+				var o = tm[b]
+				if typeof(o) == TYPE_STRING and (o == "" or o == "cops"): continue
+				var r = T.rect(b)
+				var oc = T.o_col(o)
+				var tpoly = PoolVector2Array([_w2m(Vector3(r[0] + 10, 0, r[1] + 10), P, c, s, ctr), _w2m(Vector3(r[2] - 10, 0, r[1] + 10), P, c, s, ctr), _w2m(Vector3(r[2] - 10, 0, r[3] - 10), P, c, s, ctr), _w2m(Vector3(r[0] + 10, 0, r[3] - 10), P, c, s, ctr)])
+				draw_colored_polygon(tpoly, Color(oc.r, oc.g, oc.b, 0.2 if T.is_mine(o) else 0.12))
 		# roads
 		for x in G.D["XL"]:
 			_line(Vector3(x, 0, -260), Vector3(x, 0, 260), P, c, s, ctr, 11.0)
@@ -145,13 +157,21 @@ class MiniMap extends Control:
 		if main.vehicles.own_car and not main.vehicles.own_car.dead and P.car != main.vehicles.own_car:
 			_car(main.vehicles.own_car.pos, Color(0.48, 0.88, 0.65), P, c, s, ctr)
 		for e in main.crews.ENEMIES:
-			if not e.is_down(): _dot(e.pos, Color(1, 0.28, 0.22), 4.0, P, c, s, ctr)
+			if not e.is_down(): _dot(e.pos, e.crew.get("col", Color(1, 0.28, 0.22)), 4.0, P, c, s, ctr)
 		for cp in main.police.COPS:
 			if not cp.is_down(): _dot(cp.pos, Color(0.35, 0.55, 1), 4.0, P, c, s, ctr)
 		for f in main.gang.FOL:
 			if not f.riding: _dot(f.pos, main.gang.gang_color(), 3.5, P, c, s, ctr)
 		for r in main.net.R.values():
 			_dot(r.pos, Color(1, 1, 1), 4.5, P, c, s, ctr)
+		# a raid on one of your blocks, pinned to the edge
+		if T and T.raid != null:
+			var rq = _w2m(T.corners[T.raid.b], P, c, s, ctr)
+			rq.x = clamp(rq.x, 10, sz.x - 10); rq.y = clamp(rq.y, 10, sz.y - 10)
+			var pr = 6.0 + 3.0 * (0.5 + 0.5 * sin(G.REAL_T * 6.0))
+			draw_circle(rq, pr + 2, Color(0, 0, 0, 0.7)); draw_circle(rq, pr, T.CREWS[T.raid.fac].col)
+		elif T and T.take != null:
+			_dot(T.corners[T.take.b], Color(1, 1, 1), 5.0, P, c, s, ctr)
 		# the tracked job, pinned to the edge when it is far away
 		var tr = G.S.get("tracked")
 		if tr != null and main.story.job_available(tr):
@@ -362,6 +382,29 @@ class Wheel extends Control:
 		draw_circle(ctr, R - 46, Color(0.03, 0.03, 0.04, 0.82))
 		draw_string(G.font_l, ctr - Vector2(nw / 2, -8), name, Color(1, 1, 1))
 
+# turf: taking a corner, or a raid on one of yours (top centre)
+class TurfCard extends Control:
+	var main
+	func _draw():
+		var info = main.turf.card() if main.turf else null
+		if info == null: return
+		var w = rect_size.x
+		var sb = StyleBoxFlat.new(); sb.bg_color = Color(0.03, 0.03, 0.04, 0.5); sb.set_corner_radius_all(16); sb.anti_aliasing = true
+		sb.border_color = Color(1, 1, 1, 0.14); sb.set_border_width_all(1)
+		draw_style_box(sb, Rect2(Vector2(), rect_size))
+		var ft = G.ifont_sp(11, "s", 2)
+		var fs = G.ifont(13, "m")
+		var t = str(info[0])
+		var tw = ft.get_string_size(t).x
+		draw_circle(Vector2(w / 2 - tw / 2 - 10, 21), 4, info[3])
+		draw_string(ft, Vector2(w / 2 - tw / 2, 25), t, Color(1, 1, 1))
+		var sub = str(info[1])
+		var sw = fs.get_string_size(sub).x
+		draw_string(fs, Vector2(w / 2 - sw / 2, 46), sub, Color(1, 1, 1, 0.72))
+		var bar = Rect2(18, rect_size.y - 14, w - 36, 4)
+		draw_rect(bar, Color(1, 1, 1, 0.14))
+		draw_rect(Rect2(bar.position, Vector2(bar.size.x * clamp(float(info[2]), 0, 1), bar.size.y)), info[3])
+
 # name tags over people's heads
 class Tags extends Control:
 	var main
@@ -389,7 +432,9 @@ class Tags extends Control:
 		for cp in main.police.COPS:
 			if not cp.is_down(): items.append([cp.pos, "POLICE", "", Color(0.44, 0.7, 1)])
 		for e in main.crews.ENEMIES:
-			if not e.is_down() and e.crew.state != "leave": items.append([e.pos, e.name, "", Color(1, 0.3, 0.23)])
+			if not e.is_down() and e.crew.state != "leave": items.append([e.pos, e.name, "", e.crew.get("col", Color(1, 0.3, 0.23))])
+		if main.turf and not P.car:
+			for t in main.turf.tags(): items.append(t)
 		for it in items:
 			var w = it[0] + Vector3(0, 2.1, 0)
 			if cam.is_position_behind(w): continue
@@ -493,6 +538,8 @@ void fragment() {
 	cross.anchor_left = 0.5; cross.anchor_right = 0.5; cross.anchor_top = 0.5; cross.anchor_bottom = 0.5; cross.margin_left = -20; cross.margin_right = 20; cross.margin_top = -14; cross.margin_bottom = 12
 	hit = _lab(G.font_l, Color(1, 1, 1), 0, 0, 0, 0, 0, 0, Label.ALIGN_CENTER); hit.text = "✕"
 	hit.anchor_left = 0.5; hit.anchor_right = 0.5; hit.anchor_top = 0.5; hit.anchor_bottom = 0.5; hit.margin_left = -20; hit.margin_right = 20; hit.margin_top = -18; hit.margin_bottom = 18; hit.modulate.a = 0
+	turf_card = TurfCard.new(); turf_card.main = main; turf_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_anchor(turf_card, 0.5, 0, -170, 16, 170, 78); root.add_child(turf_card)
 	wheel = Wheel.new(); wheel.hud = self; _full(wheel); root.add_child(wheel)
 	# the death screen: the picture drains to red with a dark vignette, a slim line of text
 	var dl = CanvasLayer.new(); dl.layer = 12; add_child(dl)
@@ -662,6 +709,8 @@ func update(dt):
 		var ow = objective.get_minimum_size().x
 		objective.margin_left = -ow / 2; objective.margin_right = ow / 2
 	objective.visible = hud_on and ob != "" and not indoors
+	turf_card.visible = hud_on and G.MODE != "menu" and main.turf != null and main.turf.card() != null
+	if turf_card.visible: turf_card.update()
 	cross.visible = hud_on and not P.car and (P.aim_t > 0.3 or P.fp_on()) and wheel_kind == ""
 	# big message and subtitles
 	banner_t -= dt
@@ -711,6 +760,9 @@ func _prompt():
 	if P.car: return ""
 	var so = main.crews.active_standoff()
 	if so: return "Hold %s to walk away\nAim to fight" % _key("E", "RB")
+	if main.turf:
+		var tp = main.turf.prompt(_key("E", "RB"))
+		if tp != "": return tp
 	var it = P.nearest_interact()
 	if it: return "%s %s" % [_key("E", "RB"), main.story.interact_label(it)]
 	var rp = main.gang.nearest_recruit_ped()

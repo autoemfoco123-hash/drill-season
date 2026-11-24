@@ -597,6 +597,10 @@ func _event(id, e):
 		_chat_line(nm, m)
 		return
 	var from_host = server != null and (id == "r" + server.sid or (server.get("direct", false) and id == "e1"))
+	if t == "turf" or t == "turfmap" or t == "turfhit":
+		if rejected.has(id): return
+		if main.turf: main.turf.net_event(t, r, from_host, e)
+		return
 	if t == "reject" and from_host:
 		var w = str(e.get("who", ""))
 		var who = w if w.begins_with("e") else "r" + w
@@ -615,6 +619,7 @@ func _event(id, e):
 		server.motd = clean_text(e.get("motd", ""), 120)
 		server.pvp = e.get("pvp", true) == true
 		server.max = int(_num(e.get("max", 16), 2, 64))
+		if main.turf: main.turf.load_map(e.get("tf"))
 		main.hud.banner(server.name, server.motd if server.motd != "" else "Welcome")
 		main.sfx.play("notif", 0.5)
 		return
@@ -650,6 +655,14 @@ func _event(id, e):
 	elif t == "joined":
 		main.hud.toast("@%s joined the gang" % (r.name if r else "someone"))
 		main.gang.rep(2)
+
+# turf (Turf.gd): who holds which block on this server
+func send_turf(b, o):
+	if online(): _send("ev", { "t": "turf", "b": b, "o": o })
+func send_turfmap(m):
+	if online(): _send("ev", { "t": "turfmap", "m": m })
+func send_turfhit(b, o):
+	if online(): _send("ev", { "t": "turfhit", "b": b, "o": o, "g": main.turf.my_gang() })
 
 func id_for_send(r):
 	return r.id.substr(1)  if mode == "relay" else r.id
@@ -902,6 +915,7 @@ func host_server(cfg):
 	server = { "sid": uid, "name": clean_text(cfg.get("name", "Server"), 32), "motd": clean_text(cfg.get("motd", ""), 120), "max": int(clamp(int(cfg.get("max", 16)), 2, 64)),
 		"pw": host_pw != "", "pvp": cfg.get("pvp", true) == true, "ded": false, "direct": false }
 	welcomed = true
+	if main.turf: main.turf.new_server_map()
 	if cfg.get("direct", false) and _listen(int(cfg.get("port", PORT)), server.max):
 		server.direct = true
 		room = "direct"
@@ -1055,7 +1069,7 @@ func _admit(id, p):
 		rejected[id] = true
 		return false
 	rejected.erase(id)
-	_send("ev", { "t": "welcome", "name": server.name, "motd": server.motd, "pvp": server.pvp, "max": server.max }, rid)
+	_send("ev", { "t": "welcome", "name": server.name, "motd": server.motd, "pvp": server.pvp, "max": server.max, "tf": main.turf.cur() if main.turf else null }, rid)
 	announce_t = min(announce_t, 1.0)
 	return true
 

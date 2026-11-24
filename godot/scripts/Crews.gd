@@ -54,7 +54,12 @@ func clear():
 	ENEMIES.clear(); CREWS.clear()
 
 func spawn_crew(at, n, shooters, o = {}):
-	var c = { "members": [], "state": "approach", "t": 0.0, "so": 0.0, "aim_hold": 0.0, "fought": false, "over": false, "leave_t": 0.0, "saint": o.get("saint", false), "challenge": o.get("challenge", false) }
+	var c = { "members": [], "state": "approach", "t": 0.0, "so": 0.0, "aim_hold": 0.0, "fought": false, "over": false, "leave_t": 0.0, "saint": o.get("saint", false), "challenge": o.get("challenge", false),
+		"turf": int(o.get("turf", -1)), "look": o.get("look"), "handles": o.get("handles"), "lines": o.get("lines", STANDOFF), "col": o.get("col", Color(1, 0.28, 0.22)), "said": false }
+	# turf crews (Turf.gd): people standing on a corner, or a wave coming for you
+	if o.get("guard", false): c.state = "guard"
+	elif o.get("combat", false):
+		c.state = "combat"; c.fought = true
 	CREWS.append(c)
 	var types = []
 	if c.saint: types.append("saint")
@@ -74,7 +79,10 @@ func _spawn(type, p, crew):
 	var e = Enemy.new()
 	e.main = main; e.type = type; e.T = G.D["ETYPES"][type]; e.crew = crew; e.pos = p; e.hp = float(e.T.hp)
 	e.name = G.D["CAST"]["saint"].name if type == "saint" else G.pick(HANDLES); e.fire_cd = G.rand(0.6, 1.2); e.strafe = 1 if randf() < 0.5 else -1
-	e.h = load("res://scripts/Human.gd").new().build({ "jacket": e.T.jacket, "jacket2": e.T.jacket2, "pants": 0x18191c, "skin": G.pick([0x5a3a26, 0x7a4a30, 0x4a2e1e, 0x8a5a3a, 0x6b4630]), "hat": 0x8a1c24, "chain": type == "saint", "head": "hood" if type == "runner" else ("none" if type == "saint" else "beanie"), "hair": "braids" if type == "saint" else "none", "mask": 0x111214 if randf() < 0.6 and type != "saint" else null })
+	var lk = crew.get("look")
+	if typeof(lk) != TYPE_ARRAY or lk.size() < 3: lk = [e.T.jacket, e.T.jacket2, 0x8a1c24]
+	if typeof(crew.get("handles")) == TYPE_ARRAY and type != "saint": e.name = G.pick(crew.handles)
+	e.h = load("res://scripts/Human.gd").new().build({ "jacket": lk[0], "jacket2": lk[1], "pants": 0x18191c, "skin": G.pick([0x5a3a26, 0x7a4a30, 0x4a2e1e, 0x8a5a3a, 0x6b4630]), "hat": lk[2], "chain": type == "saint", "head": "hood" if type == "runner" else ("none" if type == "saint" else "beanie"), "hair": "braids" if type == "saint" else "none", "mask": 0x111214 if randf() < 0.6 and type != "saint" else null })
 	main.add_child(e.h)
 	e.gun = GUN.build(e.T.gun, GUN.def_cfg())
 	e.gun.rotation = Vector3(PI / 2, 0, 0); e.gun.translation = Vector3(0, -0.03, 0.02); e.gun.scale = Vector3.ONE * 1.35
@@ -92,6 +100,13 @@ func leader(c):
 
 func engage(c, why = ""):
 	if c.state == "combat" or c.over: return
+	if c.get("turf", -1) >= 0:
+		c.state = "combat"; c.fought = true
+		var TL = leader(c)
+		if TL: main.hud.say(TL.name, G.pick(["Wrong corner.", "Now you did it.", "Get him.", "On sight."]))
+		main.story.add_heat(2)
+		main.story.on_crew_engaged()
+		return
 	var was = c.state == "standoff"
 	c.state = "combat"; c.fought = true
 	var L = leader(c)
@@ -113,11 +128,11 @@ func damage(e, dmg, head, dir, melee):
 		main.sfx.play3d("bodyfall", e.pos, 0.8)
 		if e.type == "saint": main.story.on_saint_down()
 		G.S["stats"]["downs"] = G.S["stats"].get("downs", 0) + 1
-		G.S["heat"] = min(100, G.S["heat"] + 3)
+		G.S["heat"] = min(100, G.S["heat"] + (1 if e.crew.get("turf", -1) >= 0 else 3))
 
 func on_player_shot(at):
 	for c in CREWS:
-		if c.state == "approach" or c.state == "standoff":
+		if c.state == "approach" or c.state == "standoff" or c.state == "guard":
 			for e in c.members:
 				if e.pos.distance_to(at) < 65:
 					engage(c, "shot")
@@ -161,7 +176,7 @@ func update(dt):
 	# ambush director: more Heat, more often, bigger crews
 	var busy = false
 	for c in CREWS:
-		if c.state != "leave": busy = true
+		if c.state != "leave" and c.state != "guard": busy = true
 	if not busy:
 		if G.S["heat"] < 30 or G.S.get("playTime", 0) < 40:
 			ambush_t = max(ambush_t, 20)
@@ -183,7 +198,9 @@ func update(dt):
 		if alive.size() == 0:
 			if not c.over:
 				c.over = true
-				if c.fought:
+				if c.fought and c.get("turf", -1) >= 0:
+					main.gang.rep(2)
+				elif c.fought:
 					main.story.add_heat(4)
 					if not c.saint or not G.S["flags"].get("saintDown", false): main.hud.banner("Fight over", "Heat +4")
 					main.gang.rep(3)
@@ -199,6 +216,14 @@ func update(dt):
 			c.aim_hold = c.aim_hold + dt if P.aiming else max(0, c.aim_hold - dt * 2)
 			if c.aim_hold > 0.35 or dmin < 5.2 or c.so > 20: engage(c, "aim")
 			elif dmin > 42: _walk_away(c)
+		elif c.state == "guard":
+			# standing on their corner: a word when you walk up, a fight if you pull on them
+			c.aim_hold = c.aim_hold + dt if P.aiming and dmin < 32 else max(0, c.aim_hold - dt * 2)
+			if dmin < 13 and not c.said and alive.size() > 0 and not P.dead:
+				c.said = true
+				main.hud.say(alive[0].name, G.pick(c.lines))
+			if c.aim_hold > 0.8: engage(c, "aim")
+			if alive.size() == 0: c.state = "leave"
 		elif c.state == "combat":
 			if dmin > 95 or P.dead:
 				c.state = "leave"
@@ -206,7 +231,9 @@ func update(dt):
 		elif c.state == "leave":
 			c.leave_t += dt
 			if dmin > 70 or c.leave_t > 25:
+				# the ones still standing go; the ones down stay where they fell for a while
 				for e in c.members:
+					if e.is_down(): continue
 					if is_instance_valid(e.h): e.h.queue_free()
 					ENEMIES.erase(e)
 				CREWS.erase(c)
@@ -250,6 +277,22 @@ func _walk_away(c):
 	main.hud.banner("Walked away", "Heat %d" % dh)
 	main.sfx.play("whoosh", 0.4)
 	main.story.on_walk_away(c)
+
+# a turf crew that lost (or won): they walk off
+func send_home(c):
+	if c.state == "leave": return
+	c.state = "leave"; c.leave_t = 0
+	var P = main.player
+	for e in c.members:
+		var a = atan2(e.pos.x - P.pos.x, e.pos.z - P.pos.z)
+		e.leave_to = Vector3(clamp(e.pos.x + sin(a) * 60, -W.BOUND + 7, W.BOUND - 7), 0, clamp(e.pos.z + cos(a) * 60, -W.BOUND + 7, W.BOUND - 7))
+
+# gone at once (people on a corner you walked away from)
+func despawn(c):
+	for e in c.members:
+		if is_instance_valid(e.h): e.h.queue_free()
+		ENEMIES.erase(e)
+	CREWS.erase(c)
 
 func _spawn_point(min_d, max_d):
 	var P = main.player
@@ -301,7 +344,9 @@ func _update_enemy(e, dt):
 	var aim = 0.0
 	var face = atan2(dv.x, dv.z)
 	var strafe = 0
-	if c.state == "approach":
+	if c.state == "guard":
+		if d > 20: face = null
+	elif c.state == "approach":
 		goal = P.pos; spd = float(e.T.speed) * 0.75
 	elif c.state == "standoff":
 		aim = 0.35
