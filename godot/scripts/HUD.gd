@@ -172,6 +172,16 @@ class MiniMap extends Control:
 			draw_circle(rq, pr + 2, Color(0, 0, 0, 0.7)); draw_circle(rq, pr, T.CREWS[T.raid.fac].col)
 		elif T and T.take != null:
 			_dot(T.corners[T.take.b], Color(1, 1, 1), 5.0, P, c, s, ctr)
+		# the mission's next checkpoint or target, pinned to the edge
+		var MI = main.missions
+		var mt = MI.target() if MI else null
+		if mt != null:
+			var mq = _w2m(mt, P, c, s, ctr)
+			mq.x = clamp(mq.x, 10, sz.x - 10); mq.y = clamp(mq.y, 10, sz.y - 10)
+			var mc = MI.target_col()
+			var pr2 = 6.5 + 2.5 * (0.5 + 0.5 * sin(G.REAL_T * 5.0))
+			draw_colored_polygon(PoolVector2Array([mq + Vector2(0, -pr2 - 2), mq + Vector2(pr2 + 2, 0), mq + Vector2(0, pr2 + 2), mq + Vector2(-pr2 - 2, 0)]), Color(0, 0, 0, 0.75))
+			draw_colored_polygon(PoolVector2Array([mq + Vector2(0, -pr2), mq + Vector2(pr2, 0), mq + Vector2(0, pr2), mq + Vector2(-pr2, 0)]), mc)
 		# the tracked job, pinned to the edge when it is far away
 		var tr = G.S.get("tracked")
 		if tr != null and main.story.job_available(tr):
@@ -387,6 +397,7 @@ class TurfCard extends Control:
 	var main
 	func _draw():
 		var info = main.turf.card() if main.turf else null
+		if info == null and main.missions: info = main.missions.card()
 		if info == null: return
 		var w = rect_size.x
 		var sb = StyleBoxFlat.new(); sb.bg_color = Color(0.03, 0.03, 0.04, 0.5); sb.set_corner_radius_all(16); sb.anti_aliasing = true
@@ -711,7 +722,7 @@ func update(dt):
 		var ow = objective.get_minimum_size().x
 		objective.margin_left = -ow / 2; objective.margin_right = ow / 2
 	objective.visible = hud_on and ob != "" and not indoors
-	turf_card.visible = hud_on and G.MODE != "menu" and main.turf != null and main.turf.card() != null
+	turf_card.visible = hud_on and G.MODE != "menu" and main.turf != null and (main.turf.card() != null or (main.missions != null and main.missions.card() != null))
 	if turf_card.visible: turf_card.update()
 	cross.visible = hud_on and not P.car and (P.aim_t > 0.3 or P.fp_on()) and wheel_kind == ""
 	# big message and subtitles

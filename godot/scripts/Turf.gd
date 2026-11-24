@@ -479,6 +479,9 @@ func _take_update(dt):
 	var c = corners[b]
 	if is_mine(cur()[b]):         # a gang mate got it first
 		take = null; return
+	# a turf raid (Missions.gd): the crew's progress is shared
+	if main.missions and main.missions.raid_block() == b:
+		take.p = max(take.p, main.missions.shared_progress())
 	if P.dead:
 		_fail("You went down"); return
 	var inz = _dist(P.pos, c) < 16.0 and P.car == null
@@ -505,6 +508,8 @@ func _win():
 	var b = take.b
 	var old = take.o
 	var g = my_gang()
+	var raid = main.missions != null and main.missions.raid_block() == b
+	if raid: g = main.missions.raid_owner()
 	if g == null:
 		take = null; return
 	give(b, g)
@@ -524,6 +529,7 @@ func _win():
 		S.later(6, S, "send_msg", ["saint", G.pick(["%s? Enjoy it while it lasts." % block_name(b), "You took a corner. Now you gotta hold it.", "That block was mine before you could spell drill.", "We'll be by tonight."])])
 	S.later(4, S, "post_feed", [G.pick(G.D["FEED_HANDLES"]), G.pick(["new colours on %s this morning" % block_name(b), "%s got a new owner?? [%s]" % [block_name(b), g[2]], "y'all see who's standing on %s now" % block_name(b)])])
 	G.save_game()
+	if raid: main.missions.raid_won(b)
 
 func _fail(why):
 	var b = take.b

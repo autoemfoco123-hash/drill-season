@@ -1046,7 +1046,7 @@ func update(dt):
 var trailer_drive = false   # trailer shots: keep driving while a cutscene camera films the car
 
 func _player_input():
-	if G.MODE != "play" and not trailer_drive:
+	if (G.MODE != "play" and not trailer_drive) or (main.missions and main.missions.frozen()):
 		return { "thr": 0.0, "gas": 0.0, "brk": 0.0, "steer": 0.0, "hand": false }
 	var gas = Input.get_action_strength("move_f") + Input.get_action_strength("fire")
 	var brk = Input.get_action_strength("move_b") + Input.get_action_strength("aim")

@@ -37,6 +37,7 @@ func run(m):
 	elif OS.get_environment("DS_BLURTEST") != "": call_deferred("_blur_test")
 	elif OS.get_environment("DS_TURFTEST") != "": call_deferred("_turf_test")
 	elif OS.get_environment("DS_WHEELTEST") != "": call_deferred("_wheel_test")
+	elif OS.get_environment("DS_MISSIONTEST") != "": call_deferred("_mission_test")
 	else: call_deferred("_go")
 
 func _wait(s):
@@ -1971,6 +1972,7 @@ func _direct_test():
 	var t = 0.0
 	var said = false
 	# DS_TURFGIVE=<block>: this player's gang takes that block once it is on the server
+	var mstarted = false
 	var give = OS.get_environment("DS_TURFGIVE")
 	var given = false
 	if give != "": _log("gang: " + main.gang.create("Crew " + a[2], (a[2] + "XX").substr(0, 3), 1 + (a[2].ord_at(0) % 6)))
@@ -1981,6 +1983,15 @@ func _direct_test():
 			given = true
 			main.turf.give(int(give), main.turf.my_gang())
 			_log("%s took block %s" % [a[2], give])
+		var mk = OS.get_environment("DS_MISSION")
+		if mk != "" and net.welcomed:
+			var M = main.missions
+			if a[0] == "host" and not mstarted and t > 3.0 and net.R.size() > 0:
+				mstarted = true
+				_log("%s starts a %s: %s" % [a[2], mk, M.start(mk)])
+			if a[0] != "host" and M.cur != null and M.cur.phase == "lobby" and not M.cur["in"]:
+				M.join(); _log("%s joined %s by @%s" % [a[2], M.cur.kind, M.cur.owner])
+			if M.in_it() and M.cur.phase == "run" and not _mdrove: yield(_mission_drive(a[2], a[0] == "host"), "completed")
 		if net.welcomed and not said:
 			said = true
 			_log("%s welcomed by %s (motd %s) after %.1f s" % [a[2], net.server.name, net.server.motd, t])
@@ -2304,4 +2315,127 @@ func _wheel_test():
 	_cam_at(Vector3(-4.5, 1.9, 24), Vector3(0.5, 0.4, -12), 52)
 	yield(_wait(0.3), "completed")
 	yield(_shot("w_traffic"), "completed")
+	get_tree().quit()
+
+
+# ---------------------------------------------------------------- missions (DS_MISSIONTEST, and DS_MISSION with DS_DIRECTTEST)
+var _mdrove = false
+func _mission_drive(nm, fast):
+	# drive a mission the quick way: hop to each checkpoint / the bag / the drop
+	if _mdrove: return
+	_mdrove = true
+	var M = main.missions
+	var P = main.player
+	var V = main.vehicles
+	if M.cur.kind == "race":
+		while M.frozen(): yield(get_tree(), "idle_frame")
+		var pts = M.route().pts
+		for i in range(1, pts.size()):
+			yield(_wait(0.5 if fast else 1.4), "completed")
+			var c = M._pt(i)
+			if P.car:
+				P.car.pos = c + Vector3(1.5, 0, 1.5); V.place(P.car)
+			P.pos = c + Vector3(1.5, 0, 1.5)
+		yield(_wait(1.0), "completed")
+		var t1 = OS.get_ticks_msec()
+		while M.cur.phase != "done" and OS.get_ticks_msec() - t1 < 40000: yield(_wait(0.3), "completed")
+		_log("%s race: checkpoints %s, finished %s, standings %s" % [nm, str(M.cur.cp), str(M.cur.fin), str(M.standings()) if M.cur.phase != "done" else M.cur.res])
+	elif M.cur.kind == "drop":
+		if not fast:
+			var at = M.cur.bag.at
+			P.place(at.x + 1, 0, at.z, 0)
+			yield(_wait(1.5), "completed")
+			_log("%s picked up: carrier %s" % [nm, M.cur.bag.carrier])
+			yield(_wait(4.0), "completed")
+			var to = M.loc(M.cur.d.to)
+			P.place(to.x + 1, 0, to.z, 0)
+			yield(_wait(1.5), "completed")
+		else:
+			var t0 = OS.get_ticks_msec()
+			var seen = ""
+			while M.cur.phase != "done" and OS.get_ticks_msec() - t0 < 40000:
+				if M.cur.has("bag") and M.cur.bag.carrier != seen:
+					seen = M.cur.bag.carrier; _log("%s sees the bag with %s" % [nm, seen])
+				yield(_wait(0.3), "completed")
+	_log("%s mission over: %s ok %s, cash %d" % [nm, M.cur.kind, str(M.cur.get("ok")), G.S["cash"]])
+
+func _mission_test():
+	yield(_wait(1.0), "completed")
+	main.title._close(); main.start_game(G.new_state("racer"))
+	yield(_wait(1.5), "completed")
+	G.time_offset += (14.0 * 60 - G.world_minutes())
+	var M = main.missions
+	var P = main.player
+	var V = main.vehicles
+	main.gang.create("Frostline", "FRL", 4)
+	G.S["cash"] = 1000
+	# the phone's missions list
+	main.phone.open("online")
+	yield(_wait(1.0), "completed")
+	yield(_shot("m_phone"), "completed")
+	main.phone.close(true)
+	main.net.browse(false)
+	yield(_wait(0.3), "completed")
+	# a race on your own
+	_log("start race: '%s'" % M.start("race"))
+	while M.cur.phase == "lobby": yield(get_tree(), "idle_frame")
+	yield(_wait(1.0), "completed")
+	_log("on the grid: car %s, frozen %s, card %s" % [str(P.car != null), str(M.frozen()), str(M.card())])
+	yield(_shot("m_race_grid"), "completed")
+	while M.frozen(): yield(get_tree(), "idle_frame")
+	var pts = M.route().pts
+	for i in range(1, pts.size()):
+		yield(_wait(0.6), "completed")
+		var c = M._pt(i)
+		P.car.pos = c + Vector3(1.0, 0, 1.0); V.place(P.car); P.pos = P.car.pos
+		if i == 2:
+			yield(_wait(0.2), "completed")
+			yield(_shot("m_race_cp"), "completed")
+	yield(_wait(1.5), "completed")
+	_log("race: phase %s, result %s, cash %d" % [M.cur.phase if M.cur else "-", M.cur.res if M.cur else "-", G.S["cash"]])
+	yield(_wait(7.0), "completed")
+	# a drop run
+	if P.car:
+		P.exit_vehicle(true)
+	_log("start drop: '%s'" % M.start("drop"))
+	while M.cur.phase == "lobby": yield(get_tree(), "idle_frame")
+	yield(_wait(0.5), "completed")
+	var at = M.cur.bag.at
+	P.place(at.x + 6, 0, at.z, 0)
+	yield(_wait(0.8), "completed")
+	_face(at)
+	yield(_wait(0.3), "completed")
+	yield(_shot("m_drop_bag"), "completed")
+	P.place(at.x + 1, 0, at.z, 0)
+	yield(_wait(1.0), "completed")
+	_log("drop: carrier %s, target %s, card %s" % [M.cur.bag.carrier, str(M.target()), str(M.card())])
+	yield(_shot("m_drop_carry"), "completed")
+	var to = M.loc(M.cur.d.to)
+	P.place(to.x + 1, 0, to.z, 0)
+	yield(_wait(1.5), "completed")
+	_log("drop: phase %s ok %s, cash %d" % [M.cur.phase, str(M.cur.get("ok")), G.S["cash"]])
+	yield(_wait(7.0), "completed")
+	# a turf raid
+	G.S["heat"] = 0
+	_log("start raid: '%s'" % M.start("raid"))
+	while M.cur.phase == "lobby": yield(get_tree(), "idle_frame")
+	var T = main.turf
+	var b = int(M.cur.d.b)
+	var c2 = T.corners[b]
+	P.place(c2.x + 1.5, 0, c2.z + 1.5, 0)
+	var t0 = OS.get_ticks_msec()
+	while T.take == null and OS.get_ticks_msec() - t0 < 8000: yield(get_tree(), "idle_frame")
+	if T.take: T.take.need = 10.0
+	_log("raid on %s: takeover %s" % [T.block_name(b), str(T.take != null)])
+	t0 = OS.get_ticks_msec()
+	var shot_mid = false
+	while M.cur.phase != "done" and OS.get_ticks_msec() - t0 < 120000:
+		G.S["health"] = 100
+		if Vector2(P.pos.x - c2.x, P.pos.z - c2.z).length() > 10: P.place(c2.x + 1.5, 0, c2.z + 1.5, P.cam_yaw)
+		_kill_turf(b, 1.5)
+		if not shot_mid and T.take and T.take.p > 0.2:
+			shot_mid = true
+			yield(_shot("m_raid"), "completed")
+		yield(_wait(0.2), "completed")
+	_log("raid: phase %s ok %s, block owner %s, cash %d" % [M.cur.phase, str(M.cur.get("ok")), str(T.cur()[b]), G.S["cash"]])
 	get_tree().quit()

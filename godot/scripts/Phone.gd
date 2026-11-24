@@ -224,6 +224,12 @@ class BigMap extends Control:
 		draw_circle(pp, 3.6, Color(0.04, 0.52, 1.0))
 		for cp in main.police.COPS:
 			draw_circle(o + Vector2(cp.pos.x, cp.pos.z) * k, 3, Color(1, 0.27, 0.23))
+		var MI = main.missions
+		var mt = MI.target() if MI else null
+		if mt != null:
+			var mp = o + Vector2(mt.x, mt.z) * k
+			draw_circle(mp, 8 + 3 * (0.5 + 0.5 * sin(G.REAL_T * 5.0)), Color(1, 1, 1, 0.9))
+			draw_circle(mp, 7, MI.target_col())
 		if T and T.raid != null:
 			var rc = T.corners[T.raid.b]
 			var rp = o + Vector2(rc.x, rc.z) * k
@@ -999,6 +1005,7 @@ func _typed(t, dict_name, key):
 	elif dict_name == "chat": chat_text = t
 
 func _app_online():
+	_missions_section()
 	var net = main.net
 	net.lan_listen(net.mode in ["off", "browse", "lan_client"])
 	if net.mode == "off" and not net.browsing: net.browse(true)
@@ -1177,6 +1184,44 @@ func _accept(i):
 	main.net.accept_invite(i); show_app("online")
 func _leave_net():
 	main.net.leave(); show_app("online")
+
+# ---------- Missions (in the Online app) ----------
+func _missions_section():
+	var M = main.missions
+	if M == null: return
+	_sec("Missions")
+	var c = M.cur
+	if c != null and c.phase != "done":
+		var K = M.KINDS[c.kind]
+		var mv = _card()
+		var ml = Label.new(); ml.text = K.name; ml.add_font_override("font", G.ifont(17, "s")); ml.add_color_override("font_color", K.col); mv.add_child(ml)
+		var info = ""
+		if c.phase == "lobby": info = "Started by @%s · starts in %d s" % [c.owner, int(max(0, c.at - M.now()))]
+		else: info = "On now · started by @%s" % c.owner
+		if c.kind == "race": info += " · " + M.ROUTES[int(c.d.route)].name
+		elif c.kind == "drop": info += " · %s to %s" % [G.D["LOC"][c.d.from].name, G.D["LOC"][c.d.to].name]
+		elif c.kind == "raid": info += " · " + main.turf.block_name(int(c.d.b))
+		var il = Label.new(); il.text = info; il.autowrap = true; il.add_font_override("font", G.ifont(12, "r")); il.add_color_override("font_color", TXT2); mv.add_child(il)
+		var names = []
+		for n in c.joined: names.append("@" + n)
+		var jl = Label.new(); jl.text = "In: " + PoolStringArray(names).join(", "); jl.autowrap = true; jl.add_font_override("font", G.ifont(12, "r")); mv.add_child(jl)
+		if c.phase == "lobby" and not c["in"]: _primary("Join", "_mis_join")
+		elif c["in"]: _danger("Leave the mission", "_mis_leave")
+		return
+	var on = main.net.online() and main.net.mode != "browse"
+	_foot(("Start one and everyone here can join for %d seconds." % int(M.LOBBY)) if on else "Playing solo: missions start right away. Go online to play them with others.")
+	for k in ["race", "drop", "raid"]:
+		var K2 = M.KINDS[k]
+		var why = M.can_start(k)
+		_cell(K2.name, "Start" if why == "" else why, "_mis_start", [k], why != "", "action")
+		_foot(K2.desc)
+
+func _mis_start(k):
+	main.missions.start(k); show_app("online", true)
+func _mis_join():
+	main.missions.join(); show_app("online", true)
+func _mis_leave():
+	main.missions.leave(); show_app("online", true)
 
 # ---------- Maps ----------
 func _app_map():

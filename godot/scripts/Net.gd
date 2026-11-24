@@ -597,6 +597,10 @@ func _event(id, e):
 		_chat_line(nm, m)
 		return
 	var from_host = server != null and (id == "r" + server.sid or (server.get("direct", false) and id == "e1"))
+	if t.begins_with("mis_"):
+		if rejected.has(id): return
+		if main.missions: main.missions.net_event(t, r, e)
+		return
 	if t == "turf" or t == "turfmap" or t == "turfhit":
 		if rejected.has(id): return
 		if main.turf: main.turf.net_event(t, r, from_host, e)
@@ -661,6 +665,8 @@ func send_turf(b, o):
 	if online(): _send("ev", { "t": "turf", "b": b, "o": o })
 func send_turfmap(m):
 	if online(): _send("ev", { "t": "turfmap", "m": m })
+func send_mission(d):
+	if online(): _send("ev", d)
 func send_turfhit(b, o):
 	if online(): _send("ev", { "t": "turfhit", "b": b, "o": o, "g": main.turf.my_gang() })
 
