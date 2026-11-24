@@ -13,6 +13,14 @@ extends Node
 #
 # Options: --name=  --max=2..64  --password=  --motd=  --pvp=on|off  --region=  --id=
 # (the id keeps the same listing across restarts; it is saved on first start)
+#          --port=24680  --addr=your.public.ip[:port]  --direct=on|off
+#
+# Direct (1.9.1, on by default): the server also listens for players itself on UDP --port,
+# opens that port on the router on its own (UPnP) and lists its address, so players connect
+# straight to it, quick, and can join by address even with no relay at all (Online → Join by
+# address). On a VPS the address is the machine's own; behind a router that won't do UPnP,
+# forward the UDP port and pass --addr. Players who come in through the relay and players
+# who connect directly see each other: the server passes their messages across.
 
 const Net = preload("res://scripts/Net.gd")
 
@@ -32,6 +40,13 @@ var label = null
 var status_t = 0.0
 var online = false
 var log_file = null         # servidor.log next to the game (or in the user folder)
+var peer = null             # direct players (ENet)
+var enet = {}               # ENet id -> { "name", "seen" }
+var drop_at = {}            # ENet id -> time to disconnect (turned away)
+var pub_addr = ""
+var lan_addr = ""
+var upnp = null
+var upnp_thread = null
 
 func _ready():
 	Engine.target_fps = 20
@@ -51,9 +66,10 @@ func _ready():
 	if cfg.motd != "": _log("Message of the day: " + cfg.motd)
 	_log("Server id %s (keep --id=%s to keep the same listing)" % [sid, sid])
 	_fill()
+	if cfg.direct: _listen()
 
 func _args():
-	var c = { "name": "Drill Season server", "max": 24, "pw": "", "motd": "", "pvp": true, "region": "", "id": "", "brokers": "" }
+	var c = { "name": "Drill Season server", "max": 24, "pw": "", "motd": "", "pvp": true, "region": "", "id": "", "brokers": "", "port": Net.PORT, "addr": "", "direct": true }
 	for a in OS.get_cmdline_args():
 		var kv = a.split("=", true, 1)
 		if kv.size() < 2: continue
@@ -66,6 +82,9 @@ func _args():
 		elif k == "pvp": c.pvp = not (v.to_lower() in ["off", "0", "no", "false"])
 		elif k == "region": c.region = Net.clean_text(v, 3).to_upper()
 		elif k == "id" and v.is_valid_identifier() and v.length() <= 20: c.id = v
+		elif k == "port" and v.is_valid_integer(): c.port = int(clamp(int(v), 1024, 65535))
+		elif k == "addr": c.addr = Net.clean_addr(v)
+		elif k == "direct": c.direct = not (v.to_lower() in ["off", "0", "no", "false"])
 	if c.region == "":
 		var parts = OS.get_locale().split("_")
 		c.region = (parts[1] if parts.size() > 1 else parts[0]).to_upper().substr(0, 3)
@@ -85,6 +104,126 @@ func _saved_id():
 	if f.open(p, File.WRITE) == OK:
 		f.store_string(s2); f.close()
 	return s2
+
+# ---------- direct players ----------
+func _listen():
+	peer = NetworkedMultiplayerENet.new()
+	if peer.create_server(cfg.port, cfg.max + 4) != OK:
+		_log("Could not listen on UDP %d (in use?). Players can still join through the relay." % cfg.port)
+		peer = null; return
+	get_tree().network_peer = peer
+	get_tree().connect("network_peer_connected", self, "_peer_in")
+	get_tree().connect("network_peer_disconnected", self, "_peer_out")
+	for ip in _ips():
+		lan_addr = "%s:%d" % [ip, cfg.port]; break
+	if cfg.addr != "":
+		pub_addr = cfg.addr if ":" in cfg.addr else "%s:%d" % [cfg.addr, cfg.port]
+		_log("Direct: listening on UDP %d, address %s" % [cfg.port, pub_addr])
+		return
+	for ip in _ips():
+		if _public(ip):
+			pub_addr = "%s:%d" % [ip, cfg.port]
+			_log("Direct: listening on UDP %d, address %s" % [cfg.port, pub_addr])
+			return
+	_log("Direct: listening on UDP %d (%s on this network). Asking the router to open the port…" % [cfg.port, lan_addr])
+	if ClassDB.class_exists("UPNP") and OS.get_environment("DS_NOUPNP") == "":
+		upnp_thread = Thread.new()
+		upnp_thread.start(self, "_upnp_job", cfg.port)
+
+func _upnp_job(port):
+	var u = UPNP.new()
+	var res = { "ok": false, "ip": "" }
+	if u.discover(2000, 2, "InternetGatewayDevice") == UPNP.UPNP_RESULT_SUCCESS and u.get_gateway() != null and u.get_gateway().is_valid_gateway():
+		if u.add_port_mapping(port, port, "Drill Season server", "UDP", 0) == UPNP.UPNP_RESULT_SUCCESS:
+			res.ok = true; res.ip = u.query_external_address()
+	call_deferred("_upnp_done", res, u)
+
+func _upnp_done(res, u):
+	upnp_thread.wait_to_finish(); upnp_thread = null
+	if res.ok and str(res.ip) != "":
+		upnp = u
+		pub_addr = "%s:%d" % [res.ip, cfg.port]
+		_log("The router opened the port: players anywhere connect to %s" % pub_addr)
+	else:
+		_log("The router didn't open UDP %d. Forward it by hand and start with --addr=<your public ip>, or players outside this network join through the relay." % cfg.port)
+	announce_t = 0.0
+
+func _ips():
+	var out = []
+	for ip in IP.get_local_addresses():
+		if ip.find(":") >= 0 or ip.begins_with("127.") or ip.begins_with("169.254."): continue
+		out.append(ip)
+	return out
+
+func _public(ip):
+	var a = ip.split(".")
+	if a.size() != 4: return false
+	var b = int(a[1])
+	return not (a[0] == "10" or (a[0] == "172" and b >= 16 and b <= 31) or (a[0] == "192" and a[1] == "168") or (a[0] == "100" and b >= 64 and b <= 127))
+
+func _peer_in(id):
+	enet[id] = { "name": "", "seen": G.REAL_T, "ok": false }
+
+func _peer_out(id):
+	var p = enet.get(id)
+	if p != null and p.ok:
+		_log("@%s left" % p.name)
+		_relay_send("bye", {}, "e%d" % id)
+	enet.erase(id); drop_at.erase(id)
+	announce_t = min(announce_t, 1.0)
+
+# a direct player's message (players connected directly see it already: ENet passes it on)
+remote func msg(kind, d):
+	if typeof(d) != TYPE_DICTIONARY or typeof(kind) != TYPE_STRING: return
+	var from = get_tree().get_rpc_sender_id()
+	var p = enet.get(from)
+	if p == null: return
+	p.seen = G.REAL_T
+	if kind == "hi":
+		if not p.ok: _admit_direct(from, d)
+	elif not p.ok:
+		return
+	elif kind == "ev" and str(d.get("t", "")) == "chat":
+		_log("@%s: %s" % [p.name, Net.clean_text(d.get("m", ""), 120)])
+	if p.ok and kind in ["hi", "st", "ev"]:
+		# across to the players on the relay
+		var out = d.duplicate()
+		if out.has("to") and str(out.to).begins_with("r"): out.to = str(out.to).substr(1)
+		_relay_send(kind, out, "e%d" % from)
+
+remote func fwd(_a, _b, _c):
+	pass
+
+func _admit_direct(id, d):
+	var nm = Net.clean_text(d.get("name", "player"), 18)
+	var pw = str(d.get("pw", ""))
+	var why = ""
+	if cfg.pw != "" and pw != Net.pw_hash(cfg.pw, sid) and pw != Net.pw_hash(cfg.pw, ""): why = "Wrong password"
+	elif _count() >= cfg.max: why = "Server full"
+	if why != "":
+		_log("Turned away @%s: %s" % [nm, why])
+		rpc_id(id, "msg", "ev", { "t": "kick", "why": why, "to": "e%d" % id, "q": _q() })
+		drop_at[id] = G.REAL_T + 0.6
+		return
+	enet[id].ok = true; enet[id].name = nm
+	_log("@%s joined (direct)" % nm)
+	rpc_id(id, "msg", "ev", { "t": "welcome", "name": cfg.name, "motd": cfg.motd, "pvp": cfg.pvp, "max": cfg.max, "to": "e%d" % id, "q": _q() })
+	announce_t = min(announce_t, 1.0)
+
+func _q():
+	seq += 1
+	return seq
+
+func _count():
+	var n = players.size()
+	for p in enet.values():
+		if p.ok: n += 1
+	return n
+
+func _relay_send(kind, d, as_id):
+	if links.empty(): return
+	var payload = JSON.print(d)
+	for l in links: l.publish(Net.PREFIX + room + "/" + kind + "/" + as_id, payload)
 
 func _brokers():
 	var env = OS.get_environment("DS_BROKERS")
@@ -132,6 +271,10 @@ func _process(dt):
 	announce_t -= dt
 	if online and announce_t <= 0:
 		announce_t = 10.0; _announce()
+	for id in drop_at.keys():
+		if G.REAL_T > drop_at[id]:
+			drop_at.erase(id)
+			if peer: peer.disconnect_peer(id)
 	for id in players.keys():
 		if G.REAL_T - players[id].seen > 15.0:
 			_log("@%s left" % players[id].name)
@@ -141,13 +284,14 @@ func _process(dt):
 	status_t -= dt
 	if status_t <= 0:
 		status_t = 60.0
-		print("[server] %d/%d players" % [players.size(), cfg.max])
+		print("[server] %d/%d players" % [_count(), cfg.max])
 	if label:
-		label.text = "%s\n%d / %d players · %s\n\n%s" % [cfg.name, players.size(), cfg.max, "online" if online else "connecting…", PoolStringArray(log_lines).join("\n")]
+		var where = ("direct " + (pub_addr if pub_addr != "" else lan_addr)) if peer else "relay only"
+		label.text = "%s\n%d / %d players · %s · %s\n\n%s" % [cfg.name, _count(), cfg.max, "relay online" if online else "relay connecting…", where, PoolStringArray(log_lines).join("\n")]
 
 func _announce():
-	var d = { "n": cfg.name, "m": cfg.motd, "p": players.size(), "x": cfg.max, "k": cfg.pw != "", "r": cfg.region, "d": true, "pvp": cfg.pvp,
-		"h": "dedicated", "room": room, "v": Net.VERSION, "t": OS.get_unix_time() }
+	var d = { "n": cfg.name, "m": cfg.motd, "p": _count(), "x": cfg.max, "k": cfg.pw != "", "r": cfg.region, "d": true, "pvp": cfg.pvp,
+		"h": "dedicated", "room": room, "v": Net.VERSION, "t": OS.get_unix_time(), "a": pub_addr if peer else "", "l": lan_addr if peer else "" }
 	var payload = JSON.print(d)
 	for l in links: l.publish(Net.PREFIX + "servers/" + sid, payload, true)
 
@@ -169,7 +313,9 @@ func _relay_in(topic, payload):
 	if kind == "bye":
 		if players.has(from):
 			_log("@%s left" % players[from].name); players.erase(from); announce_t = min(announce_t, 1.0)
+			_to_direct("bye", {}, from)
 		return
+	if from.begins_with("e") and from.substr(1).is_valid_integer(): return     # our own bridge, echoed back
 	if payload.length() > 20000: return
 	var d = parse_json(payload)
 	if typeof(d) != TYPE_DICTIONARY: return
@@ -184,6 +330,17 @@ func _relay_in(topic, payload):
 		if players.has(from): players[from].seen = G.REAL_T
 	elif kind == "ev" and str(d.get("t", "")) == "chat" and players.has(from):
 		_log("@%s: %s" % [players[from].name, Net.clean_text(d.get("m", ""), 120)])
+	if players.has(from): _to_direct(kind, d, from)
+
+# across to the players connected directly (who see relay players as "r" + their id)
+func _to_direct(kind, d, from):
+	if peer == null: return
+	var any = false
+	for p in enet.values():
+		if p.ok: any = true
+	if not any: return
+	if kind == "st": rpc_unreliable("fwd", "r" + from, kind, d)
+	else: rpc("fwd", "r" + from, kind, d)
 
 func _admit(from, p):
 	var nm = Net.clean_text(p.get("name", "player"), 18)
@@ -229,5 +386,9 @@ func _notification(what):
 		for l in links:
 			l.publish(Net.PREFIX + "servers/" + sid, "", true)
 			l.close()
+		if peer:
+			for id in enet.keys():
+				rpc_id(id, "msg", "ev", { "t": "closing", "q": _q() })
+		if upnp != null: upnp.delete_port_mapping(cfg.port, "UDP")
 		if log_file:
 			log_file.close(); log_file = null

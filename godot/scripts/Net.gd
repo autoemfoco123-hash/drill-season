@@ -8,6 +8,14 @@ extends Node
 # the host answers with a welcome (or a kick: wrong password, full, banned). There is chat.
 # Nobody opens ports: hosts and players all connect OUT to the relay below.
 #
+# Direct servers (1.9.1): a server created on a computer listens for players itself (ENet,
+# UDP 24680), opens that port on the router on its own (UPnP), and lists its address next to
+# its name, so players connect straight to it: quick, and it doesn't lean on the public
+# relay for anything but the list. If the router won't open the port, the server runs on the
+# relay instead, as before. Any server can also be joined by its address (ip:port), with no
+# list and no relay at all. A dedicated server (Server.gd) takes both: players who connect
+# directly and players on the relay, and passes their messages across, so they all meet.
+#
 # Two ways to connect, both carrying the same messages:
 #  - Online (internet): every player connects OUT to public MQTT message brokers over a
 #    secure WebSocket, and the brokers pass the game's messages around. Nobody hosts and
@@ -64,6 +72,12 @@ var rejected = {}           # ids the host turned away (everyone ignores them)
 var kicked = {}             # host: id -> until
 var chat = []               # [{ "n": name, "m": text }]
 var chat_t = 0.0
+var pub_addr = ""            # a direct server's address on the internet (ip:port), once the port is open
+var lan_addr = ""            # and on its own network
+var port_state = ""          # "", checking, open, closed
+var upnp = null
+var upnp_port = 0
+var upnp_thread = null
 const EMOTE_IDS = ["", "dance1", "dance2", "dance3", "hype", "clap", "laugh", "shrug", "salute", "point", "facepalm", "flex", "sit", "snowangel", "pray", "sturdy", "griddy", "shmoney", "woah", "hitfolks"]
 const CAR_MODELS = ["hatch", "sedan", "suv", "pickup", "coupe", "van", "police", "taxi", "bruiser", "boulder"]
 
@@ -359,6 +373,8 @@ func _relay_poll(dt):
 	if relay_t <= 0:
 		relay_t = 3.0
 		_fill_links()
+	if mode == "lan_host":
+		return       # a direct server: the relay only carries its listing; players reach it on its port
 	if any and status != "online":
 		status = "online"
 		if mode == "relay":
@@ -448,7 +464,10 @@ func _on_connected():
 	main.hud.banner("Online", "Connected to the host")
 
 func _on_failed():
-	status = "offline"; note = "Could not connect. Check the IP, and that the host's port %d is open." % PORT
+	status = "offline"; note = "Could not connect. Check the address, and that the server's UDP port is open."
+	if server != null:
+		main.hud.banner("Couldn't reach the server", server.name)
+		server = null; welcomed = false
 	call_deferred("_drop_peer")
 
 func _drop_peer():
@@ -467,14 +486,17 @@ func _on_peer_gone(id):
 # ---------- leaving ----------
 func leave(quiet = false):
 	for id in R.keys(): _remove(id)
-	if mode == "relay" or mode == "browse":
+	if hosting and server != null and server.get("direct", false) and peer != null:
+		_send("ev", { "t": "closing" })            # straight to the players on our port
+	if mode == "relay" or mode == "browse" or links.size() > 0:
 		for l in links:
 			if hosting:
-				_send("ev", { "t": "closing" })
+				if mode == "relay": _send("ev", { "t": "closing" })
 				l.publish(PREFIX + "servers/" + server.sid, "", true)
 			if mode == "relay": l.publish(PREFIX + room + "/bye/" + uid, "{}")
 			l.close()
 	links.clear()
+	_close_port()
 	if peer:
 		peer.close_connection()
 		get_tree().network_peer = null
@@ -509,6 +531,8 @@ func _remote(id):
 
 func _hello(id, p):
 	if hosting and not R.has(id) and not _admit(id, p): return
+	if not hosting and mode == "lan_host" and p.has("srv") and not R.has(id):
+		_send("ev", { "t": "welcome", "name": "@%s's game" % str(G.S["name"]).substr(0, 18), "motd": "", "pvp": true, "max": 8 }, _to(id))
 	var r = _remote(id)
 	var first = not r.has_hello
 	r.has_hello = true
@@ -572,9 +596,10 @@ func _event(id, e):
 		var nm = r.name if r else "server"
 		_chat_line(nm, m)
 		return
-	var from_host = server != null and id == "r" + server.sid
+	var from_host = server != null and (id == "r" + server.sid or (server.get("direct", false) and id == "e1"))
 	if t == "reject" and from_host:
-		var who = "r" + str(e.get("who", ""))
+		var w = str(e.get("who", ""))
+		var who = w if w.begins_with("e") else "r" + w
 		if who != "r" + uid:
 			rejected[who] = true; _remove(who)
 		return
@@ -678,7 +703,7 @@ func targets():
 # ---------- every frame ----------
 func update(dt):
 	_lan(dt)
-	if mode == "relay" or mode == "browse": _relay_poll(dt)
+	if mode == "relay" or mode == "browse" or (hosting and links.size() > 0): _relay_poll(dt)
 	for k in seen_ev.keys():
 		if G.REAL_T - seen_ev[k] > 30: seen_ev.erase(k)
 	for sid in servers.keys():
@@ -855,7 +880,8 @@ func _server_info(sid, payload):
 	if rm == "": return
 	servers[sid] = { "sid": sid, "name": clean_text(d.get("n", "Server"), 32), "motd": clean_text(d.get("m", ""), 120), "p": int(_num(d.get("p", 1), 0, 64)),
 		"x": int(_num(d.get("x", 16), 2, 64)), "k": d.get("k", false) == true, "r": clean_text(d.get("r", ""), 3), "d": d.get("d", false) == true,
-		"pvp": d.get("pvp", true) == true, "h": clean_text(d.get("h", ""), 18), "room": rm, "v": clean_text(d.get("v", ""), 8), "seen": G.REAL_T }
+		"pvp": d.get("pvp", true) == true, "h": clean_text(d.get("h", ""), 18), "room": rm, "v": clean_text(d.get("v", ""), 8), "seen": G.REAL_T,
+		"a": clean_addr(d.get("a", "")), "l": clean_addr(d.get("l", "")) }
 
 func server_list():
 	var out = servers.values()
@@ -866,38 +892,162 @@ func _by_players(a, b):
 	if a.d != b.d: return a.d
 	return a.p > b.p
 
-# create a server: this game hosts it on the relay (keep it open; leaving closes the server)
+# create a server. Direct (the default on a computer): this game listens for players itself
+# and opens its port on the router (UPnP); if the router won't, it moves to the relay. Relay:
+# hosted through the public relay, like before. Keep it open; leaving closes the server.
 func host_server(cfg):
 	leave(true)
 	hosting = true
 	host_pw = str(cfg.get("pw", "")).substr(0, 32)
 	server = { "sid": uid, "name": clean_text(cfg.get("name", "Server"), 32), "motd": clean_text(cfg.get("motd", ""), 120), "max": int(clamp(int(cfg.get("max", 16)), 2, 64)),
-		"pw": host_pw != "", "pvp": cfg.get("pvp", true) == true, "ded": false }
+		"pw": host_pw != "", "pvp": cfg.get("pvp", true) == true, "ded": false, "direct": false }
 	welcomed = true
+	if cfg.get("direct", false) and _listen(int(cfg.get("port", PORT)), server.max):
+		server.direct = true
+		room = "direct"
+		var ips = my_ips()
+		lan_addr = ("%s:%d" % [ips[0], upnp_port]) if ips.size() > 0 else ""
+		note = "Opening port %d on your router…" % upnp_port
+		_open_port(upnp_port)
+		_fill_links()         # the relay only carries the listing
+		main.hud.banner(server.name, "Your server is online")
+		return
 	_connect_room("s" + uid)
+
+func _listen(port, mx):
+	peer = NetworkedMultiplayerENet.new()
+	if peer.create_server(port, mx + 2) != OK:
+		peer = null
+		note = "Port %d is busy, hosting through the relay instead." % port
+		return false
+	get_tree().network_peer = peer
+	mode = "lan_host"; status = "online"
+	upnp_port = port
+	bcast = PacketPeerUDP.new(); bcast.set_broadcast_enabled(true)
+	bcast.set_dest_address("255.255.255.255", LAN_PORT)
+	return true
+
+# the router: ask it to forward the port to us (in a thread: finding it takes a second or two)
+func _open_port(port):
+	port_state = "checking"
+	if OS.get_environment("DS_FAKEUPNP") != "":          # tests: pretend the router said yes
+		_upnp_done({ "ok": true, "ip": OS.get_environment("DS_FAKEUPNP") }, null, port); return
+	if not ClassDB.class_exists("UPNP") or OS.get_environment("DS_NOUPNP") != "":
+		_upnp_done({ "ok": false, "ip": "" }, null, port); return
+	upnp_thread = Thread.new()
+	upnp_thread.start(self, "_upnp_job", port)
+
+func _upnp_job(port):
+	var u = UPNP.new()
+	var res = { "ok": false, "ip": "" }
+	if u.discover(2000, 2, "InternetGatewayDevice") == UPNP.UPNP_RESULT_SUCCESS and u.get_gateway() != null and u.get_gateway().is_valid_gateway():
+		if u.add_port_mapping(port, port, "Drill Season", "UDP", 0) == UPNP.UPNP_RESULT_SUCCESS:
+			res.ok = true
+			res.ip = u.query_external_address()
+	call_deferred("_upnp_done", res, u, port)
+
+func _upnp_done(res, u, port):
+	if upnp_thread:
+		upnp_thread.wait_to_finish(); upnp_thread = null
+	if not hosting or server == null: return
+	if res.ok and str(res.ip) != "":
+		upnp = u
+		pub_addr = "%s:%d" % [res.ip, port]
+		port_state = "open"
+		note = "Port %d is open: players anywhere connect straight to you (%s)." % [port, pub_addr]
+		announce_t = 0.0
+	else:
+		port_state = "closed"
+		# nobody outside this network could reach us: host on the relay instead
+		var cfg = { "name": server.name, "motd": server.motd, "pw": host_pw, "max": server.max, "pvp": server.pvp, "direct": false }
+		host_server(cfg)
+		note = "Your router didn't open port %d, so the server runs through the relay (works anywhere, a bit slower)." % port
+
+func _close_port():
+	if upnp != null and upnp_port > 0:
+		upnp.delete_port_mapping(upnp_port, "UDP")
+	upnp = null
+	pub_addr = ""; lan_addr = ""; port_state = ""
 
 func join_server(sid, pw = ""):
 	var info = servers.get(sid)
 	if info == null: return false
+	var srv = { "sid": sid, "name": info.name, "motd": info.motd, "max": info.x, "pw": info.k, "pvp": info.pvp, "ded": info.d }
+	# a direct server: straight to it (its own network's address if we're on that network)
+	var addr = info.get("a", "")
+	var la = info.get("l", "")
+	if la != "" and _same_net(la.split(":")[0]): addr = la
+	if addr != "":
+		return join_addr(addr, pw, srv)
 	leave(true)
-	server = { "sid": sid, "name": info.name, "motd": info.motd, "max": info.x, "pw": info.k, "pvp": info.pvp, "ded": info.d }
+	server = srv
 	join_pw = str(pw)
 	welcomed = false; welcome_t = 12.0
 	_connect_room(info.room)
 	return true
 
+# join any server by its address (ip or ip:port), listed or not
+func join_addr(addr, pw = "", srv = null):
+	addr = clean_addr(str(addr).strip_edges())
+	if addr == "":
+		note = "Type the server's address, like 203.0.113.5:24680"; return false
+	var parts = addr.split(":")
+	var ip = parts[0]
+	var port = int(parts[1]) if parts.size() > 1 and parts[1].is_valid_integer() else PORT
+	leave(true)
+	peer = NetworkedMultiplayerENet.new()
+	if peer.create_client(ip, port) != OK:
+		note = "Could not reach %s" % addr; peer = null; return false
+	get_tree().network_peer = peer
+	mode = "lan_client"; status = "connecting"; room = "direct"
+	if srv == null: srv = { "sid": "", "name": addr, "motd": "", "max": 16, "pw": pw != "", "pvp": true, "ded": false }
+	srv["direct"] = true
+	server = srv
+	join_pw = str(pw)
+	welcomed = false; welcome_t = 12.0
+	note = "Connecting to %s …" % addr
+	return true
+
+func _same_net(ip):
+	var a = ip.split(".")
+	if a.size() != 4: return false
+	for m in my_ips():
+		var b = m.split(".")
+		if b.size() == 4 and a[0] == b[0] and a[1] == b[1] and a[2] == b[2]: return true
+	return false
+
+static func clean_addr(v):
+	var out = ""
+	for ch in str(v).substr(0, 60):
+		if ch in "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-:": out += ch
+	return out
+
+# a dedicated server passes on what players on the relay say (the sender's id kept)
+remote func fwd(from_id, kind, d):
+	if get_tree().get_rpc_sender_id() != 1: return
+	if typeof(d) != TYPE_DICTIONARY or typeof(kind) != TYPE_STRING or typeof(from_id) != TYPE_STRING: return
+	if not from_id.begins_with("r") or from_id.length() > 26 or not from_id.is_valid_identifier(): return
+	if kind == "bye":
+		_remove(from_id); return
+	if kind == "ev" and d.has("to") and str(d.to) != "e" + str(get_tree().get_network_unique_id()): return
+	if rejected.has(from_id) and kind != "ev": return
+	_on_msg(from_id, kind, d)
+
 func _announce():
 	var d = { "n": server.name, "m": server.motd, "p": R.size() + 1, "x": server.max, "k": server.pw, "r": region(), "d": false, "pvp": server.pvp,
-		"h": str(G.S["name"]).substr(0, 18), "room": room, "v": VERSION, "t": OS.get_unix_time() }
+		"h": str(G.S["name"]).substr(0, 18), "room": room, "v": VERSION, "t": OS.get_unix_time(), "a": pub_addr, "l": lan_addr }
 	var payload = JSON.print(d)
 	for l in links: l.publish(PREFIX + "servers/" + server.sid, payload, true)
 
 # the host decides who gets in
+func _to(id):
+	return id if id.begins_with("e") else id.substr(1)
+
 func _admit(id, p):
-	var rid = id.substr(1)
+	var rid = _to(id)
 	var why = ""
 	if kicked.has(id) and kicked[id] > G.REAL_T: why = "You were kicked from this server"
-	elif host_pw != "" and str(p.get("pw", "")) != pw_hash(host_pw, server.sid): why = "Wrong password"
+	elif host_pw != "" and str(p.get("pw", "")) != pw_hash(host_pw, server.sid) and str(p.get("pw", "")) != pw_hash(host_pw, ""): why = "Wrong password"
 	elif R.size() + 1 >= server.max: why = "Server full"
 	if why != "":
 		_send("ev", { "t": "kick", "why": why }, rid)
@@ -911,7 +1061,7 @@ func _admit(id, p):
 
 func kick(id):
 	if not hosting or not R.has(id): return
-	var rid = id.substr(1)
+	var rid = _to(id)
 	kicked[id] = G.REAL_T + 600.0
 	_send("ev", { "t": "kick", "why": "Kicked by the host" }, rid)
 	_send("ev", { "t": "reject", "who": rid })

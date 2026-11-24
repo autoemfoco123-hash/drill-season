@@ -33,6 +33,8 @@ func run(m):
 	elif OS.get_environment("DS_BACKSEATTEST") != "": call_deferred("_backseat_test")
 	elif OS.get_environment("DS_PHONETEST") != "": call_deferred("_phone_test")
 	elif OS.get_environment("DS_CARTEST") != "": call_deferred("_car_test")
+	elif OS.get_environment("DS_DIRECTTEST") != "": call_deferred("_direct_test")
+	elif OS.get_environment("DS_BLURTEST") != "": call_deferred("_blur_test")
 	else: call_deferred("_go")
 
 func _wait(s):
@@ -1948,4 +1950,74 @@ func _car_test():
 	yield(_shot("x_wreck"), "completed")
 	_log("blast: wreck at y %.2f, neighbour hp %.0f, wanted %s" % [c2.blast.y, c3.hp, str(G.S.get("wanted", "?"))])
 	main.cutscene.end()
+	get_tree().quit()
+
+# ---------------------------------------------------------------- direct servers (DS_DIRECTTEST="addr|password|name|seconds")
+func _direct_test():
+	var a = OS.get_environment("DS_DIRECTTEST").split("|")
+	yield(_wait(1.0), "completed")
+	var st = G.new_state("d" + a[2])
+	st["name"] = a[2]
+	main.title._close(); main.start_game(st)
+	yield(_wait(1.0), "completed")
+	var net = main.net
+	if a[0] == "host":
+		net.host_server({ "name": "Test host", "motd": "in-game server", "pw": a[1], "max": 8, "pvp": true, "direct": true })
+		_log("hosting: mode %s direct %s address %s port %s" % [net.mode, str(net.server.direct), net.pub_addr, net.port_state])
+	else:
+		_log("joining %s as %s: %s" % [a[0], a[2], str(net.join_addr(a[0], a[1]))])
+	var t = 0.0
+	var said = false
+	while t < float(a[3]):
+		yield(_wait(0.5), "completed")
+		t += 0.5
+		if net.welcomed and not said:
+			said = true
+			_log("%s welcomed by %s (motd %s) after %.1f s" % [a[2], net.server.name, net.server.motd, t])
+			net.chat_t = 0.0
+			net.send_chat("hello from " + a[2])
+		if net.server == null:
+			_log("%s: no longer on the server (%s)" % [a[2], net.note]); break
+	var names = []
+	for r in net.R.values(): names.append(r.name)
+	_log("%s sees %d players: %s; chat lines %d; mode %s" % [a[2], net.R.size(), str(names), net.chat.size(), net.mode])
+	main.phone.open("online")
+	yield(_wait(0.6), "completed")
+	yield(_shot("n_" + a[2]), "completed")
+	get_tree().quit()
+
+# ---------------------------------------------------------------- motion blur (DS_BLURTEST)
+var _spin = 0.0
+func _process(dt):
+	if _spin != 0.0 and main and main.player:
+		main.player.cam_yaw += _spin * dt
+		main.player.last_look = G.REAL_T
+func _blur_test():
+	yield(_wait(1.0), "completed")
+	main.title._close(); main.start_game(G.new_state("blur"))
+	yield(_wait(1.5), "completed")
+	G.S["settings"]["quality"] = "high"; main.set_quality("high")
+	G.time_offset += (13 * 60 - G.world_minutes())
+	var P = main.player
+	P.place(-95 + 3, 0, -150, PI)
+	yield(_wait(0.5), "completed")
+	# on foot, a fast turn
+	_spin = 2.6
+	yield(_wait(0.6), "completed")
+	yield(_shot("mb_turn"), "completed")
+	_log("turning: blur on %s shift %s" % [str(main.motion_blur.rect.visible), str(main.motion_blur.shift)])
+	_spin = 0.0
+	yield(_wait(1.0), "completed")
+	yield(_shot("mb_still"), "completed")
+	_log("still: blur on %s" % str(main.motion_blur.rect.visible))
+	# flat out in the fastback
+	var car = main.vehicles.spawn("bruiser", -95, -200, 0.0, { "owned": true, "color": 0x6b0d12 })
+	main.vehicles.enter(car)
+	Input.action_press("move_f")
+	var tt = 0.0
+	while car.speed < 45.0 and tt < 25.0:
+		yield(get_tree(), "idle_frame"); tt += get_process_delta_time()
+	yield(_shot("mb_speed"), "completed")
+	_log("at %.0f km/h: blur on %s zoom %.3f" % [car.speed * 3.6, str(main.motion_blur.rect.visible), main.motion_blur.zoom])
+	Input.action_release("move_f")
 	get_tree().quit()

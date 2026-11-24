@@ -29,6 +29,12 @@ Online (Android, Linux, Windows e Mac juntos): celular (Tab) > Online.
   - Quick play: sala pública ou sala privada com código de 5 letras.
   Não precisa abrir portas no roteador.
 
+Servidores diretos (1.9.1): ao criar um servidor no PC, o jogo pede ao roteador para abrir
+a porta UDP 24680 (UPnP) e os jogadores conectam direto em você: mais rápido e sem depender
+do relay. Se o roteador não abrir, o servidor roda pelo relay como antes. Em Online > Join
+by address dá para entrar em qualquer servidor pelo endereço (ex.: 203.0.113.5:24680),
+com senha se tiver, mesmo sem a lista. Motion blur leve: Settings > Motion blur.
+
 Servidor dedicado (24 horas, sem você jogando): edite servidor.sh (Linux) ou
 servidor.bat (Windows) com o nome, a senha, as vagas e a mensagem, e rode. Deixe ligado
 num PC ou VPS: o servidor aparece em Online > Servers para todo mundo. Numa VPS Linux

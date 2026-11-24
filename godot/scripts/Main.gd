@@ -32,6 +32,7 @@ var env
 var sun
 var city
 var city_build
+var motion_blur
 var facade_mats = []
 var emis_mats = []
 var glow_mats = []
@@ -52,7 +53,7 @@ func _ready():
 	if "--server" in OS.get_cmdline_args():
 		server_mode = true
 		var srv = load("res://scripts/Server.gd").new()
-		srv.name = "Server"
+		srv.name = "Net"      # the same path as the game's Net, so players' calls reach it
 		add_child(srv)
 		return
 	W.setup(G.D)
@@ -94,7 +95,8 @@ func _ready():
 	interiors = _system("res://scripts/Interiors.gd", "Interiors")
 	console = _system("res://scripts/Console.gd", "Console")
 	music = _system("res://scripts/Music.gd", "Music")
-	for s in [sfx, vehicles, player, peds, police, crews, gang, hud, phone, title, story, cutscene, studio, blok, train, fx, net, wardrobe, cockpit, touch, memorial, sky, eras, interiors, console, music]:
+	motion_blur = _system("res://scripts/MotionBlur.gd", "MotionBlur")
+	for s in [sfx, vehicles, player, peds, police, crews, gang, hud, phone, title, story, cutscene, studio, blok, train, fx, net, wardrobe, cockpit, touch, memorial, sky, eras, interiors, console, music, motion_blur]:
 		s.setup(self)
 	story.build_npcs()
 	eras.build()
@@ -337,6 +339,7 @@ func _process(dt):
 	memorial.update(dt)
 	net.update(dt)
 	update_day_night(player.pos)
+	motion_blur.update(dt)
 	sfx.update(dt)
 	hud.update(dt)
 	phone.update(dt)

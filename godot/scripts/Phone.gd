@@ -36,7 +36,7 @@ var badge_lbl
 var app = ""
 var gang_tab = "crew"
 var form = { "name": "", "tag": "", "color": 0 }
-var srv_form = { "name": "", "motd": "", "pw": "", "max": 16, "pvp": true }
+var srv_form = { "name": "", "motd": "", "pw": "", "max": 16, "pvp": true, "direct": true }
 var join_sid = ""
 var join_pw = ""
 var chat_text = ""
@@ -44,6 +44,7 @@ var msg = ""
 var thread = null
 var blok_tab = "feed"
 var ip_edit = null
+var addr_pw_edit = null
 var lan_edit = null
 var anim = 0.0              # 0 put away .. 1 in your hand
 var anim_to = 0.0
@@ -985,7 +986,10 @@ func _app_online():
 		head = ("%s · %d/%d" % [net.server.name, n, net.server.max]) if net.online() else "Connecting to " + net.server.name + "…"
 		if net.online() and not net.hosting and not net.welcomed: head = "Joining " + net.server.name + "…"
 	elif net.mode == "relay": head = ("Room %s · %d here" % [net.room_label(), n]) if net.online() else "Connecting…"
+	elif net.mode == "lan_host" and net.server != null: head = "%s · %d/%d · direct" % [net.server.name, n, net.server.max]
 	elif net.mode == "lan_host": head = "Hosting on this network · %d here" % n
+	elif net.mode == "lan_client" and net.server != null:
+		head = ("%s · %d/%d" % [net.server.name, n, net.server.max]) if net.welcomed else ("Joining " + net.server.name + "…")
 	elif net.mode == "lan_client": head = ("Joined · %d here" % n) if net.online() else "Joining…"
 	if net.mode != "off" and net.mode != "browse":
 		var hv = _card()
@@ -1005,6 +1009,7 @@ func _app_online():
 			var tags = ["%d/%d" % [sv.p, sv.x]]
 			if sv.r != "": tags.append(sv.r)
 			if sv.d: tags.append("24h")
+			if sv.get("a", "") != "": tags.append("direct")
 			if sv.k: tags.append("pw")
 			if not sv.pvp: tags.append("no PvP")
 			_cell(sv.name, PoolStringArray(tags).join(" · "), "_pick_server", [sv.sid], sv.p >= sv.x)
@@ -1020,6 +1025,7 @@ func _app_online():
 		_edit(srv_form.pw, "Password (optional)", "pw", "srv", true, 32)
 		_cell("Players", str(int(srv_form.max)), "_srv_max")
 		_switch("PvP", srv_form.pvp, "_srv_pvp")
+		_switch("Direct connection (faster)", srv_form.direct, "_srv_direct")
 		_primary("Create server", "_create_server")
 		_foot("Your game hosts the server while it is open. For one that stays up day and night, run the dedicated server (servidor.sh / servidor.bat).")
 		_sec("Quick play")
@@ -1027,10 +1033,13 @@ func _app_online():
 		_action("Create a private room", "_go_private")
 		ip_edit = _edit(str(G.S["settings"].get("lastRoom", "")), "Room code from a friend", "code", "none", false, 12)
 		_action("Join private room", "_go_code")
-		_sec("Same Wi-Fi or direct IP")
+		_sec("Join by address")
+		lan_edit = _edit(str(G.S["settings"].get("lastIp", "")), "Server address, e.g. 203.0.113.5:24680", "ip", "none", false, 60)
+		addr_pw_edit = _edit("", "Password (if it has one)", "pw", "none", true, 32)
+		_action("Join", "_join")
+		_foot("Any server by its address: a friend's, a dedicated server, one on this Wi-Fi. No server list or relay needed.")
+		_sec("Same Wi-Fi")
 		_action("Host on this network", "_host")
-		lan_edit = _edit(str(G.S["settings"].get("lastIp", "")), "Host IP, e.g. 192.168.0.10", "ip", "none", false, 40)
-		_action("Join by IP", "_join")
 		if net.LAN.size() > 0:
 			for k in net.LAN.keys():
 				var g = net.LAN[k]
@@ -1055,7 +1064,10 @@ func _app_online():
 			rc.add_color_override("font_color", Color(1, 0.62, 0.04)); rv.add_child(rc)
 			var rt = Label.new(); rt.text = "Send this code to your friends. They open Online, type it and press Join."; rt.autowrap = true; rt.align = Label.ALIGN_CENTER
 			rt.add_font_override("font", G.ifont(12, "r")); rt.add_color_override("font_color", TXT2); rv.add_child(rt)
-		if net.mode == "lan_host":
+		if net.mode == "lan_host" and net.server != null:
+			var addr = net.pub_addr if net.pub_addr != "" else (net.lan_addr + " (this network)")
+			_foot("Address: %s   ·   %s" % [addr, { "checking": "opening the port…", "open": "port open", "closed": "port closed" }.get(net.port_state, "")])
+		elif net.mode == "lan_host":
 			_foot("Your address: " + PoolStringArray(net.my_ips()).join(", ") + "  ·  port %d (UDP)" % net.PORT)
 		_sec("Players")
 		for r in net.R.values():
@@ -1090,6 +1102,10 @@ func _srv_max():
 	srv_form.max = order[(order.find(int(srv_form.max)) + 1) % order.size()]
 	show_app("online", true)
 
+func _srv_direct():
+	srv_form.direct = not srv_form.direct
+	show_app("online", true)
+
 func _srv_pvp():
 	srv_form.pvp = not srv_form.pvp
 	show_app("online", true)
@@ -1100,7 +1116,7 @@ func _create_server():
 		main.hud.toast("Give the server a name"); return
 	if not main.gang.text_ok(nm):
 		main.hud.toast("Pick a different name"); return
-	main.net.host_server({ "name": nm, "motd": srv_form.motd, "pw": srv_form.pw, "max": srv_form.max, "pvp": srv_form.pvp })
+	main.net.host_server({ "name": nm, "motd": srv_form.motd, "pw": srv_form.pw, "max": srv_form.max, "pvp": srv_form.pvp, "direct": srv_form.direct })
 	show_app("online")
 
 func _send_chat_enter(_t):
@@ -1130,7 +1146,7 @@ func _host():
 func _join():
 	var ip = lan_edit.text if lan_edit else ""
 	G.S["settings"]["lastIp"] = ip
-	main.net.join(ip); show_app("online")
+	main.net.join_addr(ip, addr_pw_edit.text if addr_pw_edit else ""); show_app("online")
 func _join_lan(ip, port):
 	main.net.join(ip, port); show_app("online")
 func _invite(id):
@@ -1276,6 +1292,7 @@ func _app_settings():
 	_switch("Invert look Y", st.get("invertY", false), "_toggle", ["invertY"])
 	_cell("Camera", "First person" if st.get("fp", false) else "Third person", "_toggle", ["fp"])
 	_switch("Head bob and tilt (first person)", st.get("headbob", true), "_headbob")
+	_switch("Motion blur", st.get("motionblur", true), "_motionblur")
 	var tm = str(st.get("touch", "auto"))
 	_cell("On-screen controls", { "auto": "Auto", "on": "On", "off": "Off" }.get(tm, "Auto"), "_touch_mode")
 	_sec("Controller and TV")
@@ -1327,6 +1344,9 @@ func _toggle_on(key):
 	if key == "rumble" and G.S["settings"][key]: G.rumble(0.4, 0.4, 0.15)
 func _console_mode():
 	main.console.set_on(not main.console.on); show_app("settings", true)
+func _motionblur():
+	G.S["settings"]["motionblur"] = not G.S["settings"].get("motionblur", true); show_app("settings", true)
+
 func _headbob():
 	G.S["settings"]["headbob"] = not G.S["settings"].get("headbob", true); show_app("settings", true)
 func _outlines():
