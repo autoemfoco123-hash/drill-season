@@ -613,7 +613,7 @@ func safe_area(f):
 	root.margin_top = round(vs.y * f); root.margin_bottom = -round(vs.y * f)
 
 func _declutter():
-	for n in [feed, help_box, objective, big_title, big_sub, big_band, sub_box]:
+	for n in [feed, help_box, objective, sub_box] + ([] if trailer_banner else [big_title, big_sub, big_band]):
 		if n: n.visible = false
 
 func show():
@@ -622,6 +622,7 @@ func hide():
 	root.visible = false
 
 # ---------- every frame ----------
+var trailer_banner = false  # trailer shots that show the big in-game banner
 var trailer_clean = false   # trailer shots: no toasts, prompts, banners or subtitles
 
 func update(dt):
@@ -647,6 +648,7 @@ func update(dt):
 		death_title.modulate.a = 0; death_sub.modulate.a = 0
 	for c in [minimap, bars, feed, help_box, weapon_icon, lbl_weapon, lbl_ammo, lbl_cash, lbl_cash_delta, stars, meter_buzz, meter_heat, lbl_street, lbl_area, lbl_clock, lbl_speed, lbl_radio, objective, cross, tags, tr_card, br_card]:
 		c.visible = hud_on
+	if trailer_clean: tags.visible = false
 	minimap.material.set_shader_param("size", minimap.rect_size)
 	var indoors = main.interiors != null and main.interiors.inside != ""
 	if indoors: minimap.visible = false

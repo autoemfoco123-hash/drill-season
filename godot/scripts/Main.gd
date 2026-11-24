@@ -46,6 +46,7 @@ var lamp_count = 2
 var _save_t = 20.0
 
 var server_mode = false
+var trailer_fog = 0.0      # trailer shots from the air: see further through the night haze
 
 func _ready():
 	G.main = self
@@ -258,6 +259,8 @@ func update_day_night(focus):
 	env.fog_color = fog
 	env.fog_depth_end = lerp(190, 95, n)
 	env.fog_depth_begin = lerp(25, 8, n)
+	if trailer_fog > 0:
+		env.fog_depth_end = trailer_fog; env.fog_depth_begin = trailer_fog * 0.15
 	env.ambient_light_color = Color(lerp(0.80, 0.36, n), lerp(0.86, 0.46, n), lerp(0.96, 0.68, n))
 	env.ambient_light_energy = lerp(0.85, 0.55, n)
 	for m in facade_mats:

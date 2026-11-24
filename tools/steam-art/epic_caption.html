@@ -1,0 +1,46 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<!-- Title cards for the epic trailer, rendered to transparent 1920x1080 PNGs with shot.js.
+     ?k=title&t=TAKE YOURS            big centred title
+     ?k=lower&t=CALDER PARK · CHICAGO  small spaced line, low in the frame
+     ?k=banner&t=...&s=...            the game's own big banner (Inter Light), with its sub line
+     ?k=tag&t=...                     the line under the logo
+     ?k=end&t=WISHLIST NOW&s=ON STEAM the end card's call to action -->
+<style>
+@font-face { font-family: Anton; src: url(node_modules/@fontsource/anton/files/anton-latin-400-normal.woff2); }
+@font-face { font-family: Bebas; src: url(node_modules/@fontsource/bebas-neue/files/bebas-neue-latin-400-normal.woff2); }
+@font-face { font-family: InterL; src: url(../../godot/fonts/Inter-Light.ttf); }
+@font-face { font-family: InterS; src: url(../../godot/fonts/Inter-SemiBold.ttf); }
+html, body { margin: 0; background: transparent; }
+#c { position: relative; width: 1920px; height: 1080px; }
+.title { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; }
+.title .t { font-family: Anton; font-size: 168px; line-height: 1; letter-spacing: 18px; color: #fff; padding-left: 18px;
+  text-shadow: 0 0 40px rgba(255,120,60,0.35), 0 0 4px rgba(0,0,0,0.5), 0 10px 40px rgba(0,0,0,0.75); }
+.title .rule { width: 220px; height: 4px; margin: 34px auto 0; background: linear-gradient(90deg, rgba(255,70,50,0), #ff5a3c 30%, #ffb347 70%, rgba(255,179,71,0)); }
+.lower { position: absolute; left: 0; right: 0; bottom: 190px; text-align: center; font-family: Bebas; font-size: 58px; letter-spacing: 22px;
+  color: #fff; padding-left: 22px; text-shadow: 0 0 18px rgba(0,0,0,0.85); }
+.lower small { display: block; font-size: 26px; letter-spacing: 12px; margin-top: 10px; color: #ffb347; }
+.banner { position: absolute; left: 0; right: 0; top: calc(24% - 10px); text-align: center; }
+.banner .band { position: absolute; left: 0; right: 0; top: 0; height: 120px; background: linear-gradient(90deg, rgba(0,0,0,0), rgba(0,0,0,0.32) 50%, rgba(0,0,0,0)); }
+.banner .t { position: relative; font-family: InterL; font-size: 50px; letter-spacing: 6px; color: #f7f7fa; padding-top: 4px; }
+.banner .s { position: relative; font-family: InterS; font-size: 12px; letter-spacing: 3px; color: rgba(255,255,255,0.8); margin-top: 22px; }
+.tag { position: absolute; left: 0; right: 0; top: 628px; text-align: center; font-family: Bebas; font-size: 50px; letter-spacing: 20px; color: #fff;
+  padding-left: 20px; text-shadow: 0 0 20px rgba(0,0,0,0.9); }
+.end { position: absolute; left: 0; right: 0; top: 790px; text-align: center; }
+.end .t { font-family: Anton; font-size: 64px; letter-spacing: 12px; color: #fff; padding-left: 12px; text-shadow: 0 0 22px rgba(0,0,0,0.9); }
+.end .s { font-family: Bebas; font-size: 34px; letter-spacing: 16px; color: #ffb347; margin-top: 8px; padding-left: 16px; text-shadow: 0 0 16px rgba(0,0,0,0.9); }
+</style></head>
+<body><div id="c"></div>
+<script>
+const q = new URLSearchParams(location.search);
+const c = document.getElementById('c');
+const k = q.get('k') || 'title', t = q.get('t') || '', s = q.get('s') || '';
+Promise.all(['168px Anton', '58px Bebas', '50px InterL', '12px InterS'].map(f => document.fonts.load(f))).then(() => {
+  if (k === 'title') c.innerHTML = `<div class="title"><div class="t">${t}</div><div class="rule"></div></div>`;
+  else if (k === 'lower') c.innerHTML = `<div class="lower">${t}${s ? `<small>${s}</small>` : ''}</div>`;
+  else if (k === 'banner') c.innerHTML = `<div class="banner"><div class="band"></div><div class="t">${t}</div><div class="s">${s}</div></div>`;
+  else if (k === 'tag') c.innerHTML = `<div class="tag">${t}</div>`;
+  else if (k === 'end') c.innerHTML = `<div class="end"><div class="t">${t}</div><div class="s">${s}</div></div>`;
+  document.title = 'ready';
+});
+</script></body></html>

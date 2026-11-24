@@ -1,6 +1,16 @@
-Drill Season (versão Godot) 1.9.1
+Drill Season (versão Godot) 1.9.2
 
-Novo na 1.9.1: carros novos modelados (um fastback musculoso de quatro portas no estilo
+Novo na 1.9.2: TURF WARS. As ruas cortam o Calder Park em 16 quarteirões, e cada um é de
+alguém: Halo, Low End, Sable Row (crews inventadas), ninguém, ou a delegacia da Area 7.
+Com uma gangue, vá até a esquina de um quarteirão (o anel na calçada, na cor do dono) e
+segure E: o pessoal do dono vem em ondas; segure a esquina e limpe o quarteirão. Cada
+quarteirão seu paga todo dia às 6h. À noite as crews atacam os seus: chegue em 2:30 e
+segure, ou os seus recrutas que ficaram em casa defendem sozinhos. Aba Turf no app Gang,
+o mapa com as cores de cada um, e no online todo mundo do servidor joga no mesmo mapa (o
+servidor dedicado salva o mapa).
+
+
+Na 1.9.1: carros novos modelados (um fastback musculoso de quatro portas no estilo
 dos novos muscle cars, um SUV musculoso de três fileiras, sedã com grade cromada, SUV
 grande, picape cabine dupla, cupê, polícia), 0-100 bem mais rápido (2,9 s no fastback),
 câmbio de 8 marchas e tração integral nos mais fortes; atire num carro até ele fumaçar,

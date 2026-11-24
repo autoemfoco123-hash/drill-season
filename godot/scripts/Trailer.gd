@@ -16,11 +16,19 @@ var ws0 = 0.0           # the world clock when recording started
 var events = []
 var actors = []         # [human, emote, start time] posed every frame
 var shot = ""
+var actor_dt = 1.0 / 30.0
+var every = 1           # DS_EVERY: save only every n-th frame (previews)
+var grid_on = false     # the turf map: where the streets' crossings land on screen, every frame
+var grid = []
+var trk = null          # a camera riding with a car: { v, off, look } in the car's own frame
+var walkers = []        # [human, velocity] walking every frame
+var driver = null       # someone in the driver's seat of trk.v (third person hides you in a car)
 
 func run(m, a):
 	main = m; A = a
 	shot = OS.get_environment("DS_TRAILER")
 	nframes = int(OS.get_environment("DS_FRAMES")) if OS.get_environment("DS_FRAMES") != "" else 60
+	every = int(OS.get_environment("DS_EVERY")) if OS.get_environment("DS_EVERY") != "" else 1
 	dir = A.out.plus_file(shot)
 	Directory.new().make_dir_recursive(dir)
 	yield(A._wait(1.0), "completed")
@@ -45,6 +53,9 @@ func run(m, a):
 	fl.open(dir.plus_file("events.txt"), File.WRITE)
 	for e in events: fl.store_line("%d %s %.2f %.2f" % e)
 	fl.close()
+	if grid_on:
+		var gf = File.new()
+		gf.open(dir.plus_file("grid.json"), File.WRITE); gf.store_string(JSON.print(grid)); gf.close()
 	A._log("trailer %s: %d frames" % [shot, f])
 	get_tree().quit()
 
@@ -55,14 +66,16 @@ func rec(n, step = ""):
 	for i in range(n):
 		if step != "": call(step, i, n)
 		for a in actors:
-			a[0].animate(1.0 / 30.0, { "speed": 0.0, "emote": a[1], "et": a[2] + i / 30.0, "mug": a[1] == "" })
+			a[0].animate(actor_dt, { "speed": 0.0, "emote": a[1], "et": a[2] + i * actor_dt, "mug": a[1] == "" and OS.get_environment("DS_NOMUG") == "" })
 		# the world clock moves with the frames, not with the (slow) wall clock
 		G.time_offset += (ws0 + i / 30.0) - G.world_seconds()
 		main.cutscene.layer.visible = false
 		yield(get_tree(), "idle_frame")
-		var img = get_viewport().get_texture().get_data()
-		img.flip_y()
-		img.save_png(dir.plus_file("%05d.png" % f))
+		if grid_on: _grid_frame()
+		if every <= 1 or i % every == 0:
+			var img = get_viewport().get_texture().get_data()
+			img.flip_y()
+			img.save_png(dir.plus_file("%05d.png" % f))
 		f += 1
 
 # let things settle without saving (cars get going, cameras catch up, cops arrive)
@@ -87,10 +100,10 @@ func hud(on):
 		if fo.h: fo.h.visible = on
 
 func cam(from, to, look, look_to, fov = 50.0):
-	main.cutscene.play([{ "dur": nframes / 30.0, "from": from, "to": to, "look": look, "look_to": look_to, "fov": fov }])
+	main.cutscene.play([{ "dur": (nframes + (3 if shot.begins_with("e_") else 0)) / 30.0, "from": from, "to": to, "look": look, "look_to": look_to, "fov": fov }])
 
 func orbit(c, r, a0, a1, h0, h1, fov = 50.0):
-	main.cutscene.play([{ "dur": nframes / 30.0, "orbit": { "c": c, "r": r, "a0": a0, "a1": a1, "h0": h0, "h1": h1 }, "fov": fov }])
+	main.cutscene.play([{ "dur": (nframes + (3 if shot.begins_with("e_") else 0)) / 30.0, "orbit": { "c": c, "r": r, "a0": a0, "a1": a1, "h0": h0, "h1": h1 }, "fov": fov }])
 
 # put the train closest to it at a point of its run (arrive u: 0 far .. 1 at the platform)
 func train_phase(ph, dir = 0):
@@ -414,4 +427,441 @@ func _hero():
 	train_phase(main.train.T1 + 3.0)
 	yield(warm(8), "completed")
 	cam(Vector3(X - 4.6, 0.6, 0.5), Vector3(X - 10.5, 0.85, 0.4), Vector3(X + 1, 1.9, 0.0), Vector3(X + 1, 2.6, 0.0), 44)
+	yield(rec(nframes), "completed")
+
+
+# ================================================================ the epic trailer (turf update)
+# Night, fire and the turf war. Scenes are named e_*; trailer_epic.py cuts them to the score.
+
+func _grid_frame():
+	var cam = main.camera
+	var pts = []
+	for z in G.D["ZL"]:
+		for x in G.D["XL"]:
+			var w = Vector3(x, 0.0, z)
+			if cam.is_position_behind(w): pts.append(null)
+			else:
+				var q = cam.unproject_position(w)
+				pts.append([stepify(q.x, 0.1), stepify(q.y, 0.1)])
+	grid.append(pts)
+
+func night(h = 21.6, cover = 0.85):
+	tod(h)
+	hud(false)
+	main.sky.override = { "cover": cover, "storm": 0.0, "aurora": 0.0 }
+
+func gang_up(n = 2, names = ["Ace", "Bo", "Kiki"]):
+	var GA = main.gang
+	if GA.gang() == null: GA.create("Frostline", "FRL", 4)
+	G.S["cash"] = 999999; G.S["buzz"] = 999
+	for i in range(n):
+		GA.hire("shooter" if i < 2 else "brawler", 700 + i * 13, names[i % names.size()])
+	G.S["cash"] = 48250
+
+func own(b):
+	main.turf.give(b, main.turf.my_gang())
+
+func guards(b, o, n, at = null, shooters = 0):
+	var T = main.turf
+	return T._spawn_crew(b, o, at if at != null else T.corners[b], n, shooters, true)
+
+func wave(b, o, at, n, shooters):
+	return main.turf._spawn_crew(b, o, at, n, shooters, false)
+
+func kill_one(near, from):
+	var best = null
+	var bd = 999.0
+	for e in main.crews.ENEMIES:
+		if e.is_down(): continue
+		var d = e.pos.distance_to(near)
+		if d < bd:
+			bd = d; best = e
+	if best: best.take_hit(999, false, (best.pos - from).normalized(), true, false)
+
+func gun_on(h, id = "draft"):
+	var g = GUN.build(id, GUN.def_cfg())
+	g.rotation = Vector3(PI / 2, 0, 0); g.translation = Vector3(0, -0.03, 0.02); g.scale = Vector3.ONE * 1.35
+	h.gun_slot.add_child(g)
+
+func face_cam(p):
+	var P = main.player
+	P.cam_yaw = atan2(P.pos.x - p.x, P.pos.z - p.z); P.last_look = G.REAL_T
+
+func calm():
+	# a clean street: no ambushes, no cops wandering in
+	G.S["heat"] = 0
+	main.crews.ambush_t = 9999
+	main.vehicles.trailer_drive = true
+
+func wreck(model, x, z, yaw):
+	var v = main.vehicles.spawn(model, x, z, yaw, { "owned": true, "color": 0x2a2d33 })
+	main.vehicles.explode(v)
+	return v
+
+func _track(_i, _n):
+	if trk == null: return
+	var v = trk.v
+	var f = main.vehicles.fwd(v)
+	var sd = main.vehicles.side(v)
+	var at = v.pos + sd * trk.off.x + Vector3(0, trk.off.y, 0) + f * trk.off.z
+	var lk = v.pos + sd * trk.look.x + Vector3(0, trk.look.y, 0) + f * trk.look.z
+	var c = main.cutscene.cur
+	if c:
+		c.from = at; c.to = at; c.look = lk; c.look_to = lk
+	if driver != null:
+		var cb = main.cockpit.cabin(v)
+		driver.transform = main.cockpit.car_frame(v) * Transform(Basis(), Vector3(cb.xD, cb.hy, cb.eyeZ - 0.1) - Vector3(0, 0.92, 0))
+		driver.animate(1.0 / 30.0, { "seat": true, "sway": Vector2(v.ay if "ay" in v else 0.0, v.ax if "ax" in v else 0.0) })
+
+func _walk_step(_i, _n):
+	var dt = actor_dt
+	for w in walkers:
+		w[0].translation += w[1] * dt
+		w[0].animate(dt, { "speed": w[1].length(), "mug": true })
+
+# 1. the city at night from the air, the L crossing it
+func _e_open():
+	night(21.4); calm()
+	main.trailer_fog = 330.0
+	main.camera.far = 900.0
+	main.player.place(-20, 0, 10, 0)
+	train_phase(main.train.T1 + 1.5)
+	yield(warm(6), "completed")
+	cam(Vector3(-95, 58, 70), Vector3(-62, 47, 48), Vector3(70, 4, -30), Vector3(75, 4, -18), 48)
+	yield(rec(nframes), "completed")
+
+# 2-4. three corners, three crews
+func _corner(b, o, n, from, to, look, look_to, col, fov = 42.0):
+	night(21.6); calm()
+	var c = main.turf.corners[b]
+	clear_street(c, 60.0)
+	var away = (from - c); away.y = 0
+	main.player.place(c.x + away.normalized().x * 18.0, 0, c.z + away.normalized().z * 18.0, 0)
+	yield(warm(4), "completed")
+	guards(b, o, n)
+	light(c + Vector3(0, 3.2, 0), col, 1.25, 9.0)
+	light(c + Vector3(-2.5, 1.2, -2.5), col, 0.8, 5.0)
+	yield(warm(8), "completed")
+	cam(from, to, look, look_to, fov)
+	yield(rec(nframes), "completed")
+
+func _e_halo():
+	var c = main.turf.corners[6]
+	yield(_corner(6, "halo", 3, c + Vector3(-7.6, 0.45, -7.2), c + Vector3(-5.4, 0.55, -5.3), c + Vector3(0, 1.4, 0), c + Vector3(0, 1.5, 0), Color(1.0, 0.18, 0.15), 40.0), "completed")
+
+func _e_low():
+	var c = main.turf.corners[2]
+	yield(_corner(2, "lowend", 3, c + Vector3(-7.5, 1.1, -3.0), c + Vector3(-5.2, 1.0, -6.6), c + Vector3(0, 1.3, 0), c + Vector3(0.4, 1.3, 0), Color(1.0, 0.6, 0.15), 42.0), "completed")
+
+func _e_sable():
+	var c = main.turf.corners[14]
+	yield(_corner(14, "sable", 3, c + Vector3(-8.5, 5.0, -8.0), c + Vector3(-6.2, 1.3, -6.0), c + Vector3(0, 1.1, 0), c + Vector3(0, 1.45, 0), Color(0.3, 0.5, 1.0), 42.0), "completed")
+
+# 5. the map from above (the colours go on in the edit, on grid.json)
+func _e_map():
+	night(21.4); calm()
+	main.env.fog_enabled = false
+	main.camera.far = 1600.0
+	main.player.place(-15, 0, 0, 0)
+	grid_on = true
+	yield(warm(4), "completed")
+	main.fx.snow.visible = false
+	cam(Vector3(-32, 330, 215), Vector3(-6, 300, 190), Vector3(-15, 0, -8), Vector3(-15, 0, -4), 46)
+	yield(rec(nframes), "completed")
+
+func _e_map2():
+	night(21.4); calm()
+	main.env.fog_enabled = false
+	main.camera.far = 1600.0
+	main.player.place(-15, 0, 0, 0)
+	grid_on = true
+	yield(warm(4), "completed")
+	main.fx.snow.visible = false
+	cam(Vector3(5, 300, 180), Vector3(-25, 285, 175), Vector3(-15, 0, -6), Vector3(-15, 0, -2), 48)
+	yield(rec(nframes), "completed")
+
+# 6. taking a corner at sundown: a wave down Calder Ave, your shooters with you
+func _e_takeover():
+	tod(16.85); hud(false); calm()
+	main.sky.override = { "cover": 0.7, "storm": 0.0, "aurora": 0.0 }
+	gang_up(2)
+	var T = main.turf
+	var b = 10
+	var c = T.corners[b]
+	clear_street(c, 70.0)
+	var P = main.player
+	P.place(c.x - 1.6, 0, c.z - 2.2, 0)
+	P.switch_weapon("dragon")
+	yield(warm(20), "completed")
+	T.begin(b)
+	T.take.p = 0.36
+	T.take.w = T.take.waves.size()
+	wave(b, "halo", c + Vector3(-30, 0, -6), 3, 1)
+	wave(b, "halo", c + Vector3(-36, 0, -12), 2, 1)
+	hud(true); main.hud.trailer_clean = true
+	for k in range(main.gang.FOL.size()):
+		var fo = main.gang.FOL[k]
+		fo.h.visible = true
+		fo.pos = c + [Vector3(-3.2, 0, 0.6), Vector3(0.6, 0, -4.8)][k % 2]
+	face_cam(c + Vector3(-30, 0, -8))
+	P.cam_pitch = -0.02
+	G.last_pad = true
+	Input.action_press("aim")
+	yield(warm(16, "keep_alive"), "completed")
+	yield(rec(nframes, "_take_step"), "completed")
+	Input.action_release("aim")
+
+func _take_step(i, _n):
+	G.S["health"] = 100
+	var P = main.player
+	var c = main.turf.corners[10]
+	face_cam(c + Vector3(-30, 0, -8 + sin(i * 0.05) * 2.0))
+	if i % 3 == 0 and i % 21 < 13 and G.S["guns"][G.S["cur"]].mag > 0:
+		P.fire_cd = 0; P.try_fire(); P.flash_frames = 2
+		ev("gun_draft", 0.8, 1.05)
+	if i in [18, 33, 49, 66, 84]:
+		kill_one(P.pos + Vector3(-22, 0, -6), P.pos)
+
+# 7. first person under the L at night
+func _e_fp():
+	night(21.0); calm()
+	var P = main.player
+	P.place(64, 0, -30, 0); P.cam_yaw = 0; P.cam_pitch = 0.03
+	clear_street(P.pos, 50.0)
+	G.S["settings"]["fp"] = true
+	P.switch_weapon("dragon")
+	wave(7, "lowend", P.pos + Vector3(1.2, 0, -9.5), 3, 3)
+	hud(true); main.hud.trailer_clean = true
+	yield(warm(24, "keep_alive"), "completed")
+	yield(rec(nframes, "_fp_step"), "completed")
+
+func _fp_step(i, n):
+	G.S["health"] = 100
+	var P = main.player
+	if i % 4 == 0 and G.S["guns"][G.S["cur"]].mag > 0:
+		P.fire_cd = 0; P.try_fire(); P.flash_frames = 2
+		ev("gun_draft", 1.0, 0.8)
+	if i == 20 or i == 38: kill_one(P.pos + Vector3(0, 0, -9.5), P.pos)
+
+# 8. the Bruiser flat out down Calder Ave, the camera low by the front wheel
+func _e_cars():
+	night(20.9); calm()
+	var P = main.player
+	P.place(-160, 0, 1.8, 0)
+	clear_street(Vector3(-60, 0, 0), 140.0)
+	var v = main.vehicles.spawn("bruiser", -158, 1.8, PI / 2, { "color": 0x8a1c24, "owned": true })
+	main.vehicles.enter(v)
+	yield(warm(4), "completed")
+	Input.action_press("move_f")
+	yield(warm(55), "completed")
+	trk = { "v": v, "off": Vector3(-1.7, 0.42, 3.4), "look": Vector3(0.2, 0.55, -2.2) }
+	cam(Vector3(), Vector3(), Vector3(0, 0, 1), Vector3(0, 0, 1), 40)
+	yield(rec(nframes, "_track"), "completed")
+	Input.action_release("move_f")
+
+# 9. your crew in the back seat, from the driver's seat looking back, the city going by
+func _e_ride():
+	night(21.2); calm()
+	gang_up(3)
+	var P = main.player
+	P.place(-150, 0, -1.8, 0)
+	clear_street(Vector3(-60, 0, 0), 140.0)
+	var v = main.vehicles.spawn("boulder", -148, -1.8, PI / 2, { "color": 0x1d1f24, "owned": true })
+	main.vehicles.enter(v)
+	G.S["settings"]["fp"] = true
+	main.hud.root.visible = false
+	for fo in main.gang.FOL: fo.h.visible = true
+	yield(warm(4), "completed")
+	Input.action_press("move_f")
+	yield(warm(30), "completed")
+	Input.action_release("move_f")
+	yield(rec(nframes, "_ride_step"), "completed")
+	Input.action_release("move_f")
+
+func _ride_step(i, n):
+	var P = main.player
+	var v = P.car
+	if v == null: return
+	if i % 10 < 3: Input.action_press("move_f")
+	else: Input.action_release("move_f")
+	var look = lerp(-2.15, -2.55, float(i) / n)
+	P.cam_yaw = v.yaw + PI + look; P.cam_pitch = -0.1; P.last_look = G.REAL_T
+
+# 10. a car riddled with bullets goes up, in slow motion, with the crew around it
+func clear_cars(at, r, keep = []):
+	for v in main.vehicles.VEH.duplicate():
+		if not v in keep and v.pos.distance_to(at) < r: main.vehicles.remove(v)
+
+func _e_boom():
+	night(21.3); calm()
+	var at = Vector3(-48, 0, 1.8)
+	main.player.place(at.x - 24, 0, at.z + 3, 0)
+	clear_street(at, 50.0)
+	var v = main.vehicles.spawn("sedan", at.x, at.z, PI / 2 + 0.25, { "owned": true, "color": 0x6b0d16 })
+	clear_cars(at, 60.0, [v])
+	yield(warm(4), "completed")
+	guards(10, "halo", 3, at + Vector3(-1.5, 0, 3.0))
+	light(at + Vector3(-4, 3, 5), Color(1.0, 0.7, 0.45), 0.9, 12.0)
+	yield(warm(10), "completed")
+	cam(at + Vector3(-13.5, 0.42, 3.6), at + Vector3(-11.4, 0.5, 3.2), at + Vector3(0, 1.0, 0.4), at + Vector3(0, 1.4, 0.4), 44)
+	boom_v = v
+	yield(rec(nframes, "_boom_step"), "completed")
+	Engine.time_scale = 1.0
+
+var boom_v = null
+func _boom_step(i, n):
+	var at = boom_v.pos
+	if i < 13 and i % 3 == 0:
+		var from = main.camera.global_transform.origin + Vector3(-1, 0.5, 2)
+		main.sfx.tracer(from, at + Vector3(G.rand(-1, 1), G.rand(0.4, 1.2), G.rand(-0.6, 0.6)))
+		ev("gun_draft", 0.7, 1.0)
+	if i == 13:
+		boom_v.by_player = false
+		main.vehicles.explode(boom_v); ev("car_explode", 1.0)
+		main.fx.explosion(at + Vector3(1.2, 1.1, 0.4))
+		# softer flashes: in slow motion they would wash the street out for seconds
+		for fl in main.fx._flashes:
+			fl[2] = 2.4; fl[0].light_energy = 2.4
+		Engine.time_scale = 0.24
+	if i == 30:
+		main.fx.explosion(at + Vector3(0.4, 2.2, 0.2))
+		for fl in main.fx._flashes:
+			fl[2] = min(fl[2], 2.4); fl[0].light_energy = min(fl[0].light_energy, 2.4)
+	if i > 80:
+		Engine.time_scale = min(1.0, 0.24 + (i - 80) * 0.035)
+	actor_dt = Engine.time_scale / 30.0
+
+# 11. a raid at night: they come down Low End Rd for your corner, your people hold it
+func _e_raid():
+	night(21.8); calm()
+	gang_up(3)
+	var T = main.turf
+	var b = 6
+	own(b)
+	var c = T.corners[b]
+	clear_street(c, 80.0)
+	clear_cars(c, 70.0)
+	var P = main.player
+	P.place(c.x - 0.6, 0, c.z - 1.2, -PI / 2)
+	P.switch_weapon("buzz")
+	yield(warm(16), "completed")
+	for k in range(main.gang.FOL.size()):
+		var fo = main.gang.FOL[k]
+		fo.pos = c + [Vector3(-1.6, 0, 1.4), Vector3(-0.2, 0, -3.4), Vector3(-2.4, 0, -1.6)][k % 3]
+	wave(b, "halo", c + Vector3(-36, 0, -9), 4, 2)
+	light(c + Vector3(-18, 4.0, -8), Color(1.0, 0.2, 0.15), 1.2, 14.0)
+	yield(warm(14, "keep_alive"), "completed")
+	cam(c + Vector3(2.4, 1.25, -1.6), c + Vector3(1.6, 1.0, -2.6), c + Vector3(-24, 1.2, -8), c + Vector3(-20, 1.1, -8), 40)
+	yield(rec(nframes, "_raid_step"), "completed")
+
+func _raid_step(i, _n):
+	G.S["health"] = 100
+	if i in [34, 58, 80]: kill_one(main.player.pos + Vector3(-20, 0, -8), main.player.pos)
+
+# 12. the corner is yours: the banner, the ring turns your colour, the crew dances
+func _e_win():
+	tod(17.05); hud(false); calm()
+	main.sky.override = { "cover": 0.7, "storm": 0.0, "aurora": 0.0 }
+	gang_up(3)
+	var T = main.turf
+	var b = 10
+	var c = T.corners[b]
+	clear_street(c, 60.0)
+	var P = main.player
+	P.place(c.x + 0.4, 0, c.z + 0.3, 0)
+	yield(warm(20), "completed")
+	for k in range(main.gang.FOL.size()):
+		var fo = main.gang.FOL[k]
+		fo.pos = c + Vector3(cos(k * 2.1 + 0.6) * 2.2, 0, sin(k * 2.1 + 0.6) * 2.2)
+	main.hud.trailer_banner = true
+	T.begin(b)
+	T.take.p = 1.0; T.take.w = T.take.waves.size()
+	for cr in main.crews.CREWS.duplicate(): main.crews.despawn(cr)
+	hud(true); main.hud.trailer_clean = true
+	for fo in main.gang.FOL: fo.h.visible = true
+	yield(warm(3), "completed")
+	main.gang.dance_along("shmoney")
+	P.emote("griddy", 6.0)
+	orbit(c, 6.2, -2.2, -1.2, 0.7, 1.5, 46)
+	yield(rec(nframes), "completed")
+
+# 13. a donut in the snow at Bishop & Calder
+func _e_drift():
+	night(21.0); calm()
+	var P = main.player
+	var at = Vector3(-3, 0, -3)
+	P.place(at.x, 0, at.z + 4, 0)
+	clear_street(at, 70.0)
+	var v = main.vehicles.spawn("bruiser", at.x, at.z, 0.0, { "color": 0xd8d8dc, "owned": true })
+	main.vehicles.enter(v)
+	yield(warm(4), "completed")
+	Input.action_press("move_f"); Input.action_press("move_b"); Input.action_press("move_l")
+	yield(warm(70), "completed")
+	orbit(at, 8.5, 0.4, 1.5, 0.5, 1.3, 50)
+	yield(rec(nframes), "completed")
+	Input.action_release("move_f"); Input.action_release("move_b"); Input.action_release("move_l")
+
+# 14. the crew walking at the camera in slow motion, a wreck burning behind them
+func _e_walk():
+	night(21.5); calm()
+	var X = -40.0
+	main.player.place(X - 26, 0, -6, 0)
+	clear_street(Vector3(X, 0, 0), 70.0)
+	wreck("sedan", X + 13, -1.0, PI / 2 + 0.4)
+	var looks = [7, 5, 4, 2, 1]
+	var tones = [2, 5, 4, 1, 3]
+	var zs = [-0.2, 1.6, -1.9, 3.1, -3.4]
+	var xs = [0.0, 1.0, 1.1, 2.2, 2.3]
+	for i in range(5):
+		var h = person(looks[i], tones[i], Vector3(X + xs[i], 0, zs[i]), -PI / 2)
+		if i in [1, 2]: gun_on(h, "draft")
+		walkers.append([h, Vector3(-1.45, 0, 0)])
+	light(Vector3(X + 13, 2.5, -1.0), Color(1.0, 0.45, 0.15), 2.2, 18.0)
+	light(Vector3(X - 4, 4, 4), Color(0.35, 0.55, 1.0), 0.9, 12.0)
+	yield(warm(60), "completed")
+	Engine.time_scale = 0.5
+	actor_dt = 0.5 / 30.0
+	cam(Vector3(X - 7.5, 0.55, -0.3), Vector3(X - 10.6, 0.6, -0.2), Vector3(X, 1.35, -0.2), Vector3(X - 3.0, 1.45, -0.2), 40)
+	yield(rec(nframes, "_walk_step"), "completed")
+	Engine.time_scale = 1.0
+
+# 15. the finale: your crew in the middle of Calder Ave, a wreck burning behind them, the L
+#     overhead with a train going over
+func _e_finale():
+	night(21.6); calm()
+	var X = 52.0
+	main.player.place(X - 22, 0, 6.0, 0)
+	clear_street(Vector3(X, 0, 0), 80.0)
+	clear_cars(Vector3(X, 0, 0), 80.0)
+	wreck("sedan", X + 8.5, -3.2, 0.5)
+	var looks = [7, 5, 4, 2, 1]
+	var tones = [2, 5, 4, 1, 3]
+	var spots = [Vector3(0, 0, 0.2), Vector3(1.2, 0, 1.8), Vector3(1.0, 0, -1.6), Vector3(2.3, 0, 3.3), Vector3(2.2, 0, -3.1)]
+	var poses = ["", "", "", "point", ""]
+	if OS.get_environment("DS_NOMUG") != "": poses = ["point", "", "", "", ""]
+	for i in range(5):
+		var h = person(looks[i], tones[i], Vector3(X, 0, 0) + spots[i], -PI / 2 + [0.0, 0.12, -0.1, 0.25, -0.2][i])
+		if i in [1, 2]: gun_on(h, "draft")
+		actors.append([h, poses[i], 0.3 * i])
+	light(Vector3(X + 8.5, 2.0, -3.2), Color(1.0, 0.45, 0.15), 1.8, 18.0)
+	light(Vector3(X - 3, 3.5, 4.5), Color(0.3, 0.55, 1.0), 1.1, 10.0)
+	light(Vector3(X - 3, 3.0, -4.5), Color(1.0, 0.2, 0.25), 0.8, 9.0)
+	if OS.get_environment("DS_FACEOFF") != "":
+		# the key art for the turf update: Halo across the street, in their red light
+		main.player.place(X + 30, 0, 6.0, 0)
+		yield(warm(2), "completed")
+		var hc = main.turf._spawn_crew(6, "halo", Vector3(X - 8.5, 0, 0.3), 4, 2, true)
+		light(Vector3(X - 9.5, 3.2, 0.5), Color(1.0, 0.16, 0.12), 1.6, 11.0)
+		light(Vector3(X - 6.5, 1.2, 3.5), Color(1.0, 0.25, 0.2), 0.7, 7.0)
+	var tr = OS.get_environment("DS_TRAINAT")
+	train_phase(main.train.T1 + (float(tr) if tr != "" else 3.0))
+	yield(warm(40), "completed")
+	var kc = OS.get_environment("DS_KEYCAM")
+	if kc != "":
+		var q = kc.split(",")
+		var kp = Vector3(X + float(q[0]), float(q[1]), float(q[2]))
+		var kl = Vector3(X + float(q[3]), float(q[4]), float(q[5]))
+		cam(kp, kp, kl, kl, float(q[6]))
+	else:
+		cam(Vector3(X - 4.2, 0.45, 0.5), Vector3(X - 13.0, 1.5, 0.3), Vector3(X + 1, 1.5, 0.0), Vector3(X + 1, 3.2, 0.0), 44)
 	yield(rec(nframes), "completed")

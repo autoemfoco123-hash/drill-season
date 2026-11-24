@@ -38,3 +38,24 @@ library hero sem texto nenhum.
    que acontecem) e grava `DrillSeason-trailer-1080p.mp4` e uma cópia leve em 720p.
    `python3 trailer.py walk drive` refaz só essas cenas; a montagem roda sem argumentos.
 3. As screenshots saem dos quadros guardados em `work/trailer/stills/`.
+
+## Trailer épico e arte da atualização Turf Wars (1.9.2)
+
+Tudo sai de dentro do jogo e de scripts deste diretório; nada de música ou imagem de terceiros.
+
+1. **Trilha** (`score.py`): drill + orquestra sintetizados do zero, 140 BPM em Fá menor, 45 compassos
+   no tempo dos cortes (intro, drop na logo, parada na explosão em câmera lenta, break, segundo
+   drop, logo final). `python3 score.py work/epic` grava `score.wav` e as trilhas separadas.
+2. **Cenas** (`godot/scripts/Trailer.gd`, as `e_*`): as esquinas das três crews, o mapa de turf
+   visto do alto (o jogo grava onde cada cruzamento cai na tela em `grid.json`), tomar uma esquina,
+   primeira pessoa, o Bruiser na Calder Ave, a gangue no banco de trás, a explosão em câmera lenta,
+   o ataque à noite, a esquina conquistada, o drift, a crew andando em câmera lenta e o final sob o L.
+   `python3 trailer_epic.py render` renderiza tudo (3 de cada vez, 1920x1080, `--fixed-fps 30`).
+3. **Montagem** (`python3 trailer_epic.py edit`): correção de cor de cinema (sombras frias, luzes
+   quentes, bloom, vinheta, grão), barras 2.39:1 na abertura e no final, o mapa de turf animado no
+   compasso, os títulos (`epic_caption.html`), a logo, a mixagem a -14 LUFS e dois finais:
+   `...-wishlist.mp4` ("WISHLIST NOW") e `...-outnow.mp4` ("AVAILABLE NOW"), em 1080p e 720p.
+4. **Arte da Steam** (`compose_epic.py`): quatro quadros renderizados em 4K com
+   `DS_TRAILER=e_finale DS_KEYCAM=dx,y,z,lx,ly,lz,fov DS_NOMUG=1` (e `DS_FACEOFF=1` para a crew de
+   frente para a Halo), graduados com brasas e neve, e cortados em todos os tamanhos:
+   `python3 compose_epic.py <pasta dos quadros> <saída> work/epic/stills`.

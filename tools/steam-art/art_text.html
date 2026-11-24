@@ -1,0 +1,30 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<!-- One line (or two) of title text on a transparent canvas, for the Steam art.
+     ?w=1920&h=622&t=THE TURF WARS UPDATE&f=anton&size=90&sp=10&col=fff&x=right&y=0.5&s=sub line&ssize=30 -->
+<style>
+@font-face { font-family: Anton; src: url(node_modules/@fontsource/anton/files/anton-latin-400-normal.woff2); }
+@font-face { font-family: Bebas; src: url(node_modules/@fontsource/bebas-neue/files/bebas-neue-latin-400-normal.woff2); }
+html, body { margin: 0; background: transparent; }
+#c { position: relative; overflow: hidden; }
+.box { position: absolute; transform: translateY(-50%); }
+.t { line-height: 1; color: #fff; text-shadow: 0 0 30px rgba(255,110,50,0.35), 0 4px 24px rgba(0,0,0,0.85), 0 0 3px rgba(0,0,0,0.6); white-space: nowrap; }
+.r { height: 4px; margin-top: 16px; background: linear-gradient(90deg, #ff5a3c, #ffb347); }
+.s { font-family: Bebas; color: #ffb347; white-space: nowrap; text-shadow: 0 2px 14px rgba(0,0,0,0.9); margin-top: 14px; }
+</style></head>
+<body><div id="c"></div>
+<script>
+const q = new URLSearchParams(location.search);
+const w = +q.get('w'), h = +q.get('h');
+const c = document.getElementById('c'); c.style.width = w + 'px'; c.style.height = h + 'px';
+const fam = q.get('f') === 'bebas' ? 'Bebas' : 'Anton';
+Promise.all(['80px Anton', '80px Bebas'].map(f => document.fonts.load(f))).then(() => {
+  const size = +q.get('size'), sp = +(q.get('sp') || 0), x = q.get('x') || 'center', y = +(q.get('y') || 0.5), pad = +(q.get('pad') || 60);
+  const align = x === 'left' ? 'left' : x === 'right' ? 'right' : 'center';
+  const pos = x === 'left' ? `left:${pad}px;` : x === 'right' ? `right:${pad}px;` : 'left:0;right:0;';
+  const rule = q.get('rule') ? `<div class="r" style="width:${q.get('rule')}px;${align === 'center' ? 'margin-left:auto;margin-right:auto;' : align === 'right' ? 'margin-left:auto;' : ''}"></div>` : '';
+  const sub = q.get('s') ? `<div class="s" style="font-size:${+q.get('ssize') || 30}px;letter-spacing:${+(q.get('ssp') || 8)}px;">${q.get('s')}</div>` : '';
+  c.innerHTML = `<div class="box" style="${pos}top:${y * 100}%;text-align:${align};"><div class="t" style="font-family:${fam};font-size:${size}px;letter-spacing:${sp}px;">${q.get('t')}</div>${rule}${sub}</div>`;
+  document.title = 'ready';
+});
+</script></body></html>

@@ -1,4 +1,4 @@
-Drill Season 1.9.1 para iPhone e iPad (projeto Xcode)
+Drill Season 1.9.2 para iPhone e iPad (projeto Xcode)
 
 A Apple só deixa compilar e assinar apps de iPhone num Mac, com o Xcode. Este pacote é o
 jogo inteiro pronto para isso: abra no Xcode e instale no seu iPhone.
