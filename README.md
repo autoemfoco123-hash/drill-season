@@ -22,6 +22,20 @@ LEIAME-iOS.txt dentro do zip.
 
 ## O que tem
 
+**Novo na 1.9.2: Turf Wars**
+
+- **O mapa é dividido em 16 quarteirões**, cada um de alguém: Halo, Low End e Sable Row (crews
+  inventadas), ninguém, ou a Area 7 (o quarteirão da delegacia, que não dá para tomar).
+- **Tomar um quarteirão:** com uma gangue, vá até a esquina dele (o anel na calçada, na cor do
+  dono; nas esquinas rivais tem gente parada que manda você seguir andando) e segure E. O
+  pessoal do dono vem em ondas: segure a esquina e limpe o quarteirão. O que estava na esquina
+  é seu na hora.
+- **Dinheiro todo dia:** cada quarteirão seu paga às 6h do relógio do jogo ($160 a $320).
+- **Ataques à noite:** as crews vêm atrás dos seus quarteirões. Chegue em 2:30 e segure, com
+  bônus; se não der, os recrutas que ficaram em casa defendem sozinhos (quanto mais, melhor).
+- **No celular:** aba Turf no app Gang, e o mapa e o minimapa com a cor de cada dono.
+- **Online:** todo mundo no mesmo servidor joga no mesmo mapa. O servidor dedicado salva o mapa.
+
 **Novo na 1.9.1**
 
 - **iPhone e iPad:** projeto Xcode pronto (iPhone e Simulador). Abra no Mac, escolha o seu
