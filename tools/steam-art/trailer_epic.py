@@ -89,7 +89,7 @@ CAPTIONS = {   # segment: (kind, text, sub, from frame)
 }
 GRADE = {   # segment: exposure
     'open': 1.25, 'halo': 1.15, 'low': 1.1, 'sable': 1.05, 'map': 1.35, 'map2': 1.35, 'ride': 1.45, 'raid': 1.2, 'fp': 1.15, 'cars': 1.15,
-    'cars2': 1.15, 'walk': 1.1, 'finale': 1.0, 'boom': 1.0, 'drift': 1.2,
+    'cars2': 1.15, 'walk': 1.1, 'finale': 1.0, 'boom': 0.85, 'drift': 1.2,
 }
 MINE = (80, 232, 255)       # your gang on the map: cyan, apart from Sable Row's blue
 CREW_COL = { 'halo': (230, 66, 61), 'lowend': (242, 168, 61), 'sable': (86, 110, 245), 'cops': (110, 150, 230), '': (220, 225, 235) }

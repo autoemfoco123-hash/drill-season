@@ -703,6 +703,7 @@ func _e_boom():
 	guards(10, "halo", 3, at + Vector3(-1.5, 0, 3.0))
 	light(at + Vector3(-4, 3, 5), Color(1.0, 0.7, 0.45), 0.9, 12.0)
 	yield(warm(10), "completed")
+	clear_cars(at, 75.0, [v])
 	cam(at + Vector3(-13.5, 0.42, 3.6), at + Vector3(-11.4, 0.5, 3.2), at + Vector3(0, 1.0, 0.4), at + Vector3(0, 1.4, 0.4), 44)
 	boom_v = v
 	yield(rec(nframes, "_boom_step"), "completed")
@@ -711,6 +712,7 @@ func _e_boom():
 var boom_v = null
 func _boom_step(i, n):
 	var at = boom_v.pos
+	clear_cars(at, 75.0, [boom_v])      # no traffic driving into the shot
 	if i < 13 and i % 3 == 0:
 		var from = main.camera.global_transform.origin + Vector3(-1, 0.5, 2)
 		main.sfx.tracer(from, at + Vector3(G.rand(-1, 1), G.rand(0.4, 1.2), G.rand(-0.6, 0.6)))
