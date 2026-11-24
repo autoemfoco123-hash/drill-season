@@ -259,6 +259,14 @@ func spawn_follower(rec, at = null):
 		f.h.gun_slot.add_child(f.gun)
 	FOL.append(f)
 
+# the order your crew takes the seats in
+func _seat_index(f):
+	var i = 0
+	for o in FOL:
+		if o == f: return i
+		if o.down_t <= 0: i += 1
+	return -1
+
 func remove_follower(f):
 	FOL.erase(f)
 	if is_instance_valid(f.h): f.h.queue_free()
@@ -397,10 +405,18 @@ func _update_follower(f, dt):
 			remove_follower(f); G.save_game()
 		return
 	if P.car:
-		if not f.riding:
-			f.riding = true
-			H.visible = false
+		f.riding = true
 		f.pos = P.pos; f.trail.clear()
+		# a seat in your car: the passenger seat first, then the back row; no seat, no show
+		var seats = main.cockpit.seat_spots(P.car)
+		var i = _seat_index(f)
+		if i >= 0 and i < seats.size() and P.car.node:
+			H.visible = true
+			H.transform = main.cockpit.car_frame(P.car) * Transform(Basis(), seats[i] - Vector3(0, 0.92, 0))
+			var c = P.car
+			H.animate(dt, { "seat": true, "sway": Vector2(c.ay if "ay" in c else 0.0, c.ax if "ax" in c else 0.0) })
+		else:
+			H.visible = false
 		return
 	if f.riding:
 		f.riding = false; f.pos = _spot(true); f.vel = Vector3(); H.visible = true

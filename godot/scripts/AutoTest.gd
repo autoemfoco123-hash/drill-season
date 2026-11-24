@@ -30,6 +30,8 @@ func run(m):
 	elif OS.get_environment("DS_CITYTEST") != "": call_deferred("_city_test")
 	elif OS.get_environment("DS_ENGINETEST") != "": call_deferred("_engine_test")
 	elif OS.get_environment("DS_COCKPITTEST") != "": call_deferred("_cockpit_test")
+	elif OS.get_environment("DS_BACKSEATTEST") != "": call_deferred("_backseat_test")
+	elif OS.get_environment("DS_PHONETEST") != "": call_deferred("_phone_test")
 	else: call_deferred("_go")
 
 func _wait(s):
@@ -1818,4 +1820,82 @@ func _cockpit_test():
 			V.leave(car); P.car = null
 			V.remove(car)
 			yield(_wait(0.3), "completed")
+	get_tree().quit()
+
+# ---------------------------------------------------------------- the back seat (DS_BACKSEATTEST)
+# a gang with four recruits riding along; looking back from the driver's seat, then from outside
+func _backseat_test():
+	yield(_wait(1.0), "completed")
+	main.title._close(); main.start_game(G.new_state("backseat"))
+	yield(_wait(1.5), "completed")
+	G.time_offset += (13 * 60 - G.world_minutes())
+	G.S["settings"]["quality"] = "high"; main.set_quality("high")
+	var GA = main.gang
+	if GA.gang() == null: GA.create("Frostline", "FRL", 2)
+	G.S["cash"] = 999999; G.S["buzz"] = 999
+	var types = GA.types().keys()
+	for i in range(4):
+		var rec = GA.hire(types[i % types.size()], 1000 + i * 37, "Rider%d" % i)
+		if rec == null: _log("hire failed: " + GA.can_recruit(types[i % types.size()]))
+	yield(_wait(1.0), "completed")
+	_log("followers %d" % GA.FOL.size())
+	var V = main.vehicles
+	var P = main.player
+	for model in ["sedan", "suv", "coupe"]:
+		var car = V.spawn(model, -95, -150, 0.0, { "color": 0x8a1c24, "owned": true })
+		V.enter(car)
+		G.S["settings"]["fp"] = true
+		_clean_view(true)
+		Input.action_press("move_f")
+		yield(_wait(1.5), "completed")
+		Input.action_release("move_f")
+		_log("%s: seats %d" % [model, main.cockpit.seat_spots(car).size()])
+		for look in [["back_r", -2.5, -0.12], ["back_l", 2.5, -0.12], ["side", -1.3, -0.1]]:
+			for _k in range(12):
+				P.cam_yaw = car.yaw + PI + look[1]; P.cam_pitch = look[2]; P.last_look = G.REAL_T
+				yield(get_tree(), "idle_frame")
+			yield(_shot("b_%s_%s" % [model, look[0]]), "completed")
+		G.S["settings"]["fp"] = false
+		yield(_wait(0.3), "completed")
+		_frame(car.pos + Vector3(-2.6, 1.9, 1.2).rotated(Vector3.UP, car.yaw), car.pos + Vector3(0, 0.9, -0.3).rotated(Vector3.UP, car.yaw), 55)
+		yield(_wait(0.3), "completed")
+		yield(_shot("b_%s_outside" % model), "completed")
+		main.cutscene.end()
+		V.leave(car); P.car = null
+		V.remove(car)
+		yield(_wait(0.5), "completed")
+	get_tree().quit()
+
+# ---------------------------------------------------------------- the phone by touch (DS_PHONETEST)
+# on-screen controls on, tap PHONE like on a phone, open a few apps, on foot and in a car
+func _phone_test():
+	yield(_wait(1.0), "completed")
+	main.title._close(); main.start_game(G.new_state("phonetest"))
+	yield(_wait(1.5), "completed")
+	main.touch.set_mode("on")
+	yield(_wait(0.5), "completed")
+	_log("touch on: %s, screen %s" % [str(main.touch.enabled), str(get_viewport().get_visible_rect().size)])
+	for where in ["foot", "car"]:
+		if where == "car":
+			var car = main.vehicles.spawn("sedan", main.player.pos.x + 3, main.player.pos.z, 0.0, { "owned": true })
+			main.vehicles.enter(car)
+			yield(_wait(1.0), "completed")
+		var b = null
+		for x in main.touch.buttons():
+			if x.id == "phone": b = x
+		if b == null:
+			_log("%s: no PHONE button" % where); continue
+		_touch(5, b.c, true)
+		yield(get_tree(), "idle_frame")
+		_touch(5, b.c, false)
+		yield(_wait(1.0), "completed")
+		_log("%s: after tap MODE %s panel %s anim %.2f" % [where, G.MODE, str(main.phone.panel.visible), main.phone.anim])
+		yield(_shot("p_%s_home" % where), "completed")
+		for app in ["music", "map", "settings", "msgs"]:
+			main.phone.show_app(app)
+			yield(_wait(0.4), "completed")
+			_log("%s: app %s MODE %s" % [where, app, G.MODE])
+		yield(_shot("p_%s_app" % where), "completed")
+		main.phone.close(true)
+		yield(_wait(0.3), "completed")
 	get_tree().quit()

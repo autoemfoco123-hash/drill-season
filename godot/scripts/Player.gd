@@ -187,16 +187,22 @@ func _input(e):
 		main.sfx.play3d("horn", car.pos, 0.8)
 	elif e.is_action_pressed("use"):
 		use_press()
+	# (each of these opens the phone and stops the press here, or the phone would take the same
+	# press as "close" a moment later)
 	elif e.is_action_pressed("phone"):
 		main.phone.open()
+		get_tree().set_input_as_handled()
 	elif e.is_action_pressed("map"):
 		main.phone.open("map")
+		get_tree().set_input_as_handled()
 	elif e.is_action_pressed("pause"):
 		if main.console.on: main.console.pause_menu()
 		else: main.phone.open("settings")
+		get_tree().set_input_as_handled()
 	elif e is InputEventKey and e.pressed and not e.echo and e.scancode == KEY_Y and main.net.online():
 		# Y: chat (the phone's Online app, with the chat box)
 		main.phone.open("online")
+		get_tree().set_input_as_handled()
 
 func look(dx, dy):
 	var s = 0.0022 * float(G.S["settings"].get("sens", 1.0)) * (0.6 if aim_t > 0.5 else 1.0)

@@ -243,7 +243,6 @@ func build(v):
 	_box(g, 0.39, podH, 0.18, xD, podTop - podH / 2, gZ + 0.095, dash)
 	_box(g, 0.41, 0.02, 0.09, xD, podTop + 0.008, gZ - 0.01, dash, 0.18)
 	_box(g, 0.36, 0.42, 0.2, 0, dT - 0.36, zWB - 0.66, trim)
-	_box(g, 0.24, 0.5, 0.55, 0, 0.62, eyeZ + 0.05, trim)
 	for s2 in [-1, 1]:
 		_box(g, 0.14, 0.04, 0.02, s2 * 0.62, dT - 0.05, zWB - 0.615, chrome)
 	# gauges and radio: little 2D screens drawn into textures
@@ -290,7 +289,6 @@ func build(v):
 		_box(g, 0.02, 0.03, 0.12, s4 * (W / 2 - 0.1), yWB - 0.12, eyeZ + 0.1, chrome)
 	_box(g, W - 0.24, 0.07, 0.14, 0, yWT - 0.035, zWT - 0.06, trim)
 	_box(g, W - 0.18, 0.04, max(0.5, zWT - zRB), 0, roofY - 0.04, (zWT + zRB) / 2, liner)
-	_box(g, 0.5, 0.12, 0.55, -xD, 0.62, eyeZ, soft)
 	# windshield and wipers
 	var wl = Vector2(zWT - zWB, yWT - yWB).length()
 	var wsh = MeshInstance.new(); var qm = QuadMesh.new(); qm.size = Vector2(W - 0.2, wl); wsh.mesh = qm; wsh.material_override = glass
@@ -302,6 +300,13 @@ func build(v):
 func _build_more(v, g, W, xD, eyeY, eyeZ, yWB, zWB, yWT, zWT, zRB, roofY, dT, dash, trim, soft, liner, chrome, o):
 	var black = _mat("black", 0x0c0d0f, 0.6)
 	var metal = _mat("metal", 0x6a6e74, 0.35, 0.8)
+	var cb = cabin(v)
+	var hy = cb.hy                     # where your hips sit
+	var fl = hy - 0.32                 # the floor
+	var ct = hy + 0.2                  # top of the centre console
+	_box(g, 0.24, ct - fl, 0.6, 0, (ct + fl) / 2, eyeZ + 0.05, trim)
+	_box(g, W - 0.16, 0.04, max(0.6, zWB - 0.3 - (cb.rz - 0.45)), 0, fl - 0.02, (zWB - 0.3 + cb.rz - 0.45) / 2, _mat("carpet", 0x1e1f22, 1.0))
+	_box(g, 0.3, 0.16, max(0.4, zWB - 0.5 - cb.rz), 0, fl + 0.06, (zWB - 0.5 + cb.rz) / 2, _mat("carpet", 0x1e1f22, 1.0))
 	var belt = _mat("belt", 0x1b1c1f, 0.9)
 	var vent = _mat("vent", 0x08090a, 0.7)
 	# defroster slots along the top of the dash, round vents at the ends, two in the middle
@@ -324,39 +329,49 @@ func _build_more(v, g, W, xD, eyeY, eyeZ, yWB, zWB, yWT, zWT, zRB, roofY, dT, da
 		_bar(g, Vector3(xD + s * 0.05, eyeY - 0.43, eyeZ + 0.49), Vector3(xD + s * 0.2, eyeY - 0.42, eyeZ + 0.46), 0.008, black)
 	_box(g, 0.13, 0.1, 0.2, xD, eyeY - 0.47, eyeZ + 0.55, black)
 	# gear lever (P R N D) and the handbrake, between the seats
-	var gate = _box(g, 0.1, 0.01, 0.2, 0.0, 0.875, eyeZ + 0.22, black)
-	shifter = Spatial.new(); shifter.translation = Vector3(0, 0.88, eyeZ + 0.22); g.add_child(shifter)
+	var gate = _box(g, 0.1, 0.01, 0.2, 0.0, ct + 0.005, eyeZ + 0.22, black)
+	shifter = Spatial.new(); shifter.translation = Vector3(0, ct + 0.01, eyeZ + 0.22); g.add_child(shifter)
 	_bar(shifter, Vector3(), Vector3(0, 0.16, 0), 0.012, metal)
 	var knob = MeshInstance.new(); var ks = SphereMesh.new(); ks.radius = 0.035; ks.height = 0.08; ks.radial_segments = 12; ks.rings = 6
 	knob.mesh = ks; knob.material_override = black; knob.translation = Vector3(0, 0.18, 0); shifter.add_child(knob)
-	hb_lever = Spatial.new(); hb_lever.translation = Vector3(0.0, 0.88, eyeZ - 0.12); g.add_child(hb_lever)
+	hb_lever = Spatial.new(); hb_lever.translation = Vector3(0.0, ct + 0.01, eyeZ - 0.12); g.add_child(hb_lever)
 	_box(hb_lever, 0.04, 0.03, 0.26, 0, 0.0, -0.11, black)
 	_box(hb_lever, 0.05, 0.04, 0.08, 0, 0.0, -0.22, soft)
 	# cupholders
 	for z in [eyeZ + 0.02, eyeZ + 0.1]:
 		var cu = MeshInstance.new(); var cy = CylinderMesh.new(); cy.top_radius = 0.035; cy.bottom_radius = 0.035; cy.height = 0.012; cy.radial_segments = 12
-		cu.mesh = cy; cu.material_override = vent; cu.translation = Vector3(0.0, 0.872, z); g.add_child(cu)
+		cu.mesh = cy; cu.material_override = vent; cu.translation = Vector3(0.0, ct + 0.002, z); g.add_child(cu)
 	# pedals under your feet
 	pedals = []
 	for pd in [[xD + 0.09, 0.08, 0.1], [xD - 0.1, 0.12, 0.08]]:
-		var pv = Spatial.new(); pv.translation = Vector3(pd[0], 0.62, zWB - 0.42); g.add_child(pv)
+		var pv = Spatial.new(); pv.translation = Vector3(pd[0], hy + 0.06, zWB - 0.42); g.add_child(pv)
 		_bar(pv, Vector3(), Vector3(0, -0.24, -0.06), 0.01, metal)
 		_box(pv, pd[1], pd[2], 0.015, 0, -0.27, -0.07, black, -0.4)
 		pedals.append(pv)
 	# door panels: armrest, speaker, window switches, the handle
 	for s in [-1, 1]:
 		var x = s * (W / 2 - 0.1)
-		_box(g, 0.08, 0.06, 0.45, x, 0.78, eyeZ + 0.05, soft)
+		_box(g, 0.08, 0.06, 0.45, x, hy + 0.22, eyeZ + 0.05, soft)
 		var spk = MeshInstance.new(); var sc = CylinderMesh.new(); sc.top_radius = 0.07; sc.bottom_radius = 0.07; sc.height = 0.01; sc.radial_segments = 16
-		spk.mesh = sc; spk.material_override = vent; spk.rotation = Vector3(0, 0, PI / 2); spk.translation = Vector3(x + s * -0.005, 0.52, eyeZ + 0.35); g.add_child(spk)
-		for k in range(2): _box(g, 0.02, 0.012, 0.03, x - s * 0.04, 0.815, eyeZ + 0.12 + k * 0.05, black)
-	# seats: the backs and headrests, the rear bench, the belt across your chest
+		spk.mesh = sc; spk.material_override = vent; spk.rotation = Vector3(0, 0, PI / 2); spk.translation = Vector3(x + s * -0.005, hy - 0.05, eyeZ + 0.35); g.add_child(spk)
+		for k in range(2): _box(g, 0.02, 0.012, 0.03, x - s * 0.04, hy + 0.255, eyeZ + 0.12 + k * 0.05, black)
+	# the front seats: cushions, backs with a fabric insert, headrests on posts, map pockets
+	var insert = _mat("insert", 0x4a4b50, 0.98)
 	for x in [xD, -xD]:
-		_box(g, 0.5, 0.65, 0.12, x, 0.95, eyeZ - 0.3, soft, -0.15)
-		_box(g, 0.26, 0.2, 0.1, x, 1.38, eyeZ - 0.36, soft, -0.1)
-	_box(g, W - 0.3, 0.14, 0.5, 0, 0.6, eyeZ - 0.85, soft)
-	_box(g, W - 0.3, 0.6, 0.12, 0, 0.95, eyeZ - 1.12, soft, -0.2)
-	_bar(g, Vector3(xD + 0.24, eyeY - 0.02, eyeZ - 0.28), Vector3(xD - 0.2, 0.7, eyeZ - 0.02), 0.03, belt)
+		_box(g, 0.52, 0.12, 0.52, x, hy - 0.12, eyeZ + 0.06, soft)
+		_box(g, 0.3, 0.02, 0.4, x, hy - 0.055, eyeZ + 0.06, insert)
+		# (your own seat back stays out: your head is in front of it when you look round)
+		if x == xD: continue
+		_box(g, 0.52, 0.66, 0.13, x, hy + 0.3, eyeZ - 0.33, soft, -0.17)
+		_box(g, 0.3, 0.5, 0.02, x, hy + 0.3, eyeZ - 0.26, insert, -0.17)
+		for sx in [-0.23, 0.23]:
+			_box(g, 0.06, 0.5, 0.16, x + sx, hy + 0.28, eyeZ - 0.3, soft, -0.17)
+		for px in [-0.06, 0.06]:
+			_bar(g, Vector3(x + px, hy + 0.62, eyeZ - 0.39), Vector3(x + px, hy + 0.7, eyeZ - 0.4), 0.008, metal)
+		_box(g, 0.26, 0.19, 0.1, x, hy + 0.78, eyeZ - 0.41, soft, -0.1)
+		_box(g, 0.38, 0.24, 0.03, x, hy + 0.16, eyeZ - 0.43, _mat("pocket", 0x2a2b2f, 0.95), -0.17)
+	_bar(g, Vector3(xD + 0.24, eyeY - 0.02, eyeZ - 0.28), Vector3(xD - 0.2, hy + 0.06, eyeZ - 0.02), 0.03, belt)
+	_rear_cabin(v, g, cb, W, xD, eyeZ, yWB, zRB, roofY, soft, insert, trim, liner, black, metal, belt, chrome)
 	# wipers: they rest along the bottom of the windshield and sweep up across it
 	wipers = []
 	var tilt = atan2(zWT - zWB, yWT - yWB)
@@ -405,6 +420,129 @@ func _build_more(v, g, W, xD, eyeY, eyeZ, yWB, zWB, yWT, zWT, zRB, roofY, dT, da
 	dash_light.translation = Vector3(xD, eyeY - 0.25, eyeZ + 0.35); dash_light.visible = false; g.add_child(dash_light)
 	odo0 = 30000 + (hash(v.model + str(v.color)) % 90000)
 
+# the cabin's key measures for a car: the driver's eye, where hips sit, the back row
+const SEDAN_BACK = ["sedan", "taxi", "police", "coupe", "bruiser"]
+func cabin(v):
+	var Gm = G.D["CAR_GEOM"][v.model]
+	var W = float(v.sp.wid)
+	var yWB = float(Gm.yWB)
+	var roofY = float(Gm.roofY)
+	var zWB = float(Gm.zWB)
+	var zRB = float(Gm.zRB)
+	var eyeY = yWB + (roofY - yWB) * 0.62
+	var eyeZ = zWB - 0.95
+	var hy = eyeY - 0.7
+	var rz = eyeZ - 0.8
+	var rhy = hy - 0.05
+	# the rear window: a long slope on the saloons, nearly upright on hatches, vans and trucks
+	var rake = 0.75 if v.model in SEDAN_BACK else 0.12
+	var deck = yWB + 0.05
+	# does a grown-up fit in the back row, under the roof or the rear glass?
+	var hz = rz - 0.12
+	var top = roofY - 0.04
+	if hz < zRB: top = roofY - (zRB - hz) / rake * (roofY - deck)
+	var fits = rhy + 0.84 < top and rz - 0.5 > -float(v.sp.len) / 2.0 + 0.25
+	return { "W": W, "xD": W * 0.21, "eyeY": eyeY, "eyeZ": eyeZ, "hy": hy, "rhy": rhy, "rz": rz, "rake": rake, "deck": deck, "rear": fits, "zRB": zRB, "roofY": roofY, "yWB": yWB }
+
+# where passengers sit, as hip points in the car's own space: the front passenger, then the
+# back row behind them, behind the driver, and the middle
+func seat_spots(v):
+	var cb = cabin(v)
+	var out = [Vector3(-cb.xD, cb.hy, cb.eyeZ - 0.1)]
+	if cb.rear:
+		out += [Vector3(-cb.xD * 0.92, cb.rhy, cb.rz - 0.08), Vector3(cb.xD * 0.92, cb.rhy, cb.rz - 0.08), Vector3(0, cb.rhy + 0.02, cb.rz - 0.04)]
+	return out
+
+# the car's frame for people sitting in it: the cockpit's while you're in first person (so they
+# line up with the seats you see), the body's otherwise
+func car_frame(v):
+	if root and shown_car == v and root.visible: return root.global_transform
+	if v.node: return v.node.global_transform
+	return Transform(Basis(Vector3(0, 1, 0), v.yaw), v.pos)
+
+# the back row: a contoured bench, three headrests, the armrest folded down with cupholders,
+# belts and buckles, rear door panels, the B and C pillars, side and rear glass, the parcel
+# shelf with its speakers and brake light, and the boot lid through the glass
+func _rear_cabin(v, g, cb, W, xD, eyeZ, yWB, zRB, roofY, soft, insert, trim, liner, black, metal, belt, chrome):
+	var rz = cb.rz
+	var rhy = cb.rhy
+	var rake = cb.rake
+	var deck = cb.deck
+	var paint = SpatialMaterial.new(); paint.albedo_color = G.hex_color(v.color); paint.roughness = 0.3; paint.metallic = 0.25
+	var glass = SpatialMaterial.new(); glass.albedo_color = Color(0.55, 0.62, 0.7, 0.12); glass.flags_transparent = true; glass.roughness = 0.05
+	glass.params_cull_mode = SpatialMaterial.CULL_DISABLED
+	var bx = xD * 0.92
+	# cushions: two shaped outer seats and a narrower middle
+	for x in [-bx, bx]:
+		_box(g, 0.48, 0.13, 0.5, x, rhy - 0.12, rz + 0.06, soft)
+		_box(g, 0.3, 0.02, 0.38, x, rhy - 0.05, rz + 0.06, insert)
+		_box(g, 0.48, 0.64, 0.13, x, rhy + 0.28, rz - 0.3, soft, -0.24)
+		_box(g, 0.3, 0.46, 0.02, x, rhy + 0.27, rz - 0.235, insert, -0.24)
+		_box(g, 0.06, 0.5, 0.15, x + sign(x) * 0.22, rhy + 0.27, rz - 0.27, soft, -0.24)
+		for px in [-0.06, 0.06]:
+			_bar(g, Vector3(x + px, rhy + 0.58, rz - 0.39), Vector3(x + px, rhy + 0.66, rz - 0.41), 0.008, metal)
+		_box(g, 0.24, 0.17, 0.09, x, rhy + 0.74, rz - 0.42, soft, -0.2)
+		# the belt from the pillar, and the buckle in the crease
+		var top = Vector3(sign(x) * (W / 2 - 0.12), rhy + 0.62, rz - 0.36)
+		_bar(g, top, Vector3(x + sign(x) * 0.2, rhy - 0.02, rz - 0.18), 0.022, belt)
+		_box(g, 0.035, 0.07, 0.025, x - sign(x) * 0.22, rhy - 0.03, rz - 0.2, black, -0.4)
+		_box(g, 0.02, 0.015, 0.012, x - sign(x) * 0.22, rhy + 0.0, rz - 0.19, _mat("buckle", 0xb3121a, 0.5), -0.4)
+	var mw = max(0.2, 2.0 * bx - 0.48)
+	_box(g, mw, 0.11, 0.48, 0, rhy - 0.13, rz + 0.05, soft)
+	_box(g, mw, 0.6, 0.12, 0, rhy + 0.25, rz - 0.31, soft, -0.24)
+	_box(g, 0.16, 0.1, 0.08, 0, rhy + 0.66, rz - 0.42, soft, -0.2)
+	# the armrest, folded down, with two cupholders
+	_box(g, 0.24, 0.1, 0.4, 0, rhy + 0.04, rz - 0.05, soft)
+	for z in [rz - 0.02, rz + 0.08]:
+		var cu = MeshInstance.new(); var cy = CylinderMesh.new(); cy.top_radius = 0.035; cy.bottom_radius = 0.035; cy.height = 0.01; cy.radial_segments = 12
+		cu.mesh = cy; cu.material_override = _mat("vent", 0x08090a, 0.7); cu.translation = Vector3(0, rhy + 0.093, z); g.add_child(cu)
+	# rear door panels: armrest, handle, a window switch, a speaker
+	for s in [-1, 1]:
+		var x = s * (W / 2 - 0.1)
+		_box(g, 0.07, 0.06, 0.4, x, rhy + 0.2, rz + 0.05, soft)
+		_box(g, 0.02, 0.03, 0.1, x, rhy + 0.38, rz + 0.25, chrome)
+		_box(g, 0.02, 0.012, 0.03, x - s * 0.035, rhy + 0.235, rz + 0.12, black)
+		var spk = MeshInstance.new(); var sc = CylinderMesh.new(); sc.top_radius = 0.06; sc.bottom_radius = 0.06; sc.height = 0.01; sc.radial_segments = 14
+		spk.mesh = sc; spk.material_override = _mat("vent", 0x08090a, 0.7); spk.rotation = Vector3(0, 0, PI / 2); spk.translation = Vector3(x - s * 0.005, rhy - 0.05, rz + 0.2); g.add_child(spk)
+	# pillars and glass: the C pillar from the belt line up to the roof's end
+	var gz = zRB - rake                              # where the rear glass meets the deck
+	for s in [-1, 1]:
+		_bar(g, Vector3(s * (W / 2 - 0.08), yWB + 0.08, min(gz + 0.1, rz - 0.4)), Vector3(s * (W / 2 - 0.15), roofY - 0.05, zRB + 0.04), 0.07, trim)
+		var x = s * (W / 2 - 0.035)
+		# front side window, between the A and B pillars; rear side window, between B and C
+		_poly(g, [Vector3(x, yWB + 0.1, float(G.D["CAR_GEOM"][v.model].zWB) - 0.05), Vector3(x, roofY - 0.06, float(G.D["CAR_GEOM"][v.model].zWT)), Vector3(x, roofY - 0.06, eyeZ - 0.45), Vector3(x, yWB + 0.1, eyeZ - 0.45)], glass)
+		_poly(g, [Vector3(x, yWB + 0.1, eyeZ - 0.52), Vector3(x, roofY - 0.06, eyeZ - 0.52), Vector3(x, roofY - 0.06, zRB + 0.06), Vector3(x, yWB + 0.1, min(gz + 0.12, zRB))], glass)
+	# the headliner over the back row, a dome light
+	_box(g, W - 0.18, 0.04, max(0.3, eyeZ - 0.4 - zRB), 0, roofY - 0.04, (eyeZ - 0.4 + zRB) / 2, liner)
+	_box(g, 0.14, 0.02, 0.08, 0, roofY - 0.065, max(zRB + 0.15, rz - 0.1), _mat("dome", 0xe8e4d8, 0.4))
+	# the rear window
+	var w2 = W / 2 - 0.12
+	_poly(g, [Vector3(-w2, roofY - 0.03, zRB), Vector3(w2, roofY - 0.03, zRB), Vector3(w2, deck, gz), Vector3(-w2, deck, gz)], glass)
+	if rake > 0.3:
+		# a saloon: the parcel shelf behind the seat, its speakers and the brake light, the boot lid
+		var shelf_z0 = rz - 0.42
+		_box(g, W - 0.24, 0.03, max(0.1, shelf_z0 - gz), 0, deck - 0.01, (shelf_z0 + gz) / 2, _mat("shelf", 0x26272a, 1.0))
+		for x in [-w2 * 0.6, w2 * 0.6]:
+			var sp2 = MeshInstance.new(); var c2 = CylinderMesh.new(); c2.top_radius = 0.07; c2.bottom_radius = 0.07; c2.height = 0.01; c2.radial_segments = 14
+			sp2.mesh = c2; sp2.material_override = _mat("vent", 0x08090a, 0.7); sp2.translation = Vector3(x, deck + 0.01, (shelf_z0 + gz) / 2); g.add_child(sp2)
+		_box(g, 0.3, 0.04, 0.04, 0, deck + 0.03, gz + 0.06, _mat("brake3", 0x8a0a0a, 0.4))
+		_box(g, W - 0.12, 0.04, 0.9, 0, deck - 0.03, gz - 0.45, paint)
+	else:
+		# a hatch, a wagon, a van: the load floor behind the seat
+		_box(g, W - 0.2, 0.03, max(0.2, rz - 0.45 - zRB), 0, rhy - 0.08, (rz - 0.45 + zRB) / 2, _mat("carpet", 0x1e1f22, 1.0))
+
+# a flat polygon (a window) from four corners
+func _poly(parent, pts, mat):
+	var st = SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var n = (pts[1] - pts[0]).cross(pts[2] - pts[0]).normalized()
+	for i in [0, 1, 2, 0, 2, 3]:
+		st.add_normal(n); st.add_vertex(pts[i])
+	var mi = MeshInstance.new()
+	mi.mesh = st.commit(); mi.material_override = mat; mi.cast_shadow = GeometryInstance.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(mi)
+	return mi
+
 func _screen(size):
 	var vp = Viewport.new()
 	vp.size = size; vp.usage = Viewport.USAGE_2D; vp.render_target_v_flip = true
@@ -449,9 +587,11 @@ func update(v, cam, dt):
 	var sp = abs(v.speed)
 	var lat = v.steer * sp
 	var P = main.player
-	var e = eye + Vector3(clamp(lat * 0.002, -0.05, 0.05), sin(G.REAL_T * 17) * min(sp, 25) * 0.0004 + (randf() - 0.5) * P.shake * 0.03, 0)
+	var look = clamp(G.ang_diff(v.yaw + PI, P.cam_yaw), -2.6, 2.6)
+	# looking over your shoulder, your head turns in toward the middle of the car
+	var lb = clamp((abs(look) - 1.1) / 1.3, 0.0, 1.0)
+	var e = eye + Vector3(clamp(lat * 0.002, -0.05, 0.05) - 0.2 * lb, sin(G.REAL_T * 17) * min(sp, 25) * 0.0004 + (randf() - 0.5) * P.shake * 0.03 + 0.02 * lb, 0.1 * lb)
 	cam.translation = root.global_transform.xform(e)
-	var look = clamp(G.ang_diff(v.yaw + PI, P.cam_yaw), -2.0, 2.0)
 	cam.rotation = Vector3(clamp(P.cam_pitch + 0.06, -0.6, 0.5), v.yaw + PI + look, -clamp(lat * 0.0015, -0.03, 0.03))
 	spin.rotation.z = -v.steer * 2.4
 	var sx = [eye.x + 0.2, eye.x - 0.2]

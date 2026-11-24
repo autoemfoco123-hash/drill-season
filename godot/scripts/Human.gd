@@ -409,6 +409,7 @@ var _was_air = false
 var _land = 0.0
 var _turn = 0.0           # turning on the spot: small steps
 var _look = 0.0
+var _sway = Vector2()      # sitting in a car: what the car's doing to you (side, fore-aft)
 
 # one leg: the thigh swings, the knee folds on the way forward. ex adds the other layers:
 # (thigh forward, knee bend, thigh out to the side)
@@ -433,6 +434,9 @@ func _srot(n, t, k):
 func animate(dt, pose):
 	if rag != null:
 		ragdoll_update(dt)
+		return
+	if pose.get("seat", false):
+		_seated(dt, pose)
 		return
 	if getup > 0:
 		getup = max(0.0, getup - dt * 1.6)
@@ -614,6 +618,31 @@ func animate(dt, pose):
 	shadow.visible = dn < 0.5
 	sync_bones()
 
+
+# riding in a car: thighs along the seat, shins down, hands in the lap; the body sways
+# out of the corners and rocks with the throttle and the brakes, the head looks around
+func _seated(dt, pose):
+	var k = 1.0 if _cur.empty() else 1 - exp(-dt * 10)
+	var sw = pose.get("sway", Vector2())
+	_sway = _sway.linear_interpolate(Vector2(clamp(sw.x, -10.0, 10.0), clamp(sw.y, -10.0, 10.0)), min(1.0, dt * 4.0))
+	_idle_t += dt
+	var lat = _sway.x * 0.014
+	var lon = _sway.y * 0.011
+	hips.translation = Vector3(0, 0.92, 0)
+	_srot(hips, Vector3(0, 0, 0), k)
+	_srot(L.thigh, Vector3(-1.42, 0, -0.1), k); _srot(R.thigh, Vector3(-1.42, 0, 0.1), k)
+	_srot(L.knee, Vector3(1.38, 0, 0), k); _srot(R.knee, Vector3(1.38, 0, 0), k)
+	var breath = sin(_idle_t * 1.7) * 0.01
+	_srot(spine, Vector3(-0.14 - lon + breath, sin(_idle_t * 0.21) * 0.06, lat), k)
+	_srot(AL.sh, Vector3(-0.5, 0, -0.08), k); _srot(AL.elbow, Vector3(-0.95, 0, 0), k)
+	_srot(AR.sh, Vector3(-0.5, 0, 0.08), k); _srot(AR.elbow, Vector3(-0.95, 0, 0), k)
+	var glance = sin(_idle_t * 0.37 + float(get_instance_id() % 13)) * 0.4 + sin(_idle_t * 0.13) * 0.3 + float(pose.get("look", 0.0))
+	_srot(head_g, Vector3(0.1 + lon * 0.5, clamp(glance, -1.2, 1.2), -lat * 0.6), k)
+	_rot(root, 0, 0, 0)
+	root.translation = Vector3()
+	finger.visible = false
+	shadow.visible = false
+	sync_bones()
 
 # ---------- ragdoll ----------
 # A verlet ragdoll: 15 points (pelvis, chest, head, hips, knees, feet, shoulders, elbows,

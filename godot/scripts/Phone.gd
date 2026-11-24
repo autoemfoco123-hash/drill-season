@@ -424,6 +424,7 @@ func open(which = ""):
 	if G.MODE != "play" and G.MODE != "phone" and G.MODE != "menu": return
 	main.hud.close_menu()
 	G.MODE = "phone"
+	opened_frame = Engine.get_idle_frames()
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	if not panel.visible: anim = 0.0
 	panel.visible = true
@@ -479,8 +480,10 @@ func _input(e):
 	elif e is InputEventMouseButton or e is InputEventScreenTouch:
 		pad_nav = false
 
+var opened_frame = -1
 func _unhandled_input(e):
 	if not panel.visible or anim_to <= 0.0: return
+	if Engine.get_idle_frames() == opened_frame: return     # the press that opened it
 	if e.is_action_pressed("phone") or e.is_action_pressed("pause") or (e.is_action_pressed("ui_cancel") and app == ""):
 		close(); get_tree().set_input_as_handled()
 	elif e.is_action_pressed("ui_cancel"):
