@@ -361,9 +361,9 @@ func close_controls():
 class ControlsView extends Control:
 	var main
 	# [button, what it does on foot, in a car]
-	const LEFT = [["LT", "Aim", "Brake · with RT: burnout"], ["LB", "Weapon (hold: wheel)", ""], ["LS", "Move (click: sprint)", "Steer"],
+	const LEFT = [["LT", "Aim", "Brake · with RT: burnout"], ["LB", "Weapon (hold: wheel)", "Lean out the window"], ["LS", "Move (click: sprint)", "Steer"],
 		["UP", "Phone", ""], ["LEFT", "Emotes and dances", ""], ["DOWN", "Bandage", ""], ["RIGHT", "Middle finger", ""], ["VIEW", "Map", ""]]
-	const RIGHT = [["RT", "Shoot · punch", "Gas"], ["RB", "Use · talk", ""], ["Y", "Get in · out of a car", ""], ["X", "Reload", "Next station"],
+	const RIGHT = [["RT", "Shoot · punch", "Gas"], ["RB", "Use · talk · aiming: crew orders", "Shoot out the window"], ["Y", "Get in · out of a car", ""], ["X", "Reload", "Next station"],
 		["B", "Crouch", ""], ["A", "Jump", "Handbrake"], ["RS", "Camera (click: first person)", "Look"], ["MENU", "Pause", ""]]
 	func _ready():
 		mouse_filter = Control.MOUSE_FILTER_STOP

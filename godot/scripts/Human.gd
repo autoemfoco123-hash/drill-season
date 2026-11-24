@@ -594,6 +594,33 @@ func animate(dt, pose):
 			else:
 				ar = Vector3(px, 0, pz); are = pe
 			spine_y = -sd * 0.42 * e
+	# a bat or a knife in your hand (or a grenade / fire bottle, held low)
+	var mel = pose.get("melee", "")
+	if mel != "" and pose.get("down", 0.0) == 0:
+		var u = clamp(pose.get("swing", 0.0), 0.0, 1.0)
+		var e2 = sin(u * PI)
+		if mel == "bat":
+			# both hands on the handle by the right shoulder; the swing comes round flat and through
+			var w = smoothstep(0.0, 1.0, u)
+			ar = Vector3(lerp(-1.25, -1.55, e2), 0, lerp(-0.05, -0.6, w)); are = lerp(-1.85, -0.25, e2)
+			al = Vector3(lerp(-1.35, -1.55, e2), 0, lerp(0.55, 0.12, w)); ale = lerp(-1.65, -0.3, e2)
+			spine_y = lerp(0.55, -0.8, w) if u > 0 else 0.4
+			if u > 0: snap = true
+		elif mel == "knife":
+			ar = Vector3(lerp(-0.75, -1.5, e2), 0, lerp(0.0, -0.14, e2)); are = lerp(-1.45, -0.08, e2)
+			al = Vector3(lerp(al.x, -0.9, 0.6), 0, 0.3); ale = -1.5
+			spine_y = -0.28 * e2
+			if u > 0: snap = true
+		else:
+			ar = Vector3(-0.55, 0, 0.12); are = -1.0
+	# a takedown: both arms round them from behind
+	var td = pose.get("takedown", 0.0)
+	if td > 0:
+		var tk = clamp(min(td / 0.15, (0.7 - td) / 0.2 + 1.0), 0.0, 1.0)
+		ar = Vector3(lerp(ar.x, -1.3, tk), 0, lerp(ar.z, -0.35, tk)); are = lerp(are, -0.85, tk)
+		al = Vector3(lerp(al.x, -1.3, tk), 0, lerp(al.z, 0.35, tk)); ale = lerp(ale, -0.85, tk)
+		spine_x += 0.22 * tk
+		snap = true
 	var kk = 1.0 if snap else ka
 	_srot(AR.sh, Vector3(ar.x, 0, ar.z), kk); _srot(AR.elbow, Vector3(are, 0, 0), kk)
 	_srot(AL.sh, Vector3(al.x, 0, al.z), kk); _srot(AL.elbow, Vector3(ale, 0, 0), kk)

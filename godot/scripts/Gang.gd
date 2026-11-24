@@ -42,6 +42,7 @@ class Follower:
 	var heal_t = 1.0
 	var down_t = 0.0
 	var riding = false
+	var lean = 0.0         # leaning out of the car window to shoot
 	var slot = 0
 	var fighting = false
 	var last_say = -99.0
@@ -412,20 +413,54 @@ func _update_follower(f, dt):
 		var i = _seat_index(f)
 		if i >= 0 and i < seats.size() and P.car.node:
 			H.visible = true
-			H.transform = main.cockpit.car_frame(P.car) * Transform(Basis(), seats[i] - Vector3(0, 0.92, 0))
 			var c = P.car
+			var xf = main.cockpit.car_frame(c)
+			# shooters lean out at whoever's shooting at you (rival crews, a drive-by car)
+			var ct = null
+			if f.rec.type == "shooter" and f.gun and main.offense:
+				f.tgt_t -= dt
+				if f.tgt_t <= 0:
+					f.tgt_t = 0.5; f.tgt = main.offense.car_target(c.pos, 30.0)
+				ct = f.tgt if f.tgt != null and not f.tgt.is_down() else null
+			f.lean = move_toward(f.lean, 1.0 if ct != null else 0.0, dt * 3.0)
+			var turn = 0.0
+			var dl = Vector3()
+			if ct != null:
+				dl = xf.basis.orthonormalized().inverse().xform(ct.pos + Vector3(0, 1.2, 0) - xf.origin)
+				turn = clamp(atan2(dl.x, dl.z), -2.0, 2.0) * f.lean
+			var out = Vector3(sign(seats[i].x) * 0.14 * f.lean, 0, 0)
+			H.transform = xf * Transform(Basis(Vector3.UP, turn), seats[i] - Vector3(0, 0.92, 0) + out)
 			H.animate(dt, { "seat": true, "sway": Vector2(c.ay if "ay" in c else 0.0, c.ax if "ax" in c else 0.0) })
+			if f.gun: f.gun.visible = f.lean > 0.3
+			if f.lean > 0.05:
+				var pitch = atan2(dl.y - seats[i].y - 0.5, max(1.0, Vector2(dl.x, dl.z).length()))
+				H._rot(H.AR.sh, lerp(-0.4, -PI / 2 - pitch, f.lean), 0, 0.0); H._rot(H.AR.elbow, lerp(-1.2, -0.05, f.lean), 0, 0)
+				H.sync_bones()
+			if ct != null and f.lean > 0.8:
+				f.fire_cd -= dt
+				if f.fire_cd <= 0:
+					f.fire_cd = G.rand(0.35, 0.7)
+					var bx = main.offense.boxes_off([c, ct.car if "car" in ct else null])
+					_shoot(f, ct)
+					main.offense.boxes_back(bx)
 		else:
 			H.visible = false
 		return
 	if f.riding:
-		f.riding = false; f.pos = _spot(true); f.vel = Vector3(); H.visible = true
+		f.riding = false; f.pos = _spot(true); f.vel = Vector3(); H.visible = true; f.lean = 0.0
+		if f.gun: f.gun.visible = true
 	var dP = f.pos.distance_to(P.pos)
 	if dP > 45:
 		f.pos = _spot(true); f.trail.clear(); f.vel = Vector3()
 	f.tgt_t -= dt
 	if f.tgt_t <= 0:
 		f.tgt_t = 0.4; f.tgt = _target(f)
+	# your orders (Offense.gd): who to go after, where to be
+	var plan = main.offense.follower_plan(f) if main.offense else null
+	if plan != null and plan.tg != null: f.tgt = plan.tg
+	elif plan != null and plan.crouch: f.tgt = null
+	var hold_spot = plan != null and plan.crouch
+	var leash = 60.0 if plan != null else 16.0
 	var tg = f.tgt if f.tgt != null and not f.tgt.is_down() else null
 	var goal = null
 	var spd = 0.0
@@ -435,19 +470,30 @@ func _update_follower(f, dt):
 	if f.punch_t > 0:
 		f.punch_t += dt
 		if f.punch_t > 0.3: f.punch_t = 0
-	if tg and f.rec.type == "shooter" and dP < 16:
+	if tg and f.rec.type == "shooter" and dP < leash:
 		var d = tg.pos.distance_to(f.pos)
 		face = atan2(tg.pos.x - f.pos.x, tg.pos.z - f.pos.z); aim = 1.0; fighting = true
-		if d > 20:
+		if hold_spot:
+			if f.pos.distance_to(plan.goal) > 1.2:
+				goal = plan.goal; spd = 4.6
+		elif plan != null:
+			if plan.goal.distance_to(tg.pos) > 1.0 and f.pos.distance_to(plan.goal) > 3.0:
+				goal = plan.goal; spd = 5.8      # going round the side
+			elif d > 9:
+				goal = tg.pos; spd = 4.8
+		elif d > 20:
 			goal = tg.pos
 			spd = 3.2
 		f.fire_cd -= dt
 		if f.fire_cd <= 0:
 			f.fire_cd = G.rand(0.45, 0.85); _shoot(f, tg)
-	elif tg and f.rec.type == "brawler" and dP < 22:
+	elif tg and f.rec.type == "brawler" and dP < (leash if plan != null else 22.0) and not (hold_spot and tg.pos.distance_to(plan.goal) > 6.0):
 		var d2 = tg.pos.distance_to(f.pos)
 		face = atan2(tg.pos.x - f.pos.x, tg.pos.z - f.pos.z); fighting = true
-		if d2 > 1.1:
+		if plan != null and not hold_spot and plan.goal.distance_to(tg.pos) > 1.0 and f.pos.distance_to(plan.goal) > 3.0:
+			goal = plan.goal
+			spd = 5.8
+		elif d2 > 1.1:
 			goal = tg.pos
 			spd = 5.4
 		f.atk_cd -= dt
@@ -460,6 +506,16 @@ func _update_follower(f, dt):
 				var dir = (tg.pos - f.pos).normalized()
 				main.sfx.play3d("punch", tg.pos + Vector3(0, 1.45, 0), 0.75)
 				tg.take_hit(11, false, dir, false, true)
+	var crouch_k = 0.0
+	if hold_spot and goal == null:
+		# posted up: get to the spot and get low
+		var dh = f.pos.distance_to(plan.goal)
+		if dh > 1.0:
+			goal = plan.goal; spd = 4.6 if dh > 4 else 2.2
+		else:
+			crouch_k = 1.0
+			if tg != null: crouch_k = 0.6
+		fighting = true
 	if goal == null and not fighting:
 		var last = f.trail.back() if f.trail.size() > 0 else null
 		if last == null or Vector2(last.x - P.pos.x, last.z - P.pos.z).length() > 0.6: f.trail.append(P.pos)
@@ -505,17 +561,19 @@ func _update_follower(f, dt):
 		f.emote_left -= dt; f.emote_t += dt
 		if fighting or sp > 1.0: f.emote_left = 0
 		else: em = f.emote
-	H.animate(dt, { "speed": sp, "aim": aim, "pitch": 0.0, "fists": box, "guard": box, "punch": f.punch_t / 0.3 if f.punch_t > 0 else 0.0, "punchSide": f.punch_side, "shiver": G.S.get("warmth", 100) < 25 and em == "", "emote": em, "et": f.emote_t })
+	H.animate(dt, { "speed": sp, "aim": aim, "pitch": 0.0, "fists": box, "crouch": crouch_k, "guard": box, "punch": f.punch_t / 0.3 if f.punch_t > 0 else 0.0, "punchSide": f.punch_side, "shiver": G.S.get("warmth", 100) < 25 and em == "", "emote": em, "et": f.emote_t })
 	f.fighting = fighting
 
 func _shoot(f, e):
 	var mz = f.h.gun_slot.global_transform.origin
 	var tp = e.pos + Vector3(0, 0.9 if e.crouched else 1.3, 0)
 	if not W.seg_clear(mz, tp): return
-	var hit = randf() < 0.42
+	# (sent in on your orders, they don't hold back)
+	var ordered = main.offense != null and main.offense.order != ""
+	var hit = randf() < (0.52 if ordered else 0.42)
 	var end = tp if hit else tp + Vector3(G.rand(-1.2, 1.2), G.rand(-0.4, 0.8), G.rand(-1.2, 1.2))
 	main.sfx.tracer(mz, end)
 	main.sfx.shot("k9", mz, 0.75)
 	main.peds.alert(f.pos, 35)
 	G.S["heat"] = min(100, G.S["heat"] + 0.3)
-	if hit: e.take_hit(9, false, (e.pos - f.pos).normalized(), false, false)
+	if hit: e.take_hit(12 if ordered else 9, false, (e.pos - f.pos).normalized(), false, false)

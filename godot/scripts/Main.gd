@@ -9,6 +9,7 @@ var crews
 var gang
 var turf
 var missions
+var offense
 var sfx
 var hud
 var phone
@@ -81,6 +82,7 @@ func _ready():
 	gang = _system("res://scripts/Gang.gd", "Gang")
 	turf = _system("res://scripts/Turf.gd", "Turf")
 	missions = _system("res://scripts/Missions.gd", "Missions")
+	offense = _system("res://scripts/Offense.gd", "Offense")
 	hud = _system("res://scripts/HUD.gd", "HUD")
 	phone = _system("res://scripts/Phone.gd", "Phone")
 	title = _system("res://scripts/Title.gd", "Title")
@@ -101,7 +103,7 @@ func _ready():
 	console = _system("res://scripts/Console.gd", "Console")
 	music = _system("res://scripts/Music.gd", "Music")
 	motion_blur = _system("res://scripts/MotionBlur.gd", "MotionBlur")
-	for s in [sfx, vehicles, player, peds, police, crews, gang, turf, missions, hud, phone, title, story, cutscene, studio, blok, train, fx, net, wardrobe, cockpit, touch, memorial, sky, eras, interiors, console, music, motion_blur]:
+	for s in [sfx, vehicles, player, peds, police, crews, gang, turf, missions, offense, hud, phone, title, story, cutscene, studio, blok, train, fx, net, wardrobe, cockpit, touch, memorial, sky, eras, interiors, console, music, motion_blur]:
 		s.setup(self)
 	story.build_npcs()
 	eras.build()
@@ -335,6 +337,7 @@ func _process(dt):
 		missions.update(dt)
 		police.update(dt)
 		if G.MODE != "cutscene": player.update_camera(dt)
+		offense.update(dt)
 	cutscene.update(dt)
 	story.update(dt)
 	eras.update(dt)
@@ -366,6 +369,7 @@ func start_game(state):
 	gang.sync_followers()
 	turf.reset()
 	missions.reset()
+	offense.reset()
 	hud.show()
 	story.last_min = -1
 	if not G.S["flags"].get("introSeen", false) and not autotest:
@@ -385,6 +389,7 @@ func exit_to_title():
 	gang.clear()
 	turf.reset()
 	missions.reset()
+	offense.reset()
 	hud.hide()
 	G.MODE = "title"
 	title.open()

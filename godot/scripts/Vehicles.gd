@@ -76,6 +76,7 @@ class Car:
 	var lamps = -1
 	var beam = null       # the pool of light in front of a moving car at night
 	var tips = []
+	var rival = null      # a rival crew's drive-by car (Offense.gd drives it)
 
 func setup(m):
 	main = m
@@ -1013,6 +1014,8 @@ func update(dt):
 		if v.driver == "player":
 			inp = _player_input()
 			v.hand = inp.get("hand", false)
+		elif v.rival:
+			inp = main.offense.rival_drive(v, dt)
 		elif v.cop:
 			inp = main.police.cop_drive(v, dt)
 		elif v.ai:
@@ -1048,7 +1051,8 @@ var trailer_drive = false   # trailer shots: keep driving while a cutscene camer
 func _player_input():
 	if (G.MODE != "play" and not trailer_drive) or (main.missions and main.missions.frozen()):
 		return { "thr": 0.0, "gas": 0.0, "brk": 0.0, "steer": 0.0, "hand": false }
-	var gas = Input.get_action_strength("move_f") + Input.get_action_strength("fire")
-	var brk = Input.get_action_strength("move_b") + Input.get_action_strength("aim")
+	# (the mouse buttons and LB / RB are for leaning out of the window and shooting)
+	var gas = Input.get_action_strength("move_f") + Input.get_action_strength("gas")
+	var brk = Input.get_action_strength("move_b") + Input.get_action_strength("brake")
 	var steer = Input.get_action_strength("move_l") - Input.get_action_strength("move_r")
 	return { "thr": clamp(gas - brk, -1, 1), "gas": clamp(gas, 0, 1), "brk": clamp(brk, 0, 1), "steer": clamp(steer, -1, 1), "hand": Input.is_action_pressed("jump") }

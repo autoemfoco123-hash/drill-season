@@ -111,7 +111,11 @@ O jogo salva sozinho a cada 20 segundos e ao sair, em
 | Trocar de arma | toque Q (ou 1 2 3 5 6, e 4 para os punhos) | toque LB / L1 |
 | Roda de armas (câmera lenta) | segure Q | segure LB / L1 |
 | Roda de emotes (danças, palmas, rir, sentar, anjo na neve...) | segure Z (Q / E trocam a página) | segure D-pad esquerda (LB / RB trocam a página) |
-| Bola de neve | X | pela roda de armas |
+| Bola de neve, granada ou molotov (o que estiver escolhido na roda) | X (segure para ver o arco, solte para jogar) | pela roda de armas, depois segure RT |
+| Taco e faca | pela roda de armas, botão esquerdo bate | pela roda de armas, RT bate |
+| Neutralizar por trás, sem barulho | E, agachado atrás de um rival que não te viu | RB / R1 |
+| Ordens para a sua gangue | mirando: toque E (atacar quem está na mira), segure E (roda: atacar, flanquear, segurar o ponto, reagrupar) | mirando: RB / R1 |
+| Drive-by (no carro) | segure o botão direito ou Q para pôr o braço pra fora; botão esquerdo atira | segure LB / L1; RB / R1 atira |
 | Se jogar no chão (ragdoll) | J (Espaço ou andar para levantar) | pela roda de emotes |
 | Correr | Shift | L3 |
 | 1ª ou 3ª pessoa | V | R3 |
@@ -127,7 +131,7 @@ O jogo salva sozinho a cada 20 segundos e ao sair, em
 | Menu de pausa (modo console) | Esc | Start / Options |
 
 No carro, W ou o gatilho direito acelera, S ou o gatilho esquerdo freia e dá ré, e H
-buzina.
+buzina. Os botões do mouse ficam para o drive-by.
 
 ## Gráficos para PC fraco
 

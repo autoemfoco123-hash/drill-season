@@ -38,6 +38,7 @@ func run(m):
 	elif OS.get_environment("DS_TURFTEST") != "": call_deferred("_turf_test")
 	elif OS.get_environment("DS_WHEELTEST") != "": call_deferred("_wheel_test")
 	elif OS.get_environment("DS_MISSIONTEST") != "": call_deferred("_mission_test")
+	elif OS.get_environment("DS_OFFTEST") != "": call_deferred("_offense_test")
 	else: call_deferred("_go")
 
 func _wait(s):
@@ -1992,6 +1993,7 @@ func _direct_test():
 			if a[0] != "host" and M.cur != null and M.cur.phase == "lobby" and not M.cur["in"]:
 				M.join(); _log("%s joined %s by @%s" % [a[2], M.cur.kind, M.cur.owner])
 			if M.in_it() and M.cur.phase == "run" and not _mdrove: yield(_mission_drive(a[2], a[0] == "host"), "completed")
+		if OS.get_environment("DS_OFFNET") != "" and net.welcomed: _off_net_step(a, t)
 		if net.welcomed and not said:
 			said = true
 			_log("%s welcomed by %s (motd %s) after %.1f s" % [a[2], net.server.name, net.server.motd, t])
@@ -2439,3 +2441,266 @@ func _mission_test():
 		yield(_wait(0.2), "completed")
 	_log("raid: phase %s ok %s, block owner %s, cash %d" % [M.cur.phase, str(M.cur.get("ok")), str(T.cur()[b]), G.S["cash"]])
 	get_tree().quit()
+
+
+# ---------------------------------------------------------------- offense (DS_OFFTEST): drive-bys, throwables, melee, takedowns, orders
+func _aim_at(p, pitch = -0.05):
+	var P = main.player
+	var c = P.car.pos if P.car else P.pos
+	P.cam_yaw = atan2(-(p.x - c.x), -(p.z - c.z)); P.cam_pitch = pitch; P.last_look = G.REAL_T
+
+# aim the camera itself at a point (it orbits, so this settles over a few frames)
+func _aim_cam(p):
+	var P = main.player
+	var d = p - main.camera.global_transform.origin
+	P.cam_yaw = atan2(-d.x, -d.z); P.cam_pitch = asin(clamp(d.y / max(d.length(), 0.01), -1, 1)); P.last_look = G.REAL_T
+
+func _alive(c):
+	var n = 0
+	for e in c.members:
+		if not e.is_down(): n += 1
+	return n
+
+func _offense_test():
+	yield(_wait(1.0), "completed")
+	main.title._close(); main.start_game(G.new_state("shooter"))
+	yield(_wait(1.5), "completed")
+	G.time_offset += (22.0 * 60 - G.world_minutes())
+	G.S["settings"]["fp"] = false
+	G.S["cash"] = 20000; G.S["buzz"] = 80
+	var V = main.vehicles
+	var P = main.player
+	var O = main.offense
+	var M = main.crews
+	G.S["guns"]["buzz"].owned = true; G.S["guns"]["buzz"].res = 400
+	_log("gang: '%s'" % main.gang.create("Test Crew", "TST", 2))
+	main.gang.hire("shooter", 101, "Dre")
+	main.gang.hire("shooter", 202, "Moe")
+	yield(_wait(1.2), "completed")
+	_log("crew with you: %d" % main.gang.FOL.size())
+	# ---- drive-by: a rival car pulls up on your side
+	var at = Vector3(-60, 0, 1.8)
+	var car = V.spawn("sedan", at.x, at.z, PI / 2, { "color": 0x2a2d33, "owned": true })
+	V.enter(car)
+	yield(_wait(0.8), "completed")
+	var r = O.spawn_rival("halo")
+	var rp = Vector3(-46, 0, -2.1)      # the other lane, coming the other way
+	r.car.pos = rp; r.car.yaw = -PI / 2; V.place(r.car)
+	r.phase = "attack"; r.pt = 0.0
+	P.switch_weapon("buzz")
+	var hp0 = G.S["health"]
+	var car_hp0 = car.hp
+	var shots0 = int(G.S["stats"].get("shots", 0))
+	_aim_at(rp + Vector3(0, 1.0, 0))
+	Input.action_press("db_aim")
+	var t0 = OS.get_ticks_msec()
+	var fired = false
+	var shot_taken = false
+	var maxlean = 0.0
+	while OS.get_ticks_msec() - t0 < 4200:
+		yield(get_tree(), "idle_frame")
+		r.car.pos = rp; r.car.yaw = -PI / 2; r.car.vel = Vector2(); r.car.speed = 0.0; V.place(r.car)
+		car.vel = Vector2(); car.speed = 0.0
+		_aim_cam(r.car.pos + Vector3(0, 0.9, 0) if OS.get_ticks_msec() - t0 < 2600 else r.rider.pos + Vector3(0, 1.35, 0))
+		maxlean = max(maxlean, r.lean)
+		if OS.get_ticks_msec() - t0 > 900 and not fired:
+			fired = true; Input.action_press("db_fire")
+		if OS.get_ticks_msec() - t0 > 1500 and not shot_taken:
+			shot_taken = true
+			yield(_shot("o_driveby"), "completed")
+		if r.rider.is_down(): break
+	Input.action_release("db_fire")
+	_log("drive-by: lean %.2f, arm shown %s, shots %d, rider %s (hp %.0f), rival car hp %.0f, rival leaned out %.2f" % [O.db_k, str(O.arm != null and O.arm.visible), int(G.S["stats"].get("shots", 0)) - shots0, r.rider.state, r.rider.hp, r.car.hp, maxlean])
+	_log("you took: health %d -> %d, car hp %.0f -> %.0f; crew leaning %s" % [hp0, G.S["health"], car_hp0, car.hp, str([main.gang.FOL[0].lean if main.gang.FOL.size() > 0 else -1])])
+	# first person, leaning out
+	G.S["settings"]["fp"] = true
+	var r2 = O.spawn_rival("sable")
+	r2.car.pos = rp + Vector3(-3, 0, 0); r2.car.yaw = -PI / 2; V.place(r2.car); r2.phase = "attack"
+	for _i in range(30):
+		yield(get_tree(), "idle_frame")
+		r2.car.pos = rp + Vector3(-3, 0, 0); r2.car.vel = Vector2(); V.place(r2.car)
+		_aim_at(r2.car.pos + Vector3(0, 1.0, 0), -0.02)
+	yield(_shot("o_driveby_fp"), "completed")
+	Input.action_release("db_aim")
+	G.S["settings"]["fp"] = false
+	yield(_wait(0.6), "completed")
+	_log("let go: lean %.2f" % O.db_k)
+	for x in O.rivals.duplicate(): O._rival_free(x)
+	P.exit_vehicle(true); V.remove(car)
+	yield(_wait(1.0), "completed")
+	# ---- a grenade into a corner crew
+	P.place(-30, 0, -1.5, -PI / 2)
+	yield(_wait(0.5), "completed")
+	var gc = M.spawn_crew(P.pos + Vector3(14, 0, 0), 3, 0, { "guard": true })
+	for e in gc.members: e.yaw = PI / 2
+	yield(_wait(0.4), "completed")
+	P.set_hold("grenade")
+	yield(_wait(0.4), "completed")
+	_aim_at(P.pos + Vector3(14, 0, 0), 0.05)
+	Input.action_press("fire")
+	yield(_wait(0.5), "completed")
+	_log("aiming a %s: arc shown %s, grenades %d" % [O.th_aim, str(O.arc != null and O.arc.visible), O.count("grenade")])
+	yield(_shot("o_arc"), "completed")
+	Input.action_release("fire")
+	yield(_wait(0.1), "completed")
+	_log("thrown: in the air %d, grenades left %d" % [O.proj.size(), O.count("grenade")])
+	# (game time runs slow at a test's frame rate: wait for the fuse, not the clock)
+	var tg0 = OS.get_ticks_msec()
+	while O.proj.size() > 0 and OS.get_ticks_msec() - tg0 < 9000: yield(get_tree(), "idle_frame")
+	yield(_wait(0.1), "completed")
+	yield(_shot("o_blast"), "completed")
+	yield(_wait(0.8), "completed")
+	_log("grenade: crew standing %d of %d, state %s, heat %d" % [_alive(gc), gc.members.size(), gc.state, G.S["heat"]])
+	M.clear(); main.police.clear(); G.S["heat"] = 0
+	# ---- a fire bottle
+	var fc = M.spawn_crew(P.pos + Vector3(11, 0, 0), 2, 0, { "guard": true })
+	P.set_hold("molly")
+	_aim_at(P.pos + Vector3(11, 0, 0), 0.12)
+	Input.action_press("fire")
+	yield(_wait(0.4), "completed")
+	Input.action_release("fire")
+	yield(_wait(1.8), "completed")
+	yield(_shot("o_fire"), "completed")
+	var hps = []
+	for e in fc.members: hps.append(int(e.hp))
+	yield(_wait(3.0), "completed")
+	var hps2 = []
+	for e in fc.members: hps2.append(int(e.hp))
+	_log("fire bottle: patches %d, crew hp %s -> %s" % [O.fires.size(), str(hps), str(hps2)])
+	M.clear(); main.police.clear(); G.S["heat"] = 0
+	yield(_wait(1.0), "completed")
+	# ---- the bat and the knife (the crew stays home for this bit, out of the shot)
+	for rec in G.S["recruits"]: main.gang.set_with(rec, false)
+	G.S["melee"]["bat"] = true; G.S["melee"]["knife"] = true
+	for id in ["bat", "knife"]:
+		var mc = M.spawn_crew(P.pos + Vector3(1.5, 0, 0), 1, 0, { "guard": true })
+		var e1 = mc.members[0]
+		P.set_hold(id)
+		yield(_wait(0.4), "completed")
+		_aim_at(e1.pos + Vector3(0, 1, 0), -0.1)
+		yield(_wait(0.2), "completed")
+		var h0 = e1.hp
+		P.fire_cd = 0; P.switch_t = 0; P.try_fire()
+		yield(_wait(0.12), "completed")
+		yield(_shot("o_" + id), "completed")
+		yield(_wait(0.5), "completed")
+		_log("%s: model %s, hit %.0f -> %.0f, crew %s" % [id, str(P.hold_model != null), h0, e1.hp, mc.state])
+		M.clear()
+		yield(_wait(0.3), "completed")
+	# ---- a takedown from behind, crouched; his partner down the block doesn't see it
+	var tc = M.spawn_crew(P.pos + Vector3(6, 0, 0), 2, 0, { "guard": true })
+	var v1 = tc.members[0]
+	var v2 = tc.members[1]
+	v1.pos = P.pos + Vector3(6, 0, 0); v2.pos = P.pos + Vector3(6, 0, 16)
+	v1.yaw = PI / 2; v2.yaw = 0.0           # both looking away from you
+	P.set_hold("knife")
+	P.crouch = true
+	P.place(v1.pos.x - 1.3, 0, v1.pos.z)
+	_aim_at(v1.pos + Vector3(0, 1.0, 0), -0.1)
+	yield(_wait(0.5), "completed")
+	_log("takedown: prompt '%s', target %s" % [main.hud._prompt().replace("\n", " / "), str(P.takedown_target() == v1)])
+	P.use_press()
+	yield(_wait(0.25), "completed")
+	yield(_shot("o_takedown"), "completed")
+	yield(_wait(0.6), "completed")
+	_log("takedown: him %s, his partner's crew %s, heat %d, takedowns %d" % [v1.state, tc.state, G.S["heat"], int(G.S["stats"].get("takedowns", 0))])
+	P.crouch = false
+	M.clear()
+	# ---- orders: rush a patrol that hasn't seen you (an ambush), then hold a spot
+	for rec in G.S["recruits"]: main.gang.set_with(rec, true)
+	P.set_fists(true); P.switch_weapon("buzz")
+	yield(_wait(1.5), "completed")
+	for f in main.gang.FOL:
+		f.pos = P.pos + Vector3(-1.5, 0, 1.0 + f.slot); f.trail.clear()
+	var pa = P.pos + Vector3(26, 0, 0)
+	var pc = main.turf._spawn_crew(-1, "lowend", pa, 3, 2, true)
+	pc.state = "patrol"; pc["route"] = [pa, pa + Vector3(0, 0, 60)]; pc["ri"] = 1
+	for e in pc.members: e.yaw = 0.0
+	yield(_wait(0.3), "completed")
+	Input.action_press("aim")
+	for _i in range(20):
+		yield(get_tree(), "idle_frame")
+		_aim_at(M.leader(pc).pos + Vector3(0, 1.2, 0), -0.02)
+	_log("orders prompt: '%s'" % main.hud._prompt())
+	main.hud._open_wheel("order")
+	yield(_wait(0.2), "completed")
+	main.hud.wheel_sel = 0
+	yield(_shot("o_orders"), "completed")
+	main.hud._close_wheel(true)
+	Input.action_release("aim")
+	_log("order %s on a crew in state %s" % [O.order, pc.state])
+	var tt = OS.get_ticks_msec()
+	var mid_shot = false
+	while OS.get_ticks_msec() - tt < 14000 and _alive(pc) > 0:
+		yield(_wait(0.25), "completed")
+		if not mid_shot and OS.get_ticks_msec() - tt > 3000:
+			mid_shot = true; yield(_shot("o_rush"), "completed")
+	_log("rush: crew standing %d of %d, ambushed %s, order now '%s', cash %d, crew hp %s" % [_alive(pc), pc.members.size(), str(pc.get("ambushed", false)), O.order, G.S["cash"], str([int(main.gang.FOL[0].hp), int(main.gang.FOL[1].hp)] if main.gang.FOL.size() > 1 else [])])
+	M.clear()
+	_aim_at(P.pos + Vector3(0, 0, 12), -0.2)
+	yield(_wait(0.3), "completed")
+	O.give_order("hold")
+	var th0 = OS.get_ticks_msec()
+	while OS.get_ticks_msec() - th0 < 12000:
+		yield(_wait(0.3), "completed")
+		var far = false
+		for f in main.gang.FOL:
+			if f.pos.distance_to(O.order_at) > 2.5: far = true
+		if not far: break
+	yield(_wait(0.6), "completed")
+	var dists = []
+	for f in main.gang.FOL: dists.append(stepify(f.pos.distance_to(O.order_at), 0.1))
+	_log("hold: spot %s, crew distances %s" % [str(O.order_at), str(dists)])
+	yield(_shot("o_hold"), "completed")
+	O.give_order("regroup")
+	# ---- patrols spawn on their own at night
+	var sp = O.spawn_patrol("sable")
+	_log("patrol: %s" % ("none" if sp == null else "%s, %d members, %d m away" % [sp.state, sp.members.size(), int(sp.members[0].pos.distance_to(P.pos))]))
+	# ---- the weapon wheel and the shop counter
+	main.hud._open_wheel("weapon")
+	yield(_wait(0.3), "completed")
+	yield(_shot("o_wheel"), "completed")
+	main.hud._close_wheel(false)
+	main.interiors.counter_menu()
+	yield(_wait(0.4), "completed")
+	yield(_shot("o_shop"), "completed")
+	main.hud.close_menu()
+	_log("offense test done")
+	get_tree().quit()
+
+
+# online offense (DS_OFFNET with DS_DIRECTTEST): the client leans out of a car and throws a grenade,
+# the host watches for the arm and the grenade
+var _on_step = 0
+var _on_seen = {}
+func _off_net_step(a, t):
+	var O = main.offense
+	var P = main.player
+	var V = main.vehicles
+	if a[0] == "host":
+		for k in O.remote_arms.keys():
+			var e = O.remote_arms[k]
+			if is_instance_valid(e.node) and e.node.visible and not _on_seen.has("arm"):
+				_on_seen["arm"] = true; _log("%s sees an arm out of a window with a %s" % [a[2], e.key])
+		for b in O.proj:
+			if not b.mine and not _on_seen.has("nade"):
+				_on_seen["nade"] = true; _log("%s sees a %s in the air at %s" % [a[2], b.k, str(b.p.round())])
+		if _on_seen.has("nade") and O.proj.empty() and not _on_seen.has("boom"):
+			_on_seen["boom"] = true; _log("%s: it went off" % a[2])
+		return
+	if _on_step == 0 and t > 4.0:
+		_on_step = 1
+		var car = V.spawn("sedan", P.pos.x + 4, P.pos.z, 0.0, { "owned": true })
+		V.enter(car)
+	elif _on_step == 1 and t > 6.0:
+		_on_step = 2; Input.action_press("db_aim")
+	elif _on_step == 2 and t > 11.0:
+		_on_step = 3
+		_log("%s leaning out: %.2f" % [a[2], O.db_k])
+		Input.action_release("db_aim")
+	elif _on_step == 3 and t > 13.0:
+		_on_step = 4; P.exit_vehicle(true)
+	elif _on_step == 4 and t > 15.0:
+		_on_step = 5
+		O._throw_now("grenade", P.pos + Vector3(0, 1.7, 0), Vector3(7, 4, 0))
+		_log("%s threw a grenade" % a[2])

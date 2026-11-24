@@ -22,6 +22,27 @@ LEIAME-iOS.txt dentro do zip.
 
 ## O que tem
 
+**Na próxima versão (1.9.3): ataque**
+
+- **Drive-by:** no carro, segure o botão direito (ou Q / LB) para pôr o braço com a arma pra fora
+  da janela e atire com o botão esquerdo (RB). Funciona com a K9, a Draft e a Buzzsaw. A sua
+  gangue no carro também atira. À noite, carros das crews rivais passam atirando em você:
+  derrube quem está na janela ou destrua o carro.
+- **Granada e molotov:** escolha na roda de armas, segure para ver o arco e onde cai, solte para
+  jogar (ou X). A granada quica e explode; o molotov quebra e deixa o chão pegando fogo. À venda na
+  Ironside Arms (você começa com duas de cada).
+- **Taco e faca**, também na Ironside Arms. Por trás, agachado, num rival que não te viu: E para
+  neutralizar sem barulho. Os parceiros dele só reagem se virem.
+- **Ordens para a gangue:** mirando num rival, toque E e a sua gangue vai pra cima; segure E para a
+  roda de ordens: atacar, flanquear pelos dois lados, segurar um ponto (eles se agacham e abrem
+  fogo em quem passar) ou reagrupar.
+- **Emboscadas:** à noite as crews rivais andam pelas ruas delas. Acerte antes que vejam você e
+  elas demoram a reagir, e a luta paga um bônus.
+- **Missões online** (Phone → Online → Missions): corrida de rua, entrega da mochila e tomada de
+  quarteirão, com quem estiver no servidor.
+- **Rodas que giram e esterçam**, luz de freio e de ré, chamas no escapamento e farol iluminando a
+  rua à noite.
+
 **Novo na 1.9.2: Turf Wars**
 
 - **O mapa é dividido em 16 quarteirões**, cada um de alguém: Halo, Low End e Sable Row (crews

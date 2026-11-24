@@ -17,6 +17,7 @@ var stick_center = Vector2()
 var stick_vec = Vector2()
 var stick_finger = -1
 var aim_on = false
+var lean_on = false          # in a car: leaning out of the window (drive-by)
 var held = {}               # action -> true while a button holds it
 const STICK_R = 70.0
 
@@ -38,7 +39,7 @@ func apply():
 	view.visible = enabled
 	main.hud.set_touch_layout(enabled)
 	# on a touchscreen the emulated mouse must not fire or aim
-	for a in ["fire", "aim"]:
+	for a in ["fire", "aim", "db_aim", "db_fire"]:
 		for e in InputMap.get_action_list(a):
 			if e is InputEventMouseButton and enabled: InputMap.action_erase_event(a, e)
 	if enabled:
@@ -52,7 +53,7 @@ func set_mode(mode):
 		_release_all()
 		if not enabled:
 			# give the mouse back its buttons
-			for p in [["fire", BUTTON_LEFT], ["aim", BUTTON_RIGHT]]:
+			for p in [["fire", BUTTON_LEFT], ["aim", BUTTON_RIGHT], ["db_fire", BUTTON_LEFT], ["db_aim", BUTTON_RIGHT]]:
 				var me = InputEventMouseButton.new(); me.button_index = p[1]; InputMap.action_add_event(p[0], me)
 		apply()
 
@@ -67,8 +68,11 @@ func buttons():
 	var P = main.player
 	var out = []
 	if P.car:
-		out.append({ "id": "gas", "label": "GAS", "act": "fire", "c": Vector2(W - 120, H - 170), "r": 62, "hold": true })
-		out.append({ "id": "brake", "label": "BRAKE", "act": "aim", "c": Vector2(W - 255, H - 110), "r": 48, "hold": true })
+		out.append({ "id": "gas", "label": "GAS", "act": "gas", "c": Vector2(W - 120, H - 170), "r": 62, "hold": true })
+		out.append({ "id": "brake", "label": "BRAKE", "act": "brake", "c": Vector2(W - 255, H - 110), "r": 48, "hold": true })
+		# drive-by: LEAN toggles leaning out of the window (drag to aim), SHOOT fires
+		out.append({ "id": "lean", "label": "LEAN", "act": "db_aim", "c": Vector2(W - 400, H - 300), "r": 34, "toggle": true, "hi": lean_on })
+		if lean_on: out.append({ "id": "shoot", "label": "SHOOT", "act": "db_fire", "c": Vector2(W - 520, H - 210), "r": 46, "hold": true })
 		out.append({ "id": "hand", "label": "DRIFT", "act": "jump", "c": Vector2(W - 255, H - 245), "r": 40, "hold": true })
 		out.append({ "id": "exit", "label": "EXIT", "act": "car", "c": Vector2(W - 110, H - 330), "r": 38 })
 		out.append({ "id": "horn", "label": "HORN", "act": "horn", "c": Vector2(W - 370, H - 90), "r": 34 })
@@ -83,14 +87,15 @@ func buttons():
 		out.append({ "id": "car", "label": "CAR", "act": "car", "c": Vector2(W - 110, H - 330), "r": 38 })
 		out.append({ "id": "use", "label": "E", "act": "use", "c": Vector2(W - 215, H - 375), "r": 38, "hold": true, "hi": main.hud.help_box.visible })
 	var y = 262.0
-	var row = [["phone", "PHONE", "phone"], ["weapon", "WEAPON", "next_weapon"], ["emote", "EMOTE", "emote"], ["snow", "SNOW", "snowball"], ["cam", "VIEW", "camera"]]
+	var th = str(G.S.get("thr", "snowball"))
+	var row = [["phone", "PHONE", "phone"], ["weapon", "WEAPON", "next_weapon"], ["emote", "EMOTE", "emote"], ["snow", "SNOW" if th == "snowball" else ("NADE" if th == "grenade" else "FIRE"), "snowball"], ["cam", "VIEW", "camera"]]
 	if P.car: row = [["phone", "PHONE", "phone"], ["cam", "VIEW", "camera"], ["flip", "FINGER", "flip"]]
 	for i in range(row.size()):
 		var b = { "id": row[i][0], "label": row[i][1], "act": row[i][2], "c": Vector2(W - 52 - i * 74, y), "r": 30 }
 		if row[i][0] in ["weapon", "emote"]:
 			b["hold"] = true
 			b["wheel"] = true
-		if row[i][0] == "flip": b["hold"] = true
+		if row[i][0] == "flip" or row[i][0] == "snow": b["hold"] = true
 		out.append(b)
 	return out
 
@@ -148,8 +153,12 @@ func _input(e):
 
 func _press(idx, b):
 	if b.get("toggle", false):
-		aim_on = not aim_on
-		_action(b.act, aim_on)
+		if b.act == "db_aim":
+			lean_on = not lean_on
+			_action(b.act, lean_on)
+		else:
+			aim_on = not aim_on
+			_action(b.act, aim_on)
 		fingers[idx] = { "kind": "tap", "btn": b.id }
 		return
 	fingers[idx] = { "kind": "button", "btn": b.id, "act": b.act, "wheel": b.get("wheel", false) }
@@ -177,7 +186,7 @@ func _action(a, on):
 func _release_all():
 	for a in held.keys(): _action(a, false)
 	for a in ["move_f", "move_b", "move_l", "move_r", "sprint"]: Input.action_release(a)
-	fingers.clear(); stick_finger = -1; stick_vec = Vector2(); aim_on = false
+	fingers.clear(); stick_finger = -1; stick_vec = Vector2(); aim_on = false; lean_on = false
 
 func update(dt):
 	if not enabled: return
@@ -187,6 +196,8 @@ func update(dt):
 		if held.size() > 0 or stick_vec != Vector2(): _release_all()
 		view.update(); return
 	if aim_on and main.player.car: aim_on = false
+	if lean_on and not main.player.car:
+		lean_on = false; _action("db_aim", false)
 	if aim_on and not held.has("aim"): _action("aim", true)
 	# joystick -> movement strengths; at the edge you sprint
 	var v = stick_vec

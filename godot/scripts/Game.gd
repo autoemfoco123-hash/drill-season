@@ -147,6 +147,11 @@ func migrate(st):
 		if not st["guns"].has(id):
 			st["guns"][id] = { "owned": false, "mag": int(D["WEAPONS"][id].mag), "res": int(D["WEAPONS"][id].ammo.n), "cfg": dc.duplicate() }
 		if st.has("parts") and not st["parts"].has(id): st["parts"][id] = dp.duplicate()
+	# 1.9.3: melee weapons and throwables (a couple of each to try)
+	if typeof(st.get("melee")) != TYPE_DICTIONARY: st["melee"] = { "bat": false, "knife": false }
+	if typeof(st.get("throw")) != TYPE_DICTIONARY: st["throw"] = { "grenade": 2, "molly": 2 }
+	if typeof(st.get("hold")) != TYPE_STRING: st["hold"] = ""
+	if typeof(st.get("thr")) != TYPE_STRING: st["thr"] = "snowball"
 	return st
 
 func era_skin(i):
@@ -312,6 +317,7 @@ func new_state(name):
 	return {
 		"v": 1, "name": name if name != "" else "Unknown", "cash": 150, "buzz": 4, "heat": 0, "health": 100, "warmth": 100, "bandages": 1,
 		"night": 1, "clock": 21 * 60 + 30, "playTime": 0, "pos": null, "cur": "k9", "fists": false,
+		"hold": "", "thr": "snowball", "melee": { "bat": false, "knife": false }, "throw": { "grenade": 2, "molly": 2 },
 		"guns": {
 			"k9": { "owned": true, "mag": 12, "res": 36, "cfg": dc.duplicate() },
 			"draft": { "owned": false, "mag": 30, "res": 60, "cfg": dc.duplicate() },
@@ -451,6 +457,9 @@ func _setup_input():
 		"horn": [[KEY_H], [], [], []], "pause": [[KEY_ESCAPE], [], [], [JOY_START]],
 		"gun1": [[KEY_1], [], [], []], "gun2": [[KEY_2], [], [], []], "gun3": [[KEY_3], [], [], []], "fists": [[KEY_4], [], [], []], "gun4": [[KEY_5], [], [], []], "gun5": [[KEY_6], [], [], []],
 		"map": [[KEY_M], [], [], [JOY_SELECT]],
+		# in a car: W/S or the triggers drive; the mouse (or LB / RB) leans out of the window and shoots
+		"gas": [[], [], [[JOY_AXIS_7, 1]], [JOY_R2]], "brake": [[], [], [[JOY_AXIS_6, 1]], [JOY_L2]],
+		"db_aim": [[KEY_Q], [BUTTON_RIGHT], [], [JOY_L]], "db_fire": [[], [BUTTON_LEFT], [], [JOY_R]],
 	}
 	for name in A.keys():
 		_act(name, 0.3)

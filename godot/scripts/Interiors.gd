@@ -454,6 +454,14 @@ func counter_menu(_a = null):
 			var can = G.S["cash"] >= Wp.price and G.S["buzz"] >= Wp.buzz
 			var why = ("Buzz %d first" % Wp.buzz) if G.S["buzz"] < Wp.buzz else G.fmt_money(Wp.price)
 			items.append(_act(main.story._item("Buy the %s" % Wp.short, "%s. Comes with a full mag." % Wp.cls, why, "", [], not can), "_buy_gun", id))
+	# up close and thrown
+	var ML = G.S.get("melee", {})
+	if not ML.get("bat", false): items.append(_act(main.story._item("Bat", "Aluminum-handled wood. Swings slow, hits hard, knocks them down.", "$120", ""), "_shop_buy", ["bat", 120]))
+	if not ML.get("knife", false): items.append(_act(main.story._item("Knife", "Quick and quiet. Takedowns from behind make no noise.", "$90", ""), "_shop_buy", ["knife", 90]))
+	var nG = main.offense.count("grenade")
+	var nM = main.offense.count("molly")
+	items.append(_act(main.story._item("Grenade", "Hold to see the arc, let go to throw. You carry %d of 6." % nG, "$150", "", [], nG >= 6), "_shop_buy", ["grenade", 150]))
+	items.append(_act(main.story._item("Fire bottle", "Breaks and burns the ground for a few seconds. You carry %d of 6." % nM, "$70", "", [], nM >= 6), "_shop_buy", ["molly", 70]))
 	items.append(_act(main.story._item("Bandage", "Press B to heal 40 health.", "$25", ""), "_shop_buy", ["bandage", 25]))
 	var wb = main.story._item("Workbench", "Parts, finishes and charms for what you own.", "", "")
 	wb["act"] = funcref(main.studio, "open_bench")
@@ -486,6 +494,17 @@ func _shop_buy(a):
 	main.story.add_cash(-price)
 	if what == "bandage":
 		G.S["bandages"] = int(G.S.get("bandages", 0)) + 1; main.hud.toast("Bandage in your pocket.")
+	elif what == "bat" or what == "knife":
+		G.S["melee"][what] = true
+		main.player.set_hold(what)
+		main.hud.banner("Bat" if what == "bat" else "Knife", "Yours · on the weapon wheel")
+		G.save_game()
+	elif what == "grenade" or what == "molly":
+		if main.offense.count(what) >= 6:
+			main.story.add_cash(price); main.hud.toast("Vic:  You can't carry more."); counter_menu(); return
+		G.S["throw"][what] = main.offense.count(what) + 1
+		G.S["thr"] = what
+		main.hud.toast("%s · %d on you. X to throw." % ["Grenade" if what == "grenade" else "Fire bottle", G.S["throw"][what]])
 	elif what.begins_with("ammo:"):
 		var id = what.substr(5)
 		G.S["guns"][id].res += G.D["WEAPONS"][id].ammo.n; main.hud.toast("%d rounds for the %s." % [G.D["WEAPONS"][id].ammo.n, G.D["WEAPONS"][id].short])

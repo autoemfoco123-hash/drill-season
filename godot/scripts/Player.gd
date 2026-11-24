@@ -91,6 +91,12 @@ var slip_t = 0.0
 var throw_t = 0.0
 var snow_cd = 0.0
 var clap_t = 0.0
+# the bat and the knife: damage, time between swings, reach, when the hit lands
+const MELEE = { "bat": { "dmg": 36, "cd": 0.62, "reach": 2.15, "delay": 0.17, "push": 5.0 }, "knife": { "dmg": 32, "cd": 0.36, "reach": 1.6, "delay": 0.08, "push": 1.2 } }
+var hold_model = null
+var hold_key = ""
+var td_t = 0.0          # a takedown playing
+var td_face = 0.0
 const PUNCHES = [{ "dmg": 9, "cd": 0.3, "side": -1, "reach": 1.75 }, { "dmg": 12, "cd": 0.36, "side": 1, "reach": 1.8 }, { "dmg": 19, "cd": 0.62, "side": -1, "reach": 1.7, "hook": true }]
 
 func setup(m):
@@ -179,14 +185,17 @@ func _input(e):
 	elif e.is_action_pressed("flop") and not car:
 		flop()
 	elif e.is_action_pressed("snowball") and not car:
-		throw_snowball()
+		var th = str(G.S.get("thr", "snowball"))
+		if main.offense and main.offense.THROWN.has(th): main.offense.throw_begin(th)
+		else: throw_snowball()
 	elif e.is_action_pressed("flip"):
 		flip_t = max(flip_t, 2.4)
 		main.peds.flip_react(pos)
 	elif e.is_action_pressed("horn") and car:
 		main.sfx.play3d("horn", car.pos, 0.8)
 	elif e.is_action_pressed("use"):
-		use_press()
+		# (aiming with your crew around, E gives them orders: Offense.gd)
+		if not (aiming and main.gang.FOL.size() > 0): use_press()
 	# (each of these opens the phone and stops the press here, or the phone would take the same
 	# press as "close" a moment later)
 	elif e.is_action_pressed("phone"):
@@ -242,7 +251,11 @@ func update(dt):
 		human.visible = false; aim_t = 0; aiming = false; sprinting = false
 		var so = G.skin_opts(G.S["skin"])
 		main.vehicles.flip_arm(car, flipping() and not fp_on(), G.hex_color(so.skin), G.hex_color(so.jacket2 if so.top == "varsity" else so.jacket), dt)
-		fire_cd -= dt; switch_t -= dt
+		fire_cd -= dt; switch_t -= dt; bloom = max(0, bloom - dt * 2.2)
+		if reload_t > 0:
+			reload_t -= dt
+			if reload_t <= 0: _finish_reload()
+		if main.offense: main.offense.player_car(dt)
 		G.S["stats"]["drive"] = G.S["stats"].get("drive", 0) + speed * dt
 		if G.GAME_T - last_hurt > 8 and G.S["health"] < 60:
 			G.S["health"] = min(60, G.S["health"] + dt * 1.5)
@@ -327,20 +340,25 @@ func update(dt):
 			step_acc = 0
 		G.S["stats"]["dist"] = G.S["stats"].get("dist", 0) + speed * dt
 	# face where you aim, or where you walk
-	var face_aim = aim_t > 0.2 or G.GAME_T - last_shot < 0.6 or G.GAME_T - last_punch < 0.8 or fp_on()
+	var face_aim = aim_t > 0.2 or G.GAME_T - last_shot < 0.6 or G.GAME_T - last_punch < 0.8 or fp_on() or (main.offense != null and main.offense.th_aim != "")
 	var target_yaw = body_yaw
 	if face_aim: target_yaw = cam_yaw + PI
 	elif speed > 0.4: target_yaw = atan2(vel.x, vel.z)
+	if td_t > 0:
+		td_t -= dt; target_yaw = td_face; face_aim = true
 	body_yaw += G.ang_diff(body_yaw, target_yaw) * (1 - exp(-dt * (22 if face_aim else 10)))
 	human.translation = pos
 	human.rotation = Vector3(0, body_yaw, 0)
 	var fists = G.S.get("fists", false)
+	var mel = str(G.S.get("hold", "")) if fists else ""
+	_refresh_hold(mel)
 	human.animate(dt, {
 		"speed": speed, "crouch": (1.0 if not aiming else 0.6) if crouch else 0.0, "aim": 0.0 if fists else max(aim_t, 1.0 if G.GAME_T - last_shot < 0.5 else 0.0),
 		"look": G.ang_diff(body_yaw, cam_yaw + PI) if not fp_on() else 0.0, "air": not on_ground and vel.y > -40.0,
 		"pitch": cam_pitch, "down": (clamp(down_t, 0, 1) if down else 0.0) if emote_name != "snowangel" else min(1.0, emote_t * 3), "twoHand": not G.S["cur"] in ["k9", "buzz"], "shiver": G.S.get("warmth", 100) < 30,
 		"hands": hands_up > 0, "wave": wave_t > 0 and not aiming, "flip": flipping(),
-		"fists": fists, "guard": fists and aiming, "punch": punch_t / punch_dur if punch_t > 0 else 0.0, "punchSide": punch_side, "hook": punch_hook,
+		"fists": fists and mel == "", "guard": fists and aiming and mel == "", "punch": punch_t / punch_dur if punch_t > 0 else 0.0, "punchSide": punch_side, "hook": punch_hook,
+		"melee": mel, "swing": punch_t / punch_dur if punch_t > 0 and mel != "" else 0.0, "takedown": td_t,
 		"emote": emote_name, "et": emote_t,
 		"reload": _reload_u() if not fists else -1.0, "kick": vm_kick if not fists else 0.0,
 	})
@@ -348,12 +366,18 @@ func update(dt):
 	if human.foot != foot_seen:
 		foot_seen = human.foot
 		if on_ground and speed > 0.6: main.sfx.step(pos, sprinting, crouch, foot_seen)
+	var aiming_throw = main.offense != null and main.offense.th_aim != ""
 	if throw_t > 0:
 		# overhand throw on the right arm
 		var tk = throw_t / 0.45
 		human._rot(human.AR.sh, lerp(-2.7, -0.6, 1 - tk), 0, 0.2); human._rot(human.AR.elbow, lerp(-1.6, -0.2, 1 - tk), 0, 0); human.sync_bones()
+	elif aiming_throw:
+		# wound up, the other arm out in front pointing where it's going
+		human._rot(human.AR.sh, -2.75, 0, 0.25); human._rot(human.AR.elbow, -1.7, 0, 0)
+		human._rot(human.AL.sh, -1.45 - cam_pitch * 0.5, 0, -0.2); human._rot(human.AL.elbow, -0.15, 0, 0); human.sync_bones()
+	if hold_model: hold_model.visible = throw_t <= 0 or not mel in ["grenade", "molly"]
 	if gun_model:
-		gun_model.visible = not fists and hands_up <= 0 and emote_name == "" and throw_t <= 0
+		gun_model.visible = not fists and hands_up <= 0 and emote_name == "" and throw_t <= 0 and not aiming_throw
 		if gun_model.visible and not fp_on():
 			_apply_gun(gun_model, G.S["cur"], _gun_pose(G.S["cur"], _reload_u()))
 	shot_t += dt
@@ -370,7 +394,8 @@ func update(dt):
 		if reload_t <= 0: _finish_reload()
 	if heal_t > 0:
 		heal_t -= dt; G.S["health"] = min(100, G.S["health"] + dt * 26)
-	var trig = not busy and not down and Input.is_action_pressed("fire")
+	if main.offense and not busy: main.offense.orders_input(dt)
+	var trig = not busy and not down and Input.is_action_pressed("fire") and td_t <= 0
 	if trig:
 		if (fists or st.get("auto", false)) or not trigger_latch:
 			try_fire()
@@ -402,13 +427,14 @@ func update_camera(dt):
 		else:
 			main.cockpit.hide()
 			var fwd = Vector3(-sin(cam_yaw) * cos(cam_pitch), sin(cam_pitch), -cos(cam_yaw) * cos(cam_pitch))
-			var piv = car.pos + Vector3(0, 1.6, 0)
-			var dist = 7.2 + clamp(abs(car.speed) * 0.06, 0, 2)
+			var dbk = main.offense.db_k if main.offense else 0.0
+			var piv = car.pos + Vector3(0, 1.6 + 0.15 * dbk, 0) + Vector3(cos(cam_yaw), 0, -sin(cam_yaw)) * 0.9 * dbk
+			var dist = lerp(7.2 + clamp(abs(car.speed) * 0.06, 0, 2), 4.4, dbk)
 			var t = W.raycast(piv, -fwd, dist + 0.3)
 			if t != INF: dist = max(1.2, t - 0.3)
 			cam.translation = piv - fwd * dist + jit
 			cam.rotation = Vector3(cam_pitch, cam_yaw, 0)
-		cam.fov = lerp(cam.fov, 64 + clamp(abs(car.speed), 0, 34) * 0.25, 1 - exp(-dt * 3))
+		cam.fov = lerp(cam.fov, lerp(64 + clamp(abs(car.speed), 0, 34) * 0.25, 56.0, main.offense.db_k if main.offense else 0.0), 1 - exp(-dt * 3))
 		_hide_vm()
 		return
 	main.cockpit.hide()
@@ -687,8 +713,116 @@ func switch_weapon(id):
 func set_fists(on):
 	if bool(G.S.get("fists", false)) == on or down_t > 0:
 		return
-	G.S["fists"] = on; reload_t = 0; switch_t = 0.22; combo = 0; punch_t = 0
+	G.S["fists"] = on; G.S["hold"] = ""; reload_t = 0; switch_t = 0.22; combo = 0; punch_t = 0
 	main.sfx.play("swing", 0.4)
+
+# a bat, a knife, a grenade or a fire bottle in your hand (fists mode with something in it)
+func set_hold(id):
+	if down_t > 0 or dead: return
+	if id == "bat" or id == "knife":
+		if not G.S.get("melee", {}).get(id, false): return
+	elif id == "grenade" or id == "molly":
+		if main.offense.count(id) <= 0: return
+		G.S["thr"] = id
+	G.S["fists"] = true; G.S["hold"] = id; reload_t = 0; switch_t = 0.25; combo = 0; punch_t = 0
+	main.sfx.play("swing", 0.4, 0.8)
+
+func _refresh_hold(id):
+	if id == hold_key and (hold_model != null or id == ""): return
+	if hold_model: hold_model.queue_free()
+	hold_model = null; hold_key = id
+	if id == "" or human == null: return
+	hold_model = build_hold(id)
+	human.gun_slot.add_child(hold_model)
+
+# the things you can hold, built from a few primitives
+func build_hold(id):
+	var n = Spatial.new()
+	n.name = "Hold"
+	if id == "bat":
+		# wood with black grip tape, knob at the bottom; held at the handle, pointing up and a little forward
+		n.rotation = Vector3(2.09, 0, 0)
+		_part(n, "cyl", [0.019, 0.019, 0.26], Color(0.08, 0.08, 0.09), Vector3(0, 0.05, 0))
+		_part(n, "cyl", [0.034, 0.02, 0.6], Color(0.62, 0.42, 0.24), Vector3(0, 0.48, 0))
+		_part(n, "cyl", [0.03, 0.03, 0.02], Color(0.08, 0.08, 0.09), Vector3(0, -0.085, 0))
+	elif id == "knife":
+		n.rotation = Vector3(PI, 0, 0)
+		_part(n, "box", [0.026, 0.11, 0.034], Color(0.08, 0.08, 0.09), Vector3(0, 0.0, 0))
+		_part(n, "box", [0.032, 0.012, 0.046], Color(0.5, 0.5, 0.52), Vector3(0, 0.06, 0))
+		_part(n, "box", [0.006, 0.17, 0.03], Color(0.82, 0.84, 0.87), Vector3(0, 0.15, 0.002))
+	elif id == "grenade":
+		_part(n, "sphere", [0.06], Color(0.24, 0.28, 0.18), Vector3(0, -0.07, 0.02))
+		_part(n, "box", [0.018, 0.08, 0.026], Color(0.55, 0.56, 0.58), Vector3(0.035, -0.04, 0.02))
+	else:
+		_part(n, "cyl", [0.024, 0.042, 0.22], Color(0.22, 0.32, 0.16), Vector3(0, -0.1, 0.02))
+		_part(n, "box", [0.04, 0.07, 0.04], Color(0.85, 0.82, 0.7), Vector3(0, 0.03, 0.02))
+	return n
+
+func _part(n, kind, p, col, at):
+	var mi = MeshInstance.new()
+	if kind == "cyl":
+		var cm = CylinderMesh.new(); cm.top_radius = p[1]; cm.bottom_radius = p[0]; cm.height = p[2]; cm.radial_segments = 10; cm.rings = 1
+		mi.mesh = cm
+	elif kind == "sphere":
+		var sm = SphereMesh.new(); sm.radius = p[0]; sm.height = p[0] * 2; sm.radial_segments = 10; sm.rings = 5
+		mi.mesh = sm
+	else:
+		var bm = CubeMesh.new(); bm.size = Vector3(p[0], p[1], p[2])
+		mi.mesh = bm
+	mi.material_override = G.mat(col)
+	mi.translation = at
+	n.add_child(mi)
+	return mi
+
+# ---------- the bat and the knife ----------
+func swing(id):
+	if fire_cd > 0 or switch_t > 0 or car or down_t > 0: return
+	var M = MELEE[id]
+	fire_cd = M.cd; punch_t = 0.0001; punch_dur = M.cd * 0.8; punch_side = -punch_side; punch_hook = false
+	last_punch = G.GAME_T
+	G.S["stats"]["swings"] = int(G.S["stats"].get("swings", 0)) + 1
+	main.sfx.play3d("swing", pos + Vector3(0, 1.4, 0), 0.55, 0.72 if id == "bat" else 1.35)
+	var f = Vector3(-sin(cam_yaw), 0, -cos(cam_yaw))
+	var t = melee_target(pos, f, M.reach)
+	if t:
+		pending_hit = { "who": t, "pu": { "dmg": M.dmg, "reach": M.reach, "melee": id, "push": M.push }, "t": M.delay, "f": f }
+
+# ---------- takedowns: from behind, on someone who hasn't clocked you ----------
+func takedown_target():
+	if car or dead or down_t > 0 or td_t > 0 or is_ragdoll() or G.MODE != "play": return null
+	var f = Vector3(-sin(cam_yaw), 0, -cos(cam_yaw))
+	for e in main.crews.ENEMIES:
+		if e.is_down() or e.knock_t > 0: continue
+		var dv = Vector3(e.pos.x - pos.x, 0, e.pos.z - pos.z)
+		var d = dv.length()
+		if d > 1.9 or d < 0.2 or abs(e.pos.y - pos.y) > 1.0: continue
+		if e.crew.state == "combat" and (e.can_see != null or e.see_t > 0.05): continue
+		var ef = Vector3(sin(e.yaw), 0, cos(e.yaw))
+		if ef.dot(-dv / d) > -0.2: continue      # they'd see you coming
+		if f.dot(dv / d) < 0.3: continue
+		return e
+	return null
+
+func takedown(e):
+	var dv = Vector3(e.pos.x - pos.x, 0, e.pos.z - pos.z)
+	td_t = 0.7; td_face = atan2(dv.x, dv.z); emote_name = ""
+	punch_t = 0.0001; punch_dur = 0.55
+	var hd = str(G.S.get("hold", "")) if G.S.get("fists", false) else ""
+	main.sfx.play3d("stab" if hd == "knife" else "punch", e.pos + Vector3(0, 1.4, 0), 0.6)
+	G.rumble(0.5, 0.5, 0.12)
+	var seen = main.crews.silent_down(e, dv.normalized())
+	G.S["stats"]["takedowns"] = int(G.S["stats"].get("takedowns", 0)) + 1
+	# anyone on the street who saw it
+	var wit = false
+	for p in main.peds.PEDS:
+		if p.is_down(): continue
+		if p.pos.distance_to(pos) < 16 and W.seg_clear(p.pos + Vector3(0, 1.5, 0), pos + Vector3(0, 1.2, 0)): wit = true
+	if wit:
+		main.peds.alert(pos, 18)
+		G.S["heat"] = min(100, G.S["heat"] + 4)
+	if seen: main.hud.toast("They saw that")
+	elif wit: main.hud.toast("Takedown · somebody saw it (Heat +4)")
+	else: main.hud.toast("Silent takedown")
 
 func cycle_weapon():
 	var ids = []
@@ -726,12 +860,19 @@ func _cone(base, deg):
 	return (base + side * cos(a) * tan(r) + up * sin(a) * tan(r)).normalized()
 
 func try_fire():
-	if main.interiors and main.interiors.inside != "" and not G.S.get("fists", false):
+	if car:
+		# out of the window, or nothing (the trigger is the gas pedal otherwise)
+		if main.offense == null or not main.offense.db_on(): return
+	elif main.interiors and main.interiors.inside != "" and (not G.S.get("fists", false) or G.S.get("hold", "") != ""):
 		if fire_note_t <= 0:
 			fire_note_t = 4.0; main.hud.toast("Not in here. Keep it holstered.")
 		return
-	if G.S.get("fists", false):
-		punch()
+	if G.S.get("fists", false) and not car:
+		var hd = str(G.S.get("hold", ""))
+		if hd == "grenade" or hd == "molly":
+			if main.offense: main.offense.throw_begin(hd, true)
+		elif MELEE.has(hd): swing(hd)
+		else: punch()
 		return
 	var g = G.S["guns"][G.S["cur"]]
 	var st = stats()
@@ -750,14 +891,20 @@ func try_fire():
 	var chest = Vector3(pos.x, pivot_y - 0.15, pos.z)
 	org += fwd * max(0.3, (chest - org).dot(fwd))
 	var muzzle = human.gun_slot.global_transform.origin + fwd * 0.3
-	if fp_on() and vm_gun and vm_gun.has_node("Muzzle"): muzzle = vm_gun.get_node("Muzzle").global_transform.origin
+	if car: muzzle = main.offense.db_muzzle()
+	elif fp_on() and vm_gun and vm_gun.has_node("Muzzle"): muzzle = vm_gun.get_node("Muzzle").global_transform.origin
 	elif gun_model and gun_model.has_node("Muzzle"): muzzle = gun_model.get_node("Muzzle").global_transform.origin
 	var spread = lerp(float(st.spread), float(st.aimSpread), aim_t) * (1.35 if speed > 1 else 1.0) * (0.8 if crouch else 1.0) * (1 + bloom)
+	if car: spread = float(st.spread) * (1.5 + clamp(abs(car.speed) / 25.0, 0.0, 1.0)) * (1 + bloom)
 	var hit_any = false
 	var head_any = false
+	# (out of a window: your own car mustn't stop the shot)
+	var own_box = [car.box.on, car.cab.on] if car else null
+	if car:
+		car.box.on = false; car.cab.on = false
 	for i in range(int(st.pellets)):
 		var d = _cone(fwd, spread)
-		var res = shoot_ray(org, d, float(st.range) * 2.2)
+		var res = shoot_ray(org, d, float(st.range) * 2.2, car)
 		var hp = org + d * (float(st.range) * 2 if res.t == INF else res.t)
 		if i < 3:
 			main.sfx.tracer(muzzle, hp)
@@ -772,6 +919,9 @@ func try_fire():
 			if res.car:
 				res.car.hp -= float(st.dmg) * 0.3
 				res.car.by_player = true
+				if res.car.rival and main.offense: main.offense.rival_shot(res.car, hp, float(st.dmg))
+	if car:
+		car.box.on = own_box[0]; car.cab.on = own_box[1]
 	if hit_any:
 		main.hud.hitmarker(head_any); main.sfx.play("imp_flesh", 0.3)
 	main.sfx.shot(G.S["cur"], muzzle, 1.0, GUN.cfg_of(G.S["cur"]).get("muzzle") == "supp")
@@ -783,7 +933,7 @@ func try_fire():
 	shot_t = 0.0
 	if GUN.cfg_of(G.S["cur"]).get("muzzle") != "supp":
 		flash_t = 0.045; flash_frames = 2; flash_rot = randf() * TAU; flash_scale = G.rand(0.8, 1.15)
-	eject_at = 0.24 if G.S["cur"] == "plow" else 0.01
+	eject_at = (0.24 if G.S["cur"] == "plow" else 0.01) if not car else -1.0
 	var rec = float(st.recoil) * (0.8 if crouch else 1.0)
 	recoil += rec * 0.018; cam_pitch = clamp(cam_pitch + rec * 0.0035, -1.3, 1.1); cam_yaw += (randf() - 0.5) * rec * 0.006
 	bloom = min(1.6, bloom + 0.22 * float(st.recoil))
@@ -795,19 +945,19 @@ func try_fire():
 		start_reload()
 
 # ray vs the world, people and cars; who = anything with take_hit()
-func shoot_ray(o, d, max_t):
+func shoot_ray(o, d, max_t, skip = null):
 	var best = W.raycast(o, d, max_t)
 	var who = null
 	var head = false
 	var hit_car = null
-	for list in [main.crews.ENEMIES, main.peds.PEDS, main.police.COPS, main.net.targets()]:
+	for list in [main.crews.ENEMIES, main.peds.PEDS, main.police.COPS, main.net.targets(), main.offense.riders if main.offense else []]:
 		for e in list:
 			if e.is_down(): continue
 			var r = ray_body(o, d, e.pos, e.crouched if "crouched" in e else false)
 			if r and r.t < best:
 				best = r.t; who = e; head = r.head
 	for v in main.vehicles.VEH:
-		if v.dead: continue
+		if v.dead or v == skip: continue
 		var t = W._ray_box(o, Vector3(1.0 / (d.x if abs(d.x) > 1e-9 else 1e-9), 1.0 / (d.y if abs(d.y) > 1e-9 else 1e-9), 1.0 / (d.z if abs(d.z) > 1e-9 else 1e-9)), v.box)
 		if t < best:
 			best = t; who = null; hit_car = v
@@ -915,6 +1065,16 @@ func melee_target(p, f, reach):
 func _land_punch(h):
 	var e = h.who
 	if e.is_down() or Vector2(e.pos.x - pos.x, e.pos.z - pos.z).length() > h.pu.reach + 0.6:
+		return
+	var mid = str(h.pu.get("melee", ""))
+	if mid != "":
+		main.sfx.play3d("stab" if mid == "knife" else "punch", e.pos + Vector3(0, 1.4, 0), 0.9, 1.0 if mid == "knife" else 0.7)
+		main.hud.hitmarker(mid == "bat")
+		shake = max(shake, 0.22 if mid == "bat" else 0.08)
+		G.rumble(0.7 if mid == "bat" else 0.35, 0.6, 0.12)
+		e.take_hit(h.pu.dmg, false, h.f, true, mid == "bat")
+		if "vel" in e:
+			e.vel.x += h.f.x * float(h.pu.push); e.vel.z += h.f.z * float(h.pu.push)
 		return
 	var hook = h.pu.get("hook", false)
 	main.sfx.play3d("punch", e.pos + Vector3(0, 1.45, 0), 1.0 if hook else 0.75)
@@ -1111,6 +1271,9 @@ func exit_vehicle(force = false):
 
 func use_press():
 	if car: return
+	var td = takedown_target()
+	if td:
+		takedown(td); return
 	var it = nearest_interact()
 	if it: main.hud.interact(it)
 	else:

@@ -599,6 +599,13 @@ func update(v, cam, dt):
 	var fe = flip_k * flip_k * (3.0 - 2.0 * flip_k)
 	hands[0].visible = fe < 0.35
 	flip_hand.visible = fe > 0.01
+	# leaning out for a drive-by: that arm is out of the window (Offense.gd draws it)
+	var dbo = main.offense != null and main.offense.db_k > 0.05
+	var dbi = 0 if (main.offense == null or main.offense.db_left) else 1
+	if dbo: hands[dbi].visible = false
+	else: hands[1].visible = true
+	arms[0].visible = not (dbo and dbi == 0)
+	arms[1].visible = not (dbo and dbi == 1)
 	for i in range(2):
 		var hp = root.global_transform.affine_inverse().xform(hands[i].global_transform.origin)
 		if i == 0 and flip_hand.visible:

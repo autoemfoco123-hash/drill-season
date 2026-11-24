@@ -1656,7 +1656,9 @@ func _app_pad():
 	_kv([["Move · look", "Left stick · right stick"], ["Shoot · aim", "%s · %s" % [L.call_func("RT"), L.call_func("LT")]], ["Jump · crouch · reload", "%s · %s · %s" % [L.call_func("A"), L.call_func("B"), L.call_func("X")]],
 		["Car · use · weapon", "%s · %s · %s" % [L.call_func("Y"), L.call_func("RB"), L.call_func("LB")]], ["Sprint · view", "%s · %s" % [L.call_func("LS"), L.call_func("RS")]],
 		["Phone · bandage", "D-pad ↑ · ↓"], ["Emotes · finger", "D-pad ← · →"], ["Pause · map", "%s · %s" % [L.call_func("MENU"), L.call_func("VIEW")]], ["Gas · brake · handbrake", "%s · %s · %s" % [L.call_func("RT"), L.call_func("LT"), L.call_func("A")]],
-		["Burnout · donuts", "%s + %s standing still, steer to spin" % [L.call_func("RT"), L.call_func("LT")]]])
+		["Burnout · donuts", "%s + %s standing still, steer to spin" % [L.call_func("RT"), L.call_func("LT")]],
+		["Drive-by", "%s lean out · %s shoot" % [L.call_func("LB"), L.call_func("RB")]], ["Crew orders", "Aim + %s (hold: order wheel)" % L.call_func("RB")],
+		["Grenade · fire bottle", "Pick it on the wheel, hold %s to aim, let go" % L.call_func("RT")]])
 
 func _show_controls():
 	close(true); main.console.controls()

@@ -88,7 +88,8 @@ const DANCES = [["dance1", "Two-step"], ["dance2", "Arm wave"], ["dance3", "Robo
 const EMOTES = [["wave", "Wave"], ["flip", "Finger"], ["hype", "Hype"], ["clap", "Clap"], ["laugh", "Laugh"],
 	["shrug", "Shrug"], ["salute", "Salute"], ["point", "Point"], ["facepalm", "Facepalm"], ["flex", "Flex"], ["sit", "Sit"], ["snowangel", "Snow angel"], ["pray", "Pray"], ["flop", "Flop"]]
 const PAGES = ["DANCES", "EMOTES"]
-const WEAPONS = [["fists", "Fists"], ["k9", "K9"], ["buzz", "Buzzsaw"], ["draft", "Draft"], ["dragon", "Dragon"], ["plow", "Snowplow"], ["snowball", "Snowball"]]
+const WEAPONS = [["fists", "Fists"], ["bat", "Bat"], ["knife", "Knife"], ["k9", "K9"], ["buzz", "Buzzsaw"], ["draft", "Draft"], ["dragon", "Dragon"], ["plow", "Snowplow"], ["grenade", "Grenade"], ["molly", "Fire bottle"], ["snowball", "Snowball"]]
+const ORDERS = [["rush", "Rush"], ["flank", "Flank"], ["hold", "Hold here"], ["regroup", "Regroup"]]
 
 static func _sb(col, r = 10, pad = 10):
 	var sb = StyleBoxFlat.new(); sb.bg_color = col; sb.set_corner_radius_all(r); sb.anti_aliasing = true
@@ -386,7 +387,7 @@ class Wheel extends Control:
 				var sub = hud._weapon_sub(items[i][0])
 				var sw = G.font_xs.get_string_size(sub).x
 				draw_string(G.font_xs, p - Vector2(sw / 2, -24), sub, Color(0.05, 0.05, 0.07) if sel else Color(1, 1, 1, 0.6))
-		var title = hud.PAGES[hud.wheel_page] if kind == "emote" else "WEAPONS"
+		var title = hud.PAGES[hud.wheel_page] if kind == "emote" else ("CREW" if kind == "order" else "WEAPONS")
 		var name = items[hud.wheel_sel][1] if hud.wheel_sel >= 0 else title
 		var nw = G.font_l.get_string_size(name).x
 		draw_circle(ctr, R - 46, Color(0.03, 0.03, 0.04, 0.82))
@@ -680,7 +681,14 @@ func update(dt):
 	# weapon
 	var kind = "fists" if S.get("fists", false) else S["cur"]
 	weapon_icon.kind = kind
-	if kind == "fists":
+	var hd = str(S.get("hold", "")) if kind == "fists" else ""
+	if hd == "bat" or hd == "knife":
+		lbl_weapon.text = hd.to_upper()
+		lbl_ammo.text = "SWING" if hd == "bat" else "QUICK · QUIET"
+	elif hd == "grenade" or hd == "molly":
+		lbl_weapon.text = "GRENADE" if hd == "grenade" else "FIRE BOTTLE"
+		lbl_ammo.text = "x%d  ·  HOLD TO AIM" % main.offense.count(hd)
+	elif kind == "fists":
 		lbl_weapon.text = "FISTS"
 		lbl_ammo.text = "GUARD UP" if P.aiming else "JAB · CROSS · HOOK"
 	else:
@@ -724,7 +732,7 @@ func update(dt):
 	objective.visible = hud_on and ob != "" and not indoors
 	turf_card.visible = hud_on and G.MODE != "menu" and main.turf != null and (main.turf.card() != null or (main.missions != null and main.missions.card() != null))
 	if turf_card.visible: turf_card.update()
-	cross.visible = hud_on and not P.car and (P.aim_t > 0.3 or P.fp_on()) and wheel_kind == ""
+	cross.visible = hud_on and ((not P.car and (P.aim_t > 0.3 or P.fp_on())) or (P.car != null and main.offense != null and main.offense.db_on())) and wheel_kind == ""
 	# big message and subtitles
 	banner_t -= dt
 	var ba = clamp(banner_t * 2, 0, 1)
@@ -770,7 +778,13 @@ func _prompt():
 	var P = main.player
 	if G.MODE != "play" or wheel_kind != "": return ""
 	if P.is_ragdoll() and P.flopped: return "%s Get up" % _key("Space", "A")
-	if P.car: return ""
+	if P.car:
+		if main.offense and main.offense.db_k <= 0.05 and G.S["guns"]["k9"].owned and G.S.get("playTime", 0) < 3600 and fmod(G.REAL_T, 30) < 4:
+			return "Hold %s to lean out and shoot" % _key("Right click", "LB")
+		return ""
+	if P.takedown_target(): return "%s Takedown" % _key("E", "RB")
+	if main.offense and main.offense.th_aim != "": return "Let go to throw"
+	if P.aiming and main.gang.FOL.size() > 0 and not G.S.get("fists", false): return "%s Send your crew · hold for orders" % _key("E", "RB")
 	var so = main.crews.active_standoff()
 	if so: return "Hold %s to walk away\nAim to fight" % _key("E", "RB")
 	if main.turf:
@@ -873,13 +887,17 @@ func fade_to(a, secs = 0.5):
 
 # ---------- wheels ----------
 func _wheel_ok(kind, id):
-	if kind == "emote": return true
+	if kind == "emote" or kind == "order": return true
 	if id == "fists" or id == "snowball": return true
+	if id == "bat" or id == "knife": return bool(G.S.get("melee", {}).get(id, false))
+	if id == "grenade" or id == "molly": return main.offense.count(id) > 0
 	return G.S["guns"][id].owned
 
 func _weapon_sub(id):
 	if id == "fists": return "melee"
 	if id == "snowball": return "throw"
+	if id == "bat" or id == "knife": return "melee" if _wheel_ok("weapon", id) else "locked"
+	if id == "grenade" or id == "molly": return "x%d" % main.offense.count(id)
 	var g = G.S["guns"][id]
 	if not g.owned: return "locked"
 	return "%d | %d" % [g.mag, g.res]
@@ -888,6 +906,7 @@ func wheel_open(): return wheel_kind != ""
 
 func wheel_items():
 	if wheel_kind == "weapon": return WEAPONS
+	if wheel_kind == "order": return ORDERS
 	return DANCES if wheel_page == 0 else EMOTES
 
 func wheel_flip(d = 1):
@@ -939,7 +958,7 @@ func _open_wheel(kind):
 	wheel_kind = kind; wheel_vec = Vector2(); wheel_sel = -1
 	if kind == "weapon":
 		Engine.time_scale = 0.3
-		var cur = "fists" if G.S.get("fists", false) else G.S["cur"]
+		var cur = (G.S.get("hold", "") if G.S.get("hold", "") != "" else "fists") if G.S.get("fists", false) else G.S["cur"]
 		for i in range(WEAPONS.size()):
 			if WEAPONS[i][0] == cur: wheel_sel = i
 	main.sfx.play("tap", 0.4)
@@ -953,8 +972,13 @@ func _close_wheel(pick):
 	if kind == "weapon":
 		var id = WEAPONS[wheel_sel][0]
 		if id == "fists": P.set_fists(true)
-		elif id == "snowball": P.throw_snowball()
+		elif id == "snowball":
+			G.S["thr"] = "snowball"; P.throw_snowball()
+		elif id in ["bat", "knife", "grenade", "molly"]:
+			if _wheel_ok("weapon", id): P.set_hold(id)
 		elif G.S["guns"][id].owned: P.switch_weapon(id)
+	elif kind == "order":
+		main.offense.give_order(ORDERS[wheel_sel][0])
 	else:
 		var em = wheel_items()[wheel_sel][0]
 		last_emote = em

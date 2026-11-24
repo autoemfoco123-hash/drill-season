@@ -120,7 +120,10 @@ func damage(e, dmg, head, dir, melee):
 	if e.is_down(): return
 	e.hp -= dmg
 	if not melee: main.sfx.blood(e.pos + Vector3(0, 1.6 if head else 1.15, 0), dir)
-	if e.crew.state != "combat": engage(e.crew, "shot")
+	if e.crew.state != "combat":
+		# hit while walking their street or standing on their corner: an ambush
+		if main.offense and (e.crew.state == "patrol" or (e.crew.state == "guard" and not crew_noticed(e.crew))): main.offense.first_strike(e.crew)
+		engage(e.crew, "shot")
 	e.see_t = max(e.see_t, 0.3)
 	if e.hp <= 0:
 		e.state = "down"; e.down_t = 0
@@ -130,13 +133,51 @@ func damage(e, dmg, head, dir, melee):
 		G.S["stats"]["downs"] = G.S["stats"].get("downs", 0) + 1
 		G.S["heat"] = min(100, G.S["heat"] + (1 if e.crew.get("turf", -1) >= 0 else 3))
 
+# a takedown from behind: down without a sound. The rest of the crew finds out only if they see it
+func silent_down(e, dir):
+	if e.is_down(): return false
+	e.hp = 0.0; e.state = "down"; e.down_t = 0
+	e.h.ragdoll_start(Vector3(), dir * 1.4 + Vector3(0, 0.4, 0), G.rand(-0.5, 0.5))
+	main.sfx.play3d("bodyfall", e.pos, 0.45)
+	G.S["stats"]["downs"] = G.S["stats"].get("downs", 0) + 1
+	var c = e.crew
+	c["silent"] = true
+	var seen = false
+	for o in c.members:
+		if o == e or o.is_down(): continue
+		var dv = e.pos - o.pos
+		var d = dv.length()
+		if d > 20: continue
+		if not W.seg_clear(o.pos + Vector3(0, 1.5, 0), e.pos + Vector3(0, 0.9, 0)): continue
+		if d < 3.5 or Vector3(sin(o.yaw), 0, cos(o.yaw)).dot(dv / max(d, 0.01)) > 0.2: seen = true
+	if seen and c.state != "combat":
+		if c.state in ["patrol", "guard"] and main.offense: main.offense.first_strike(c)
+		engage(c, "shot")
+	return seen
+
 func on_player_shot(at):
 	for c in CREWS:
-		if c.state == "approach" or c.state == "standoff" or c.state == "guard":
+		if c.state == "approach" or c.state == "standoff" or c.state == "guard" or c.state == "patrol":
 			for e in c.members:
 				if e.pos.distance_to(at) < 65:
 					engage(c, "shot")
 					break
+
+func crew_noticed(c):
+	var P = main.player
+	for o in c.members:
+		if not o.is_down() and noticed(o, o.pos.distance_to(P.pos)): return true
+	return false
+
+# has this one clocked you? In front of them and close enough (a lot closer if you're low and
+# not aiming), or right on top of them
+func noticed(e, d):
+	var P = main.player
+	if P.dead or e.can_see == null: return false
+	if d < 1.2: return true
+	if d > (6.0 if (P.crouch and not P.aiming) else 14.0): return false
+	var to = Vector3(P.pos.x - e.pos.x, 0, P.pos.z - e.pos.z)
+	return Vector3(sin(e.yaw), 0, cos(e.yaw)).dot(to.normalized()) > -0.25
 
 func _sees(e):
 	var P = main.player
@@ -198,6 +239,7 @@ func update(dt):
 		if alive.size() == 0:
 			if not c.over:
 				c.over = true
+				if (c.get("ambushed", false) or c.get("silent", false)) and main.offense: main.offense.ambush_paid(c)
 				if c.fought and c.get("turf", -1) >= 0:
 					main.gang.rep(2)
 				elif c.fought:
@@ -218,11 +260,25 @@ func update(dt):
 			elif dmin > 42: _walk_away(c)
 		elif c.state == "guard":
 			# standing on their corner: a word when you walk up, a fight if you pull on them
-			c.aim_hold = c.aim_hold + dt if P.aiming and dmin < 32 else max(0, c.aim_hold - dt * 2)
-			if dmin < 13 and not c.said and alive.size() > 0 and not P.dead:
+			var nb = null
+			for e in alive:
+				if noticed(e, e.pos.distance_to(P.pos)): nb = e
+			c.aim_hold = c.aim_hold + dt if P.aiming and dmin < 32 and nb != null else max(0, c.aim_hold - dt * 2)
+			if nb != null and dmin < 13 and not c.said and not P.dead:
 				c.said = true
-				main.hud.say(alive[0].name, G.pick(c.lines))
+				main.hud.say(nb.name, G.pick(c.lines))
 			if c.aim_hold > 0.8: engage(c, "aim")
+			if alive.size() == 0: c.state = "leave"
+		elif c.state == "patrol":
+			# walking their street: they notice you up close (less if you're low), or turn round at the end
+			for e in alive:
+				if noticed(e, e.pos.distance_to(P.pos)):
+					c.state = "approach"; c.t = 0.0
+					main.hud.say(e.name, G.pick(["Who's that?", "Yo. You lost?", "Hold up."]))
+					break
+			if c.state == "patrol" and c.ri >= c.route.size():
+				c.state = "leave"; c.leave_t = 0
+				for e in c.members: e.leave_to = c.route[-1]
 			if alive.size() == 0: c.state = "leave"
 		elif c.state == "combat":
 			if dmin > 95 or P.dead:
@@ -345,7 +401,17 @@ func _update_enemy(e, dt):
 	var face = atan2(dv.x, dv.z)
 	var strafe = 0
 	if c.state == "guard":
-		if d > 20: face = null
+		# on their corner: they turn to you once they've clocked you (sneak up low from behind)
+		if not noticed(e, d): face = null
+	elif c.state == "patrol":
+		face = null
+		if c.ri < c.route.size():
+			var wp = c.route[c.ri]
+			var k = c.members.find(e)
+			goal = wp + Vector3((k % 2) * 1.3 - 0.65, 0, (k / 2) * 1.3)
+			spd = 1.6
+			var L = leader(c)
+			if L == e and Vector2(wp.x - e.pos.x, wp.z - e.pos.z).length() < 4.0: c.ri += 1
 	elif c.state == "approach":
 		goal = P.pos; spd = float(e.T.speed) * 0.75
 	elif c.state == "standoff":

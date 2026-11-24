@@ -597,6 +597,10 @@ func _event(id, e):
 		_chat_line(nm, m)
 		return
 	var from_host = server != null and (id == "r" + server.sid or (server.get("direct", false) and id == "e1"))
+	if t.begins_with("off_"):
+		if rejected.has(id): return
+		if main.offense: main.offense.net_event(t, r, e)
+		return
 	if t.begins_with("mis_"):
 		if rejected.has(id): return
 		if main.missions: main.missions.net_event(t, r, e)
@@ -706,6 +710,9 @@ func hit_remote(r, dmg, _head, melee):
 	main.sfx.blood(r.pos + Vector3(0, 1.3, 0), Vector3())
 	_send("ev", { "t": "hurt", "dmg": dmg, "melee": melee }, id_for_send(r))
 
+func send_offense(d):
+	if online(): _send("ev", d)
+
 func send_shot(a, b):
 	if online():
 		_send("ev", { "t": "shot", "a": [stepify(a.x, 0.01), stepify(a.y, 0.01), stepify(a.z, 0.01)], "b": [stepify(b.x, 0.01), stepify(b.y, 0.01), stepify(b.z, 0.01)], "k": G.S["cur"] })
@@ -762,6 +769,7 @@ func _my_state():
 	if P.car:
 		s["car"] = true; s["cm"] = CAR_MODELS.find(P.car.model); s["cc"] = int(P.car.color)
 		s["cx"] = stepify(P.car.pos.x, 0.01); s["cz"] = stepify(P.car.pos.z, 0.01); s["cy"] = stepify(P.car.yaw, 0.01); s["cs"] = stepify(P.car.speed, 0.1)
+		if main.offense: main.offense.net_state(s)
 	return s
 
 func _update_remote(r, dt):
@@ -795,10 +803,12 @@ func _update_remote(r, dt):
 			main.vehicles.place(r.car)
 			var so = G.skin_opts(r.skin)
 			main.vehicles.flip_arm(r.car, s.get("flip", false) == true, G.hex_color(so.skin), G.hex_color(so.jacket), dt)
+			if main.offense: main.offense.remote_arm(r, dt, s)
 			r.pos = r.car.pos
 		return
 	if r.car:
 		main.vehicles.remove(r.car); r.car = null
+		if main.offense: main.offense.remote_arm(r, dt, {})
 	r.h.visible = true
 	if s.get("down", false):
 		if not r.h.is_ragdoll(): r.h.ragdoll_start(Vector3(), Vector3(sin(r.yaw), 0.3, cos(r.yaw)) * -2.0)
@@ -821,6 +831,7 @@ func _remove(id):
 	if hosting: announce_t = min(announce_t, 1.0)
 	if r.h: r.h.queue_free()
 	if r.car: main.vehicles.remove(r.car)
+	if main.offense: main.offense.remote_gone(id)
 	R.erase(id)
 	main.hud.toast("@%s left" % r.name)
 
