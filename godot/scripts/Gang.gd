@@ -43,6 +43,9 @@ class Follower:
 	var down_t = 0.0
 	var riding = false
 	var lean = 0.0         # leaning out of the car window to shoot
+	var bstep = ""         # getting in or out of the car: walk, open, sit, close / xopen, xout
+	var bt = 0.0
+	var bcar = null
 	var slot = 0
 	var fighting = false
 	var last_say = -99.0
@@ -405,8 +408,12 @@ func _update_follower(f, dt):
 			main.hud.toast("%s is at Calder General. Back in a few minutes." % f.rec.name)
 			remove_follower(f); G.save_game()
 		return
-	if P.car:
-		f.riding = true
+	# getting in with you: each to their own door, open it, sit, shut it
+	var tv = P.car if P.car else (P.board.v if P.board != null and P.board["in"] else null)
+	if tv != null and not f.riding:
+		if _board_in(f, tv, dt): return
+	if P.car and f.riding:
+		f.bcar = P.car
 		f.pos = P.pos; f.trail.clear()
 		# a seat in your car: the passenger seat first, then the back row; no seat, no show
 		var seats = main.cockpit.seat_spots(P.car)
@@ -414,28 +421,24 @@ func _update_follower(f, dt):
 		if i >= 0 and i < seats.size() and P.car.node:
 			H.visible = true
 			var c = P.car
+			var V = main.vehicles
 			var xf = main.cockpit.car_frame(c)
-			# shooters lean out at whoever's shooting at you (rival crews, a drive-by car)
+			var door = V.seat_door(c, i)
+			var side = 1 if seats[i].x > 0.05 else -1
+			# shooters wind their window down and lean out at whoever's shooting at you
 			var ct = null
 			if f.rec.type == "shooter" and f.gun and main.offense:
 				f.tgt_t -= dt
 				if f.tgt_t <= 0:
 					f.tgt_t = 0.5; f.tgt = main.offense.car_target(c.pos, 30.0)
 				ct = f.tgt if f.tgt != null and not f.tgt.is_down() else null
-			f.lean = move_toward(f.lean, 1.0 if ct != null else 0.0, dt * 3.0)
-			var turn = 0.0
-			var dl = Vector3()
-			if ct != null:
-				dl = xf.basis.orthonormalized().inverse().xform(ct.pos + Vector3(0, 1.2, 0) - xf.origin)
-				turn = clamp(atan2(dl.x, dl.z), -2.0, 2.0) * f.lean
-			var out = Vector3(sign(seats[i].x) * 0.14 * f.lean, 0, 0)
-			H.transform = xf * Transform(Basis(Vector3.UP, turn), seats[i] - Vector3(0, 0.92, 0) + out)
-			H.animate(dt, { "seat": true, "sway": Vector2(c.ay if "ay" in c else 0.0, c.ax if "ax" in c else 0.0) })
+			if ct != null: V.roll_window(c, door, 2.5)
+			f.lean = move_toward(f.lean, 1.0 if ct != null and V.window_down(c, door) > 0.85 else 0.0, dt * 2.5)
+			var aim = (ct.pos + Vector3(0, 1.2, 0) - xf.xform(seats[i])) if ct != null else xf.basis.z
+			# out of their own window when it's their side; across the car from the seat when it isn't
+			var own_side = (xf.basis.orthonormalized().inverse().xform(aim).x > 0) == (side > 0)
+			main.offense.lean_pose(H, xf, seats[i], aim, f.lean, side, dt, own_side, Vector2(c.ay if "ay" in c else 0.0, c.ax if "ax" in c else 0.0))
 			if f.gun: f.gun.visible = f.lean > 0.3
-			if f.lean > 0.05:
-				var pitch = atan2(dl.y - seats[i].y - 0.5, max(1.0, Vector2(dl.x, dl.z).length()))
-				H._rot(H.AR.sh, lerp(-0.4, -PI / 2 - pitch, f.lean), 0, 0.0); H._rot(H.AR.elbow, lerp(-1.2, -0.05, f.lean), 0, 0)
-				H.sync_bones()
 			if ct != null and f.lean > 0.8:
 				f.fire_cd -= dt
 				if f.fire_cd <= 0:
@@ -446,9 +449,9 @@ func _update_follower(f, dt):
 		else:
 			H.visible = false
 		return
+	# and out again when you get out
 	if f.riding:
-		f.riding = false; f.pos = _spot(true); f.vel = Vector3(); H.visible = true; f.lean = 0.0
-		if f.gun: f.gun.visible = true
+		if _board_out(f, dt): return
 	var dP = f.pos.distance_to(P.pos)
 	if dP > 45:
 		f.pos = _spot(true); f.trail.clear(); f.vel = Vector3()
@@ -577,3 +580,95 @@ func _shoot(f, e):
 	main.peds.alert(f.pos, 35)
 	G.S["heat"] = min(100, G.S["heat"] + 0.3)
 	if hit: e.take_hit(12 if ordered else 9, false, (e.pos - f.pos).normalized(), false, false)
+
+
+# ---------- your crew and the car doors ----------
+# in: walk to the door for their seat, open it, sit, close it. Too far away, or you've already
+# driven off: they're in anyway (they caught up)
+func _board_in(f, v, dt):
+	var V = main.vehicles
+	var H = f.h
+	var seats = main.cockpit.seat_spots(v)
+	var i = _seat_index(f)
+	if i < 0 or i >= seats.size() or v.node == null:
+		f.riding = true; f.bcar = v; f.bstep = ""; H.visible = false
+		return false
+	var door = V.seat_door(v, i)
+	var dp = V.door_point(v, door, 0.5)
+	if abs(v.speed) > 3.0 or (f.bstep == "" and f.pos.distance_to(dp) > 22.0):
+		f.riding = true; f.bcar = v; f.bstep = ""
+		return false
+	if f.bstep == "":
+		f.bstep = "walk"; f.bt = 0.0
+	f.bt += dt
+	H.visible = true
+	if f.bstep == "walk":
+		var wp = V.path_to_door(f.pos, v, dp)
+		var to = Vector3(wp.x - f.pos.x, 0, wp.z - f.pos.z)
+		var d = to.length()
+		var dd = Vector2(dp.x - f.pos.x, dp.z - f.pos.z).length()
+		if dd > 0.15 and d > 0.05 and f.bt < 7.0:
+			var sp = 5.6 if dd > 2.5 else 2.6
+			W.move_body(f, to.x / d * min(d, sp * dt), to.z / d * min(d, sp * dt), dt)
+			f.yaw += G.ang_diff(f.yaw, atan2(to.x, to.z)) * (1 - exp(-dt * 12))
+			H.translation = f.pos; H.rotation = Vector3(0, f.yaw, 0)
+			H.animate(dt, { "speed": sp })
+			return true
+		f.bstep = "open"; f.bt = 0.0
+		f.pos = Vector3(dp.x, f.pos.y, dp.z)
+	if f.bstep == "open":
+		V.open_door(v, door, 0.35)
+		var dd = v.doors.get(door)
+		var out = main.cockpit.car_frame(v).basis.x.normalized() * (float(dd.s) if dd else 1.0)
+		f.yaw += G.ang_diff(f.yaw, atan2(-out.x, -out.z)) * (1 - exp(-dt * 12))
+		H.translation = f.pos; H.rotation = Vector3(0, f.yaw, 0)
+		H.animate(dt, { "speed": 0.0 })
+		if f.bt > 0.42:
+			f.bstep = "sit"; f.bt = 0.0
+		return true
+	if f.bstep == "sit":
+		V.open_door(v, door, 0.35)
+		var k = clamp(f.bt / 0.62, 0.0, 1.0)
+		V.sit_blend(H, v, seats[i], k, dt, door)
+		if k >= 1.0:
+			f.bstep = "close"; f.bt = 0.0
+		return true
+	V.sit_blend(H, v, seats[i], 1.0, dt, door)
+	if f.bt > 0.3:
+		f.bstep = ""; f.riding = true; f.bcar = v
+		return false
+	return true
+
+# out: their door opens, they climb out and stand by it (one after the other)
+func _board_out(f, dt):
+	var V = main.vehicles
+	var H = f.h
+	var v = f.bcar
+	var seats = main.cockpit.seat_spots(v) if v != null and not v.dead and v.node != null and v in V.VEH else []
+	var i = _seat_index(f)
+	if v == null or v.blown or seats.empty() or i < 0 or i >= seats.size():
+		f.riding = false; f.bstep = ""; f.pos = _spot(true); f.vel = Vector3(); H.visible = true; f.lean = 0.0
+		if f.gun: f.gun.visible = true
+		return false
+	var door = V.seat_door(v, i)
+	if f.bstep == "" or not f.bstep.begins_with("x"):
+		f.bstep = "xopen"; f.bt = 0.0
+	f.bt += dt
+	H.visible = true
+	if f.gun: f.gun.visible = false
+	V.open_door(v, door, 0.35)
+	if f.bstep == "xopen":
+		V.sit_blend(H, v, seats[i], 1.0, dt, door)
+		if f.bt > 0.3 + 0.15 * i:
+			f.bstep = "xout"; f.bt = 0.0
+		return true
+	var k = 1.0 - clamp(f.bt / 0.58, 0.0, 1.0)
+	V.sit_blend(H, v, seats[i], k, dt, door)
+	if k <= 0.0:
+		var dp = V.door_point(v, door, 0.5)
+		f.pos = Vector3(dp.x, 0, dp.z); f.vel = Vector3(); f.trail.clear()
+		f.riding = false; f.bstep = ""; f.lean = 0.0
+		f.yaw = H.rotation.y
+		if f.gun: f.gun.visible = true
+		return false
+	return true

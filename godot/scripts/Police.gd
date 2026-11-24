@@ -158,6 +158,7 @@ func cop_drive(v, dt):
 
 func deploy(v):
 	v.cop.deployed = true; v.cop.t = 0
+	main.vehicles.open_door(v, "DFL", 2.5); main.vehicles.open_door(v, "DFR", 2.5)
 	var l = main.vehicles.side(v)
 	for s in [1, -1]:
 		var p = v.pos + l * s * (v.sp.wid / 2 + 0.7)

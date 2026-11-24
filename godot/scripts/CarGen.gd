@@ -14,6 +14,11 @@ extends Reference
 # chrome-grille gangster sedan, a big body-on-frame SUV, a crew-cab pickup, a muscle coupe,
 # a beater hatch, a cargo van), with no real maker's badges, names or exact designs.
 #
+# The doors are their own nodes (Doors/D[F|R][L|R], on the hinge at the front edge): the
+# body shell between the seams, the mirror and the handle, an inner panel, and the side glass
+# on a child ("Win") that slides down into the door. Behind them: a floor, seats, a dash and a
+# headliner, for when a door or a window is open.
+#
 # geom(model) gives the cabin measures the first-person interior is built from, so the
 # dashboard, the glass and the seats line up with the body you see from outside.
 
@@ -125,18 +130,102 @@ func build(model, sp):
 	mb = MB.new()
 	var root = Spatial.new()
 	_mats()
+	_doors_plan()
 	_body()
 	_cabin()
 	_front()
 	_rear()
 	_sides()
+	_interior()
 	if p.get("bar", false): _lightbar()
 	if p.get("push", false): _pushbar()
 	if p.get("taxi", false): _taxi_sign()
 	mb.commit(root)
 	_wheels(root)
+	_doors_commit(root)
 	root.set_meta("tips", tips)
 	return root
+
+# ---------------------------------------------------------------- doors
+# the front doors run from the B pillar (or about 1.2 m back) to the windshield's base; the
+# rear doors from the C pillar (or just past the rear wheel) to the B pillar
+static func door_spans(p):
+	var out = []
+	var zf = float(p.zWB)
+	var zb = float(p.zB) if p.has("zB") else zf - 1.2
+	out.append([zb, zf, "F"])
+	if not p.get("van", false) and p.get("bed", null) == null:
+		if p.has("zC"): out.append([float(p.zC), zb, "R"])
+		elif p.rear != "vertical" and p.has("zB") and float(p.zB) - float(p.zR) > 1.2: out.append([float(p.zR) + float(p.r) + 0.12, zb, "R"])
+	return out
+
+var doors = []
+func _doors_plan():
+	doors = []
+	for sp in door_spans(p):
+		for s in [-1, 1]:
+			var m = MB.new(); m.mats = mb.mats
+			var w = MB.new(); w.mats = mb.mats
+			var h = Vector3(s * _halfw(sp[1]), 0.0, sp[1])
+			var zm = (sp[0] + sp[1]) / 2.0
+			doors.append({ "name": "D" + sp[2] + ("L" if s > 0 else "R"), "s": s, "z0": sp[0], "z1": sp[1], "mb": m, "win": w, "h": h,
+				"wh": max(0.2, float(p.roof) - _interp(p.top, zm) - 0.06) })
+
+func _door_at(za, zb, s):
+	for d in doors:
+		if d.s == int(s) and za >= d.z0 - 0.025 and zb <= d.z1 + 0.025 and zb > d.z0 + 0.01 and za < d.z1 - 0.01: return d
+	return null
+
+func _door_pt(c):
+	for d in doors:
+		if sign(c.x) == d.s and c.z >= d.z0 + 0.02 and c.z <= d.z1 - 0.02 and abs(c.x) > W * 0.3: return d
+	return null
+
+func _doors_commit(root):
+	var dn = Spatial.new(); dn.name = "Doors"
+	root.add_child(dn)
+	var info = {}
+	for d in doors:
+		# the inside of the door: a panel, an armrest, and the rear edge closing it off
+		var s = d.s
+		var zm = (d.z0 + d.z1) / 2.0
+		var xi = s * (_halfw(zm) - 0.08)
+		var xo = s * (_halfw(zm) - 0.01)
+		var y0 = p.yb + 0.14
+		var y1 = _interp(p.top, zm) - 0.02
+		var h = d.h
+		d.mb.quad("trim", Vector3(xi, y0, d.z0 + 0.02) - h, Vector3(xi, y1, d.z0 + 0.02) - h, Vector3(xi, y1, d.z1 - 0.03) - h, Vector3(xi, y0, d.z1 - 0.03) - h, Vector3(-s, 0, 0), Vector2(), Vector2(), Vector2(), Vector2())
+		d.mb.quad("trim", Vector3(xi, y0, d.z0 + 0.02) - h, Vector3(xo, y0, d.z0 + 0.02) - h, Vector3(xo, y1, d.z0 + 0.02) - h, Vector3(xi, y1, d.z0 + 0.02) - h, Vector3(0, 0, -1), Vector2(), Vector2(), Vector2(), Vector2())
+		d.mb.box("liner", Transform(Basis(), Vector3(xi - s * 0.04, (y0 + y1) / 2.0 + 0.04, zm) - h), Vector3(0.08, 0.05, (d.z1 - d.z0) * 0.6), 0.5, false)
+		var n = Spatial.new(); n.name = d.name
+		n.translation = h
+		d.mb.commit(n)
+		var wn = Spatial.new(); wn.name = "Win"
+		d.win.commit(wn)
+		n.add_child(wn)
+		dn.add_child(n)
+		info[d.name] = [d.s, d.z0, d.z1, d.wh]
+	root.set_meta("doors", info)
+
+# what's behind the doors: a floor, the seats, the dash and a headliner (only seen with a door
+# or a window open: the glass is dark)
+func _interior():
+	var yWB = _interp(p.top, p.zWB)
+	var eyeY = yWB + (p.roof - yWB) * 0.62
+	var eyeZ = p.zWB - 0.95
+	var hy = eyeY - 0.7
+	var xD = W * 0.21
+	var zr = max(p.zRG + 0.2, p.zR + p.r + 0.15)
+	mb.quad("liner", Vector3(-hw + 0.1, p.yb + 0.16, zr), Vector3(hw - 0.1, p.yb + 0.16, zr), Vector3(hw - 0.1, p.yb + 0.16, p.zWB), Vector3(-hw + 0.1, p.yb + 0.16, p.zWB), Vector3(0, 1, 0), Vector2(), Vector2(), Vector2(), Vector2())
+	mb.quad("liner", Vector3(-hw + 0.12, p.roof - 0.04, p.zRB), Vector3(hw - 0.12, p.roof - 0.04, p.zRB), Vector3(hw - 0.12, p.roof - 0.04, p.zWT), Vector3(-hw + 0.12, p.roof - 0.04, p.zWT), Vector3(0, -1, 0), Vector2(), Vector2(), Vector2(), Vector2())
+	for s in [-1, 1]:
+		_box("trim", Vector3(s * xD, hy - 0.06, eyeZ - 0.05), Vector3(0.5, 0.14, 0.5))
+		_box("trim", Vector3(s * xD, hy + 0.3, eyeZ - 0.34), Vector3(0.5, 0.62, 0.12), Vector3(-0.2, 0, 0))
+	_box("liner", Vector3(0, yWB - 0.08, p.zWB - 0.22), Vector3(W - 0.24, 0.24, 0.4))
+	if doors.size() > 2:
+		var rz = eyeZ - 0.8
+		_box("trim", Vector3(0, hy - 0.1, rz - 0.05), Vector3(W - 0.34, 0.14, 0.48))
+		_box("trim", Vector3(0, hy + 0.25, rz - 0.34), Vector3(W - 0.34, 0.56, 0.12), Vector3(-0.15, 0, 0))
 
 # the wheels are their own nodes so they can roll and steer (Vehicles.gd turns them):
 # Wheels/W[F|R][L|R] sits on the hub and steers about y; its "spin" child rolls about x. The
@@ -177,6 +266,7 @@ func _mats():
 	mb.mat("paint_b", _cm(Color(1, 1, 1), true))     # (named paint*: the car's colour goes on it too)
 	var gl = _cm(Color(0.035, 0.045, 0.06), false)
 	gl.roughness = 0.6
+	gl.params_cull_mode = SpatialMaterial.CULL_DISABLED
 	mb.mat("glass", gl)
 	mb.mat("trim", _cm(Color(0.045, 0.045, 0.05)))
 	mb.mat("chrome", _cm(Color(0.82, 0.84, 0.88), true))
@@ -229,6 +319,8 @@ func _stations():
 	for i in range(n + 1): zs.append(-L / 2.0 + L * i / n)
 	for k in ["zWB", "zWT", "zRB", "zRG", "zB", "zC"]:
 		if p.has(k): zs.append(float(p[k]))
+	for sp in door_spans(p):
+		zs.append(sp[0]); zs.append(sp[1])
 	for zw in [p.zF, p.zR]:
 		for d in [-0.48, -0.4, -0.3, -0.18, -0.06, 0.06, 0.18, 0.3, 0.4, 0.48]:
 			zs.append(zw + d * (p.r + 0.07) / 0.48)
@@ -240,11 +332,15 @@ func _stations():
 		out.append(z)
 	return out
 
-func _q(k, a, b, c, d, hint):
+func _q(k, a, b, c, d, hint, dr = null, win = false):
 	var n = (b - a).cross(d - a)
 	if n.length() < 1e-6: n = (c - b).cross(d - b)
 	n = n.normalized()
 	if n.dot(hint) < 0: n = -n
+	if dr != null:
+		var h = dr.h
+		(dr.win if win else dr.mb).quad(k, a - h, b - h, c - h, d - h, n, Vector2(), Vector2(), Vector2(), Vector2())
+		return
 	mb.quad(k, a, b, c, d, n, Vector2(), Vector2(), Vector2(), Vector2())
 
 func _body():
@@ -266,7 +362,9 @@ func _body():
 				var mid = (a0 + b1) * 0.5
 				var hint = Vector3(mid.x * 2.0, mid.y - 0.55, 0.0)
 				if k >= A.size() - 3: hint = Vector3(mid.x * 0.6, 1.0, 0.0)
-				_q("paint", a0, a1, b1, b0, hint)
+				# the flank between the seams is a door
+				var dr = _door_at(za, zb, s) if k < A.size() - 2 else null
+				_q("paint", a0, a1, b1, b0, hint, dr)
 	# nose and tail caps
 	for e in [[zs[zs.size() - 1], 1.0], [zs[0], -1.0]]:
 		var S = _section(e[0])
@@ -346,7 +444,9 @@ func _cabin():
 				var hint = Vector3(s * (1.0 if k == 0 else 0.4), 0.7 if k == 0 else 1.0, 0.0)
 				if wind and k > 0: hint = Vector3(0, 0.6, 0.8)
 				if back and k > 0: hint = Vector3(0, 0.6, -0.8)
-				_q(key, a0, a1, b1, b0, hint)
+				# the side glass over a door winds down into it
+				var dw = _door_at(za, zb, s) if k == 0 and key == "glass" else null
+				_q(key, a0, a1, b1, b0, hint, dw, true)
 	# a chrome or black strip along the belt
 	var bk = "chrome" if p.get("chrome", false) else "trim"
 	for s in [-1, 1]:
@@ -366,8 +466,12 @@ func _gsec(z):
 	return [Vector2(wb, belt - 0.005), Vector2(lerp(wb, wr, 0.85), belt + h * 0.9), Vector2(wr, top), Vector2(0.0, top + min(0.03, h * 0.1))]
 
 # ---------------------------------------------------------------- faces
-func _box(k, c, s, rot = Vector3()):
+func _box(k, c, s, rot = Vector3(), on_door = false):
 	var b = Basis(Vector3(1, 0, 0), rot.x) * Basis(Vector3(0, 1, 0), rot.y) * Basis(Vector3(0, 0, 1), rot.z)
+	var dr = _door_pt(c) if on_door else null
+	if dr != null:
+		dr.mb.box(k, Transform(b, c - dr.h), s, 0.5, false)
+		return
 	mb.box(k, Transform(b, c), s, 0.5, false)
 
 func _front():
@@ -508,8 +612,8 @@ func _sides():
 		# mirrors on the doors
 		var zm = p.zWB - 0.12
 		var ym = _interp(p.top, zm) + 0.1
-		_box("paint", Vector3(s * (_halfw(zm) + 0.1), ym, zm), Vector3(0.18, 0.1, 0.12))
-		_box("trim", Vector3(s * (_halfw(zm) + 0.02), ym - 0.04, zm), Vector3(0.06, 0.03, 0.05))
+		_box("paint", Vector3(s * (_halfw(zm) + 0.1), ym, zm), Vector3(0.18, 0.1, 0.12), Vector3(), true)
+		_box("trim", Vector3(s * (_halfw(zm) + 0.02), ym - 0.04, zm), Vector3(0.06, 0.03, 0.05), Vector3(), true)
 		# door seams and handles
 		var cuts = [p.zWB - 0.05]
 		if p.has("zB"): cuts.append(p.zB)
@@ -518,11 +622,11 @@ func _sides():
 		for zc in cuts:
 			var w = _halfw(zc)
 			var y1 = _interp(p.top, zc) - 0.02
-			_box("trim", Vector3(s * (w + 0.004), (p.yb + 0.12 + y1) / 2.0, zc), Vector3(0.006, y1 - p.yb - 0.14, 0.008))
+			_box("trim", Vector3(s * (w + 0.004), (p.yb + 0.12 + y1) / 2.0, zc), Vector3(0.006, y1 - p.yb - 0.14, 0.008), Vector3(), true)
 		for i in range(cuts.size() - 1):
 			var zh = cuts[i] - 0.18
 			var yh = _interp(p.top, zh) - 0.12
-			_box("chrome" if p.get("chrome", false) else "paint", Vector3(s * (_halfw(zh) + 0.012), yh, zh), Vector3(0.02, 0.03, 0.14))
+			_box("chrome" if p.get("chrome", false) else "paint", Vector3(s * (_halfw(zh) + 0.012), yh, zh), Vector3(0.02, 0.03, 0.14), Vector3(), true)
 		# roof rails
 		if p.get("rails", false):
 			var z0 = p.zRB + 0.15

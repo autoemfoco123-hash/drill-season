@@ -77,6 +77,11 @@ class Car:
 	var beam = null       # the pool of light in front of a moving car at night
 	var tips = []
 	var rival = null      # a rival crew's drive-by car (Offense.gd drives it)
+	var doors = {}        # "DFL"... -> { node, win, s, z0, z1, wh }: hinged doors and their glass
+	var door_k = {}       # how far each door is open (0..1) and each window down
+	var win_k = {}
+	var door_until = {}   # held open / down until this time (G.REAL_T)
+	var win_until = {}
 
 func setup(m):
 	main = m
@@ -246,6 +251,14 @@ func _rig(v, model):
 	v.lamp_rev = n.get_node_or_null("rev")
 	if v.lamp_rev: v.lamp_rev_m = v.lamp_rev.material_override
 	if _proc.has(model) and _proc[model].has_meta("tips"): v.tips = _proc[model].get_meta("tips")
+	var dn = n.get_node_or_null("Doors")
+	if dn and _proc.has(model) and _proc[model].has_meta("doors"):
+		var info = _proc[model].get_meta("doors")
+		for k in info.keys():
+			var d = dn.get_node_or_null(k)
+			if d == null: continue
+			v.doors[k] = { "node": d, "win": d.get_node_or_null("Win"), "s": int(info[k][0]), "z0": float(info[k][1]), "z1": float(info[k][2]), "wh": float(info[k][3]) }
+			v.door_k[k] = 0.0; v.win_k[k] = 0.0
 	if BRAKE_MAT == null:
 		BRAKE_MAT = SpatialMaterial.new(); BRAKE_MAT.flags_unshaded = true; BRAKE_MAT.albedo_color = Color(1.0, 0.16, 0.1)
 		REV_MAT = SpatialMaterial.new(); REV_MAT.flags_unshaded = true; REV_MAT.albedo_color = Color(1.0, 0.98, 0.92)
@@ -274,6 +287,7 @@ func _animate(dt):
 		v.prev_pos = v.pos; v.prev_yaw = v.yaw
 		# (your own car has a real headlight; the pool is for everyone else's)
 		if v.beam: v.beam.visible = night > 0.05 and not v.blown and not v.parked and v.driver != "player" and (v.driver != null or abs(v.speed) > 0.5)
+		if not v.blown and not v.doors.empty(): _doors_anim(v, dt)
 		if v.blown or v.wheels.empty(): continue
 		if v.pos.distance_squared_to(cam) > 110.0 * 110.0: continue
 		var f = fwd(v)
@@ -305,6 +319,111 @@ func _animate(dt):
 			v.lamps = st
 			if v.lamp_r: v.lamp_r.material_override = BRAKE_MAT if st & 1 else v.lamp_r_m
 			if v.lamp_rev: v.lamp_rev.material_override = REV_MAT if st & 2 else v.lamp_rev_m
+
+# ---------- doors and windows ----------
+# a door swings out on its front hinge, about 65 degrees, and closes with a thunk; a window
+# winds down into its door in about two thirds of a second
+func _doors_anim(v, dt):
+	var now = G.REAL_T
+	for k in v.doors.keys():
+		var d = v.doors[k]
+		var want = 1.0 if now < float(v.door_until.get(k, 0.0)) else 0.0
+		var c = float(v.door_k[k])
+		if c != want:
+			var was = c
+			c = move_toward(c, want, dt * (3.2 if want > c else 3.8))
+			v.door_k[k] = c
+			if was == 0.0 and c > 0.0: main.sfx.play3d("door_open", v.pos, 0.5)
+			if c == 0.0 and was > 0.0: main.sfx.play3d("door_close", v.pos, 0.65)
+			var e = c * c * (3.0 - 2.0 * c)
+			d.node.rotation = Vector3(0, -d.s * 1.13 * e, 0)
+		var wwant = 1.0 if now < float(v.win_until.get(k, 0.0)) else 0.0
+		var w = float(v.win_k[k])
+		if w != wwant and d.win:
+			w = move_toward(w, wwant, dt * 1.6)
+			v.win_k[k] = w
+			d.win.translation = Vector3(0, -d.wh * 0.96 * w, 0)
+
+# open a door (for secs seconds; 0 lets it close now)
+func open_door(v, k, secs):
+	if v == null or not v.doors.has(k): return
+	v.door_until[k] = G.REAL_T + secs
+
+func door_open(v, k):
+	return float(v.door_k.get(k, 0.0)) if v else 0.0
+
+# wind a window down (for secs seconds, then it goes back up)
+func roll_window(v, k, secs):
+	if v == null or not v.doors.has(k): return
+	v.win_until[k] = max(float(v.win_until.get(k, 0.0)), G.REAL_T + secs)
+
+func window_down(v, k):
+	if v == null: return 0.0
+	return float(v.win_k.get(k, 1.0 if not v.doors.has(k) else 0.0))
+
+# the door for a seat: the driver ("D"), or passenger seat i (the order Cockpit.seat_spots uses:
+# front passenger, back right, back left, back middle); two-door cars go in through the front
+func seat_door(v, i):
+	var nm = "DFL" if typeof(i) == TYPE_STRING else ["DFR", "DRR", "DRL", "DRR"][min(int(i), 3)]
+	if not v.doors.has(nm): nm = "DF" + nm.substr(2, 1)
+	return nm
+
+# a spot on the ground just outside a door, and where a seat is (hips), in the world
+func door_point(v, k, out = 0.55):
+	var d = v.doors.get(k)
+	var s = 1.0
+	var zc = 0.3
+	if d:
+		s = float(d.s); zc = (float(d.z0) + float(d.z1)) / 2.0 + 0.1
+	var xf = main.cockpit.car_frame(v)
+	var p = xf.xform(Vector3(s * (float(v.sp.wid) / 2.0 + out), 0, zc))
+	return Vector3(p.x, 0, p.z)
+
+# the next spot to walk to on the way to a door: round the nose or the tail when it's on the
+# other side of the car (the shorter way), then straight to it
+func path_to_door(pos, v, dp):
+	var xf = main.cockpit.car_frame(v)
+	var inv = xf.affine_inverse()
+	var lp = inv.xform(Vector3(pos.x, 0, pos.z))
+	var ld = inv.xform(Vector3(dp.x, 0, dp.z))
+	var hw = float(v.sp.wid) / 2.0 + 0.75
+	var hl = float(v.sp.len) / 2.0 + 0.75
+	if sign(lp.x) == sign(ld.x) and abs(lp.x) > hw - 0.5: return dp
+	var end = hl if (lp.z + ld.z) > 0 else -hl
+	if abs(lp.z) > hl - 0.3:
+		var c2 = xf.xform(Vector3(sign(ld.x) * hw, 0, end))
+		return Vector3(c2.x, 0, c2.z)
+	var c1 = xf.xform(Vector3((sign(lp.x) if lp.x != 0 else 1.0) * hw, 0, end))
+	return Vector3(c1.x, 0, c1.z)
+
+func seat_local(v, i):
+	var cb = main.cockpit.cabin(v)
+	if typeof(i) == TYPE_STRING: return Vector3(cb.xD, min(cb.hy - 0.1, cb.roofY - 1.06), cb.eyeZ - 0.1)
+	var sp = main.cockpit.seat_spots(v)
+	return sp[min(int(i), sp.size() - 1)]
+
+# getting in (k 0 -> 1) or out (1 -> 0) through a door: from standing outside it, a step in
+# with a dip, turning to face the front, then down onto the seat
+func sit_blend(H, v, seat, k, dt, door):
+	var xf = main.cockpit.car_frame(v)
+	var d = v.doors.get(door)
+	var s = float(d.s) if d else (1.0 if seat.x >= 0 else -1.0)
+	var dp = door_point(v, door, 0.5)
+	var out = xf.basis.x.normalized() * s
+	var face = atan2(-out.x, -out.z)
+	var sill = xf.xform(Vector3(s * (float(v.sp.wid) / 2.0 - 0.05), 0, seat.z))
+	sill.y = dp.y
+	var seated = xf * Transform(Basis(), seat - Vector3(0, 0.92, 0))
+	if k < 0.45:
+		var kk = k / 0.45
+		H.transform = Transform(Basis(Vector3.UP, lerp_angle(face, v.yaw, kk * 0.55)), dp.linear_interpolate(sill, kk * 0.6))
+		H.animate(dt, { "speed": 0.0, "crouch": kk * 0.7 })
+	else:
+		var kk = (k - 0.45) / 0.55
+		kk = kk * kk * (3.0 - 2.0 * kk)
+		var from = Transform(Basis(Vector3.UP, lerp_angle(face, v.yaw, 0.55)), dp.linear_interpolate(sill, 0.6))
+		H.transform = from.interpolate_with(seated, kk)
+		H.animate(dt, { "seat": true })
 
 # a flame out of each tailpipe when the engine pops (scripts/EngineAudio.gd)
 func backfire(vol):
@@ -974,27 +1093,39 @@ func nearest_car(p, r):
 			best = v
 	return best
 
-func enter(v):
-	var P = main.player
+# can you take this car? "" no (locked, or someone else's), "jack" (somebody's driving it: they
+# stomp the brakes and you pull them out), "ok"
+func claim(v):
+	if v == null or v.dead or v.blown: return ""
+	if v.driver == "player" or v.driver == "remote" or v.cop or v.rival: return ""
 	if v.locked and not v.owned:
-		main.hud.toast("Locked"); return
+		main.hud.toast("Locked"); return ""
 	if v.driver == "ai":
-		TRAFFIC.erase(v); v.ai = null
-		var l = side(v)
-		main.peds.spawn_fleeing(v.pos + l * (v.sp.wid / 2 + 0.8))
+		TRAFFIC.erase(v); v.ai = null; v.driver = "jacked"
+		v.vel *= 0.15; v.speed *= 0.15
 		main.police.add_wanted(10, v.pos); G.S["heat"] = min(100, G.S["heat"] + 3)
 		G.S["stats"]["carsTaken"] = G.S["stats"].get("carsTaken", 0) + 1
 		main.hud.banner("Carjacked", v.sp.name)
-	elif not v.owned:
-		main.police.add_wanted(4, v.pos)
+		return "jack"
+	if not v.owned: main.police.add_wanted(4, v.pos)
+	return "ok"
+
+# in the driver's seat. Scripts and tests put you straight in; walking up to a car goes through
+# the door first (Player.board), which has already claimed it
+func enter(v, claimed = false):
+	var P = main.player
+	if not claimed:
+		var k = claim(v)
+		if k == "": return
+		if k == "jack": main.peds.spawn_fleeing(v.pos + side(v) * (v.sp.wid / 2 + 0.8))
+		main.sfx.play3d("door_open", v.pos, 0.6)
 	v.driver = "player"; v.parked = false
 	P.car = v; P.crouch = false; P.aim_t = 0
-	main.sfx.play3d("door_open", v.pos, 0.6)
 	main.sfx.engine_on(v)
 
 func leave(v):
 	v.driver = null
-	main.sfx.play3d("door_close", v.pos, 0.7)
+	if not v.doors.has("DFL"): main.sfx.play3d("door_close", v.pos, 0.7)
 	main.sfx.engine_off()
 
 func update(dt):
@@ -1049,7 +1180,7 @@ func update(dt):
 var trailer_drive = false   # trailer shots: keep driving while a cutscene camera films the car
 
 func _player_input():
-	if (G.MODE != "play" and not trailer_drive) or (main.missions and main.missions.frozen()):
+	if (G.MODE != "play" and not trailer_drive) or (main.missions and main.missions.frozen()) or main.player.board != null:
 		return { "thr": 0.0, "gas": 0.0, "brk": 0.0, "steer": 0.0, "hand": false }
 	# (the mouse buttons and LB / RB are for leaning out of the window and shooting)
 	var gas = Input.get_action_strength("move_f") + Input.get_action_strength("gas")

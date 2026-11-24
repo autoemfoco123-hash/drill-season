@@ -39,6 +39,8 @@ func run(m):
 	elif OS.get_environment("DS_WHEELTEST") != "": call_deferred("_wheel_test")
 	elif OS.get_environment("DS_MISSIONTEST") != "": call_deferred("_mission_test")
 	elif OS.get_environment("DS_OFFTEST") != "": call_deferred("_offense_test")
+	elif OS.get_environment("DS_DOORTEST") != "": call_deferred("_door_test")
+	elif OS.get_environment("DS_BOARDTEST") != "": call_deferred("_board_test")
 	else: call_deferred("_go")
 
 func _wait(s):
@@ -2497,15 +2499,15 @@ func _offense_test():
 	var fired = false
 	var shot_taken = false
 	var maxlean = 0.0
-	while OS.get_ticks_msec() - t0 < 4200:
+	while OS.get_ticks_msec() - t0 < 6500:
 		yield(get_tree(), "idle_frame")
 		r.car.pos = rp; r.car.yaw = -PI / 2; r.car.vel = Vector2(); r.car.speed = 0.0; V.place(r.car)
 		car.vel = Vector2(); car.speed = 0.0
-		_aim_cam(r.car.pos + Vector3(0, 0.9, 0) if OS.get_ticks_msec() - t0 < 2600 else r.rider.pos + Vector3(0, 1.35, 0))
+		_aim_cam(r.car.pos + Vector3(0, 0.9, 0) if OS.get_ticks_msec() - t0 < 4000 else r.rider.pos + Vector3(0, 1.35, 0))
 		maxlean = max(maxlean, r.lean)
 		if OS.get_ticks_msec() - t0 > 900 and not fired:
 			fired = true; Input.action_press("db_fire")
-		if OS.get_ticks_msec() - t0 > 1500 and not shot_taken:
+		if main.offense.db_k > 0.99 and OS.get_ticks_msec() - t0 > 2500 and not shot_taken:
 			shot_taken = true
 			yield(_shot("o_driveby"), "completed")
 		if r.rider.is_down(): break
@@ -2704,3 +2706,173 @@ func _off_net_step(a, t):
 		_on_step = 5
 		O._throw_now("grenade", P.pos + Vector3(0, 1.7, 0), Vector3(7, 4, 0))
 		_log("%s threw a grenade" % a[2])
+
+
+# ---------------------------------------------------------------- doors (DS_DOORTEST): every model with a door open and a window down
+func _door_test():
+	yield(_wait(1.0), "completed")
+	main.title._close(); main.start_game(G.new_state("doors"))
+	yield(_wait(1.5), "completed")
+	G.time_offset += (13.0 * 60 - G.world_minutes())
+	var V = main.vehicles
+	var P = main.player
+	P.place(-30, 0, -14, 0)
+	var models = ["sedan", "bruiser", "boulder", "suv", "pickup", "coupe", "hatch", "van", "police", "taxi"]
+	var i = 0
+	for m in models:
+		var at = Vector3(-60 + (i % 5) * 7.0, 0, -6 + int(i / 5) * 9.0)
+		var v = V.spawn(m, at.x, at.z, PI / 2, { "owned": true, "color": 0x8a1c24 })
+		var names = v.doors.keys()
+		names.sort()
+		_log("%s doors %s" % [m, str(names)])
+		V.open_door(v, "DFL", 60.0)
+		V.roll_window(v, "DFR", 60.0)
+		if v.doors.has("DRL"): V.open_door(v, "DRL", 60.0)
+		i += 1
+	yield(_wait(1.5), "completed")
+	_cam_at(Vector3(-46, 9, -22), Vector3(-46, 0.5, -1.5), 50)
+	yield(_wait(0.3), "completed")
+	yield(_shot("d_all_left"), "completed")
+	_cam_at(Vector3(-56.5, 2.6, -11.5), Vector3(-60, 0.9, -6), 46)
+	yield(_wait(0.3), "completed")
+	yield(_shot("d_sedan"), "completed")
+	_cam_at(Vector3(-46, 1.8, 7.5), Vector3(-53, 1.0, 3), 50)
+	yield(_wait(0.3), "completed")
+	yield(_shot("d_right_windows"), "completed")
+	_cam_at(Vector3(-60, 6.0, -9.0), Vector3(-60, 0.6, -6), 50)
+	yield(_wait(0.3), "completed")
+	yield(_shot("d_sedan_top"), "completed")
+	_cam_at(Vector3(-63.5, 1.4, -9.5), Vector3(-60, 0.8, -6), 50)
+	yield(_wait(0.3), "completed")
+	yield(_shot("d_sedan_back"), "completed")
+	get_tree().quit()
+
+
+# ---------------------------------------------------------------- getting in and out (DS_BOARDTEST)
+func _board_wait(cond_obj, cond_key, max_ms):
+	var t0 = OS.get_ticks_msec()
+	while OS.get_ticks_msec() - t0 < max_ms and cond_obj.get(cond_key) != null: yield(get_tree(), "idle_frame")
+
+func _board_test():
+	yield(_wait(1.0), "completed")
+	main.title._close(); main.start_game(G.new_state("rider"))
+	yield(_wait(1.5), "completed")
+	G.time_offset += (14.0 * 60 - G.world_minutes())
+	G.S["settings"]["fp"] = false
+	G.S["cash"] = 20000; G.S["buzz"] = 80
+	G.S["guns"]["buzz"].owned = true; G.S["guns"]["buzz"].res = 400
+	var V = main.vehicles
+	var P = main.player
+	_log("gang: '%s'" % main.gang.create("Door Crew", "DRC", 3))
+	main.gang.hire("shooter", 301, "Tay")
+	main.gang.hire("shooter", 302, "Kay")
+	yield(_wait(1.0), "completed")
+	# ---- your own car: walk up, open the door, sit, close it
+	var car = V.spawn("sedan", -60, 1.8, PI / 2, { "owned": true, "color": 0x2a2d33 })
+	P.place(-61.5, 0, -2.2, 0)
+	for f in main.gang.FOL:
+		f.pos = P.pos + Vector3(-2 - f.slot, 0, -1.5); f.trail.clear()
+	yield(_wait(0.5), "completed")
+	P.car_press()
+	_log("boarding: %s, door %s" % [str(P.board != null), P.board.door if P.board else "-"])
+	var t0 = OS.get_ticks_msec()
+	var shot_open = false
+	var shot_sit = false
+	var max_door = 0.0
+	while OS.get_ticks_msec() - t0 < 9000 and P.board != null:
+		yield(get_tree(), "idle_frame")
+		max_door = max(max_door, V.door_open(car, "DFL"))
+		if not shot_open and P.board != null and P.board.step == "open" and P.board.t > 0.3:
+			shot_open = true
+			_cam_at(car.pos + Vector3(-1.5, 2.2, -6.5), car.pos + Vector3(-0.5, 0.8, -1.0), 50)
+			yield(_shot("b_open"), "completed")
+		if not shot_sit and P.board != null and P.board.step == "sit" and P.board.t > 0.35:
+			shot_sit = true
+			yield(_shot("b_sit"), "completed")
+	main.cutscene.end()
+	_log("in: car %s, driver door opened to %.2f, now %.2f" % [str(P.car == car), max_door, V.door_open(car, "DFL")])
+	# the crew get in through their own doors
+	var t1 = OS.get_ticks_msec()
+	var crew_shot = false
+	while OS.get_ticks_msec() - t1 < 9000:
+		yield(get_tree(), "idle_frame")
+		var all_in = true
+		for f in main.gang.FOL:
+			if not f.riding: all_in = false
+		if not crew_shot and OS.get_ticks_msec() - t1 > 900:
+			crew_shot = true
+			_cam_at(car.pos + Vector3(2.0, 2.4, 6.5), car.pos + Vector3(0, 0.8, 0), 52)
+			yield(_shot("b_crew_in"), "completed")
+		if all_in: break
+	main.cutscene.end()
+	var st = []
+	for f in main.gang.FOL: st.append([f.rec.name, f.riding])
+	_log("crew in: %s, doors now %s" % [str(st), str([stepify(V.door_open(car, "DFR"), 0.01), stepify(V.door_open(car, "DRR"), 0.01)])])
+	# ---- a drive-by: the window goes down, then you sit up on the sill
+	var r = main.offense.spawn_rival("halo")
+	var rp = Vector3(-46, 0, -2.1)
+	r.car.pos = rp; r.car.yaw = -PI / 2; V.place(r.car); r.phase = "attack"
+	P.switch_weapon("buzz")
+	Input.action_press("db_aim")
+	var tw = OS.get_ticks_msec()
+	var first_k = -1.0
+	var win_at_lean = 0.0
+	while OS.get_ticks_msec() - tw < 2500:
+		yield(get_tree(), "idle_frame")
+		r.car.pos = rp; r.car.vel = Vector2(); r.car.speed = 0.0; V.place(r.car)
+		_aim_cam(r.car.pos + Vector3(0, 1.0, 0))
+		if first_k < 0 and main.offense.db_k > 0.0:
+			first_k = main.offense.db_k; win_at_lean = V.window_down(car, "DFL")
+	var cl = []
+	for f in main.gang.FOL: cl.append(stepify(f.lean, 0.01))
+	var rdoor = ("DRL" if r.car.doors.has("DRL") else "DFL") if int(r.get("side", -1)) > 0 else "DFR"
+	_log("drive-by: window down %.2f when you started leaning, lean %.2f, rival window %.2f, rival lean %.2f, crew lean %s" % [win_at_lean, main.offense.db_k, V.window_down(r.car, rdoor), r.lean, str(cl)])
+	yield(_shot("b_driveby"), "completed")
+	_cam_at(car.pos + Vector3(4.5, 2.2, -5.0), car.pos + Vector3(0, 1.1, 0), 50)
+	yield(_wait(0.2), "completed")
+	yield(_shot("b_driveby_side"), "completed")
+	_cam_at(car.pos + Vector3(-3.0, 3.2, 2.6), car.pos + Vector3(0, 1.1, 0), 45)
+	yield(_wait(0.2), "completed")
+	yield(_shot("b_roof"), "completed")
+	main.cutscene.end()
+	Input.action_release("db_aim")
+	for x in main.offense.rivals.duplicate(): main.offense._rival_free(x)
+	yield(_wait(3.5), "completed")
+	_log("after: lean %.2f, window %.2f" % [main.offense.db_k, V.window_down(car, "DFL")])
+	# ---- out again, and the crew with you
+	P.car_press()
+	var t2 = OS.get_ticks_msec()
+	while OS.get_ticks_msec() - t2 < 9000:
+		yield(get_tree(), "idle_frame")
+		var anyone = P.board != null
+		for f in main.gang.FOL:
+			if f.riding: anyone = true
+		if not anyone: break
+	var fp = []
+	for f in main.gang.FOL: fp.append(stepify(f.pos.distance_to(car.pos), 0.1))
+	_log("out: in car %s, you %.1f m from it, crew at %s m" % [str(P.car != null), P.pos.distance_to(car.pos), str(fp)])
+	# ---- a carjacking: the driver is dragged out and doesn't get up
+	var tv = V.spawn("hatch", -40, 2.1, PI / 2, {})
+	tv.ai = { "axis": "x", "line": 0.0, "dir": 1, "speed": 0.0, "turn": null, "turnFor": null }; tv.driver = "ai"
+	V.TRAFFIC.append(tv)
+	P.place(-41.0, 0, -1.6, 0)
+	yield(_wait(0.4), "completed")
+	var downs0 = 0
+	for p in main.peds.PEDS:
+		if p.is_down(): downs0 += 1
+	P.car_press()
+	_log("carjack: %s" % (P.board.jack if P.board else "refused"))
+	var t3 = OS.get_ticks_msec()
+	var jshot = false
+	while OS.get_ticks_msec() - t3 < 9000 and P.board != null:
+		yield(get_tree(), "idle_frame")
+		if not jshot and P.board != null and P.board.get("pulled", false) and P.board.t > 0.5:
+			jshot = true
+			_cam_at(tv.pos + Vector3(-2.5, 2.0, -6.0), tv.pos + Vector3(0, 0.6, -1.5), 50)
+			yield(_shot("b_carjack"), "completed")
+	main.cutscene.end()
+	var downs = 0
+	for p in main.peds.PEDS:
+		if p.is_down(): downs += 1
+	_log("carjacked: in the car %s, driver down %s, wanted %s" % [str(P.car == tv), str(downs > downs0), str(main.police.level)])
+	get_tree().quit()

@@ -114,9 +114,16 @@ func player_car(dt):
 			_db_note = 5.0
 			main.hud.toast("No gun for a drive-by. A K9, a Draft or a Buzzsaw fits out of a window.")
 	_db_note = max(0.0, _db_note - dt)
-	if want and not db: main.sfx.play3d("swing", P.car.pos + Vector3(0, 1.2, 0), 0.3, 0.8)
 	db = want
-	db_k = move_toward(db_k, 1.0 if db else 0.0, dt * 5.0)
+	# the window goes down first, then you lean out (it winds back up a little after)
+	var V = main.vehicles
+	if db:
+		var dl = main.cockpit.car_frame(P.car).basis.orthonormalized().inverse().xform(-main.camera.global_transform.basis.z)
+		if db_k < 0.05: db_left = dl.x > -0.35
+		V.roll_window(P.car, "DFL" if db_left else "DFR", 2.5)
+	var wdown = V.window_down(P.car, "DFL" if db_left else "DFR")
+	if db and db_k == 0.0 and wdown > 0.85: main.sfx.play3d("swing", P.car.pos + Vector3(0, 1.2, 0), 0.3, 0.8)
+	db_k = move_toward(db_k, 1.0 if db and wdown > 0.85 else 0.0, dt * 4.0)
 	if db:
 		P.last_look = G.REAL_T
 		var trig = Input.is_action_pressed("db_fire")
@@ -141,13 +148,16 @@ func _db_gun():
 	return false
 
 func db_muzzle():
+	var P = main.player
+	if not P.fp_on() and P.gun_model and P.gun_model.has_node("Muzzle"): return P.gun_model.get_node("Muzzle").global_transform.origin
 	if arm and arm.has_node("gun/Muzzle"): return arm.get_node("gun/Muzzle").global_transform.origin
 	if arm: return arm.get_node("hand").global_transform.origin
 	return main.player.pos + Vector3(0, 1.3, 0)
 
 func _arm_update(dt):
 	var P = main.player
-	if P.car == null or db_k <= 0.01 or P.dead:
+	# (in third person it's you, sat up on the sill: Player._seat_pose; this arm is for first person)
+	if P.car == null or db_k <= 0.01 or P.dead or not P.fp_on():
 		if arm: arm.visible = false
 		if P.car == null:
 			db = false
@@ -160,7 +170,7 @@ func _arm_update(dt):
 		arm = _arm_make(GUN.build(G.S["cur"]), G.hex_color(so.skin), G.hex_color(so.jacket2 if so.top == "varsity" else so.jacket))
 		_arm_key = key
 	arm.visible = true
-	db_left = _arm_place(arm, P.car, -main.camera.global_transform.basis.z, db_k)
+	_arm_place(arm, P.car, -main.camera.global_transform.basis.z, db_k)
 
 # an arm holding a gun out of a car window (you, or another player online)
 func _arm_make(gun, skin, sleeve):
@@ -234,17 +244,36 @@ func remote_arm(r, dt, s):
 		e = { "node": _arm_make(GUN.build(gid, GUN.def_cfg()), G.hex_color(so.skin), G.hex_color(so.jacket)), "key": gid }
 		remote_arms[r.id] = e
 	var a = s.get("dbd")
+	if typeof(a) != TYPE_ARRAY: a = []
 	var d = Vector3(0, 0, 1)
 	if typeof(a) == TYPE_ARRAY and a.size() == 3:
 		d = Vector3(clamp(float(a[0]) if typeof(a[0]) in [TYPE_INT, TYPE_REAL] else 0.0, -1, 1), clamp(float(a[1]) if typeof(a[1]) in [TYPE_INT, TYPE_REAL] else 0.0, -1, 1), clamp(float(a[2]) if typeof(a[2]) in [TYPE_INT, TYPE_REAL] else 1.0, -1, 1))
 	if d.length() < 0.1: d = Vector3(0, 0, 1)
 	e.node.visible = true
-	_arm_place(e.node, r.car, d.normalized(), clamp(float(s.get("db", 0.0)), 0.0, 1.0))
+	var left = _arm_place(e.node, r.car, d.normalized(), clamp(float(s.get("db", 0.0)), 0.0, 1.0))
+	main.vehicles.roll_window(r.car, "DFL" if left else "DFR", 0.8)
 
 func remote_gone(id):
 	var e = remote_arms.get(id)
 	if e and is_instance_valid(e.node): e.node.queue_free()
 	remote_arms.erase(id)
+
+# someone in a car seat leaning out of the window to shoot (k 0..1): up on the sill with the
+# upper body out (side: +1 the left windows, -1 the right), turned to the target, the gun arm
+# out. A driver shooting across to the passenger side stays in the seat (out = false).
+func lean_pose(H, xf, seat, aim, k, side, dt, out = true, sway = Vector2()):
+	var b = xf.basis.orthonormalized()
+	var dl = b.inverse().xform(aim).normalized()
+	var a = atan2(dl.x, dl.z)
+	var turn = ((clamp(a, -0.2, 2.7) if side > 0 else clamp(a, -2.7, 0.2)) if out else clamp(a, -2.2, 2.2)) * k
+	var off = Vector3(side * 0.48 * k, 0.3 * k, -0.04 * k) if out else Vector3()
+	H.transform = xf * Transform(Basis(Vector3.UP, turn), seat + off - Vector3(0, 0.92, 0))
+	H.animate(dt, { "seat": true, "sway": sway })
+	if k > 0.02:
+		var pitch = asin(clamp(dl.y, -1.0, 1.0))
+		H._rot(H.AR.sh, lerp(-0.4, -PI / 2 - pitch, k), 0, 0.0)
+		H._rot(H.AR.elbow, lerp(-1.2, -0.05, k), 0, 0)
+		H.sync_bones()
 
 # what goes in your network state
 func net_state(s):
@@ -433,17 +462,12 @@ func _rider_pose(r, dt):
 	var side = int(r.get("side", -1))
 	# (no back row: the driver's side, then)
 	var seat = (seats[2] if seats.size() > 2 else Vector3(-seats[0].x, seats[0].y, seats[0].z)) if side > 0 else seats[0]
-	var want = 1.0 if r.phase == "attack" and dl.x * side > -1.5 and Vector2(dl.x, dl.z).length() < 34 else 0.0
-	r.lean = move_toward(r.lean, want, dt * 2.5)
-	var turn = clamp(atan2(dl.x, dl.z), -2.4, 2.4) * r.lean
-	var off = Vector3(0.32 * side * r.lean, 0.16 * r.lean, 0.05 * r.lean)
-	H.transform = xf * Transform(Basis(Vector3.UP, turn), seat - Vector3(0, 0.92, 0) + off)
-	H.animate(dt, { "seat": true, "sway": Vector2(0, 0) })
-	if r.lean > 0.05:
-		var pitch = atan2(dl.y - (seat.y + 0.5), max(1.0, Vector2(dl.x, dl.z).length()))
-		H._rot(H.AR.sh, lerp(-0.4, -PI / 2 - pitch, r.lean), 0, 0.0)
-		H._rot(H.AR.elbow, lerp(-1.2, -0.05, r.lean), 0, 0)
-		H.sync_bones()
+	var door = ("DRL" if v.doors.has("DRL") else "DFL") if side > 0 else "DFR"
+	var want = r.phase == "attack" and dl.x * side > -1.5 and Vector2(dl.x, dl.z).length() < 34
+	# the window winds down, then they come up out of it
+	if want: main.vehicles.roll_window(v, door, 2.0)
+	r.lean = move_toward(r.lean, 1.0 if want and main.vehicles.window_down(v, door) > 0.85 else 0.0, dt * 2.5)
+	lean_pose(H, xf, seat, tp - xf.xform(seat), r.lean, side, dt, true)
 	H.visible = true
 	rd.gun.visible = r.lean > 0.3
 	rd.pos = H.global_transform.origin - Vector3(0, 0.02, 0)

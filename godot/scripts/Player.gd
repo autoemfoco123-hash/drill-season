@@ -93,6 +93,7 @@ var snow_cd = 0.0
 var clap_t = 0.0
 # the bat and the knife: damage, time between swings, reach, when the hit lands
 const MELEE = { "bat": { "dmg": 36, "cd": 0.62, "reach": 2.15, "delay": 0.17, "push": 5.0 }, "knife": { "dmg": 32, "cd": 0.36, "reach": 1.6, "delay": 0.08, "push": 1.2 } }
+var board = null        # getting in or out of a car: { v, in, step, t, door, jack, pulled }
 var hold_model = null
 var hold_key = ""
 var td_t = 0.0          # a takedown playing
@@ -238,6 +239,9 @@ func update(dt):
 			var h = pending_hit
 			pending_hit = null
 			_land_punch(h)
+	if board != null:
+		_board_update(dt)
+		return
 	# right stick and arrow keys look
 	_aim_assist(dt)
 	var lx = Input.get_action_strength("look_r") - Input.get_action_strength("look_l")
@@ -248,7 +252,8 @@ func update(dt):
 		look(sign(lx) * pow(abs(lx), 1.6) * k, sign(ly) * pow(abs(ly), 1.6) * k * 0.72)
 	if car:
 		pos = Vector3(car.pos.x, 0, car.pos.z); vel = Vector3(car.vel.x, 0, car.vel.y); speed = abs(car.speed); body_yaw = car.yaw
-		human.visible = false; aim_t = 0; aiming = false; sprinting = false
+		aim_t = 0; aiming = false; sprinting = false
+		_seat_pose(dt)
 		var so = G.skin_opts(G.S["skin"])
 		main.vehicles.flip_arm(car, flipping() and not fp_on(), G.hex_color(so.skin), G.hex_color(so.jacket2 if so.top == "varsity" else so.jacket), dt)
 		fire_cd -= dt; switch_t -= dt; bloom = max(0, bloom - dt * 2.2)
@@ -1246,16 +1251,137 @@ func use_bandage():
 
 # ---------- cars and doors ----------
 func car_press():
+	if board != null: return
 	if car:
 		if abs(car.speed) > 9:
 			main.hud.toast("Slow down first")
 			return
-		exit_vehicle()
+		begin_exit()
 	else:
 		var v = main.vehicles.nearest_car(pos, 3.2)
-		if v: main.vehicles.enter(v)
+		if v: begin_board(v)
+
+# ---------- getting in and out: to the door, open it, sit, close it, drive (and back) ----------
+func begin_board(v):
+	if dead or is_ragdoll() or down_t > 0: return
+	var kind = main.vehicles.claim(v)
+	if kind == "": return
+	board = { "v": v, "in": true, "step": "walk", "t": 0.0, "door": "DFL", "jack": kind == "jack", "pulled": false }
+	emote_name = ""; crouch = false; aiming = false; aim_t = 0.0; reload_t = 0.0; sprinting = false
+
+func begin_exit():
+	var v = car
+	if v.flip_arm:
+		v.flip_arm.visible = false; v.flip_k = 0.0
+	board = { "v": v, "in": false, "step": "open", "t": 0.0, "door": "DFL" }
+
+func _board_update(dt):
+	var b = board
+	var v = b.v
+	var V = main.vehicles
+	b.t += dt
+	if v.dead or v.blown or dead or G.MODE == "title":
+		board = null
+		if car == v: exit_vehicle(true)
+		return
+	human.visible = not (fp_on() and car != null)
+	if gun_model: gun_model.visible = false
+	var dp = V.door_point(v, b.door, 0.5)
+	var seat = V.seat_local(v, "D")
+	var out = main.cockpit.car_frame(v).basis.x.normalized()
+	var face = atan2(-out.x, -out.z)
+	if b["in"]:
+		if b.step == "walk":
+			var wp = V.path_to_door(pos, v, dp)
+			var to = Vector3(wp.x - pos.x, 0, wp.z - pos.z)
+			var d = to.length()
+			if Vector2(dp.x - pos.x, dp.z - pos.z).length() > 0.12 and d > 0.05 and b.t < 3.5:
+				W.move_body(self, to.x / d * min(d, dt * 4.4), to.z / d * min(d, dt * 4.4), dt)
+				body_yaw += G.ang_diff(body_yaw, atan2(to.x, to.z)) * (1 - exp(-dt * 14))
+				human.translation = pos; human.rotation = Vector3(0, body_yaw, 0)
+				human.animate(dt, { "speed": 4.4 })
+				return
+			b.step = "open"; b.t = 0.0
+			pos = Vector3(dp.x, pos.y, dp.z)
+		if b.step == "open":
+			V.open_door(v, b.door, 0.35)
+			body_yaw += G.ang_diff(body_yaw, face) * (1 - exp(-dt * 12))
+			human.translation = pos; human.rotation = Vector3(0, body_yaw, 0)
+			# carjacked: the driver comes out first, and doesn't get up
+			if b.jack and not b.pulled and b.t > 0.32:
+				b.pulled = true
+				_pull_driver(v, dp, out)
+			human.animate(dt, { "speed": 0.0, "fists": b.jack, "punch": clamp((b.t - 0.32) / 0.3, 0.0, 1.0) if b.jack and b.t > 0.32 and b.t < 0.62 else 0.0, "punchSide": 1 })
+			if b.t > (1.05 if b.jack else 0.42):
+				b.step = "sit"; b.t = 0.0
+			return
+		if b.step == "sit":
+			V.open_door(v, b.door, 0.35)
+			var k = clamp(b.t / 0.62, 0.0, 1.0)
+			V.sit_blend(human, v, seat, k, dt, b.door)
+			pos = human.translation; pos.y = max(0.0, pos.y)
+			if k >= 1.0:
+				b.step = "close"; b.t = 0.0
+			return
+		# the door shuts, and you're driving
+		V.sit_blend(human, v, seat, 1.0, dt, b.door)
+		if b.t > 0.3:
+			board = null
+			V.enter(v, true)
+		return
+	# getting out
+	V.open_door(v, b.door, 0.35)
+	if b.step == "open":
+		pos = Vector3(v.pos.x, 0, v.pos.z)
+		_seat_pose(dt)
+		if b.t > 0.38:
+			b.step = "out"; b.t = 0.0
+			V.leave(v)
+			car = null
+		return
+	var k2 = 1.0 - clamp(b.t / 0.58, 0.0, 1.0)
+	V.sit_blend(human, v, seat, k2, dt, b.door)
+	pos = human.translation; pos.y = max(0.0, pos.y)
+	if k2 <= 0.0:
+		board = null
+		place(dp.x, 0, dp.z)
+		body_yaw = v.yaw + PI
+		cam_yaw = v.yaw + PI if G.REAL_T - last_look > 1.0 else cam_yaw
+
+# whoever was driving: dragged out of the seat and dropped
+func _pull_driver(v, dp, out):
+	var at = dp + out * 0.5
+	var p = main.peds.make(at.x, at.z)
+	p.temp = true; p.yaw = v.yaw
+	main.sfx.play3d("punch", at + Vector3(0, 1.3, 0), 0.9)
+	shake = max(shake, 0.25)
+	G.rumble(0.6, 0.6, 0.15)
+	main.peds.shot(p, 999.0, out, true)
+
+# in the driver's seat (third person): you're there behind the glass, and up on the sill with
+# the gun out of the window during a drive-by
+func _seat_pose(dt):
+	var v = car
+	human.visible = not fp_on()
+	if fp_on() or v == null:
+		if gun_model: gun_model.visible = false
+		return
+	var O = main.offense
+	var xf = main.cockpit.car_frame(v)
+	var seat = main.vehicles.seat_local(v, "D")
+	var k = O.db_k if O else 0.0
+	var sw = Vector2(v.ay if "ay" in v else 0.0, v.ax if "ax" in v else 0.0)
+	if O and k > 0.001:
+		O.lean_pose(human, xf, seat, -main.camera.global_transform.basis.z, k, 1 if O.db_left else -1, dt, O.db_left, sw)
+	else:
+		human.transform = xf * Transform(Basis(), seat - Vector3(0, 0.92, 0))
+		human.animate(dt, { "seat": true, "sway": sw })
+	if gun_model:
+		gun_model.visible = k > 0.3 and not G.S.get("fists", false)
+		if gun_model.visible: _apply_gun(gun_model, G.S["cur"], _gun_pose(G.S["cur"], _reload_u()))
 
 func exit_vehicle(force = false):
+	board = null
 	if not car: return
 	var v = car
 	if v.flip_arm:

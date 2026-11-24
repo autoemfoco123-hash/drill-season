@@ -40,6 +40,10 @@ LEIAME-iOS.txt dentro do zip.
   elas demoram a reagir, e a luta paga um bônus.
 - **Missões online** (Phone → Online → Missions): corrida de rua, entrega da mochila e tomada de
   quarteirão, com quem estiver no servidor.
+- **Portas e vidros de verdade:** para entrar num carro você vai até a porta, abre, senta e fecha;
+  para sair, o mesmo ao contrário. Num roubo de carro você puxa o motorista pra fora e ele fica no
+  chão. A sua gangue entra e sai cada um pela sua porta. No drive-by o vidro desce antes, e quem
+  atira senta na janela com o corpo pra fora (ninguém mais atravessa o teto do carro).
 - **Rodas que giram e esterçam**, luz de freio e de ré, chamas no escapamento e farol iluminando a
   rua à noite.
 

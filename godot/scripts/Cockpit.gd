@@ -15,6 +15,8 @@ var key = ""
 var eye = Vector3()
 var spin = null
 var hands = []
+var side_glass = {}      # the front side windows (1 left, -1 right): they wind down too
+var side_glass_h = 0.5
 var arms = []
 var flip_hand = null
 var flip_k = 0.0
@@ -442,15 +444,18 @@ func cabin(v):
 	var top = roofY - 0.04
 	if hz < zRB: top = roofY - (zRB - hz) / rake * (roofY - deck)
 	var fits = rhy + 0.84 < top and rz - 0.5 > -float(v.sp.len) / 2.0 + 0.25
-	return { "W": W, "xD": W * 0.21, "eyeY": eyeY, "eyeZ": eyeZ, "hy": hy, "rhy": rhy, "rz": rz, "rake": rake, "deck": deck, "rear": fits, "zRB": zRB, "roofY": roofY, "yWB": yWB }
+	return { "W": W, "xD": W * 0.21, "eyeY": eyeY, "eyeZ": eyeZ, "hy": hy, "rhy": rhy, "rz": rz, "rake": rake, "deck": deck, "rear": fits, "zRB": zRB, "roofY": roofY, "yWB": yWB, "rtop": top }
 
 # where passengers sit, as hip points in the car's own space: the front passenger, then the
 # back row behind them, behind the driver, and the middle
+# (a little low in the cushion, so a hat clears the roof in the low cars)
 func seat_spots(v):
 	var cb = cabin(v)
-	var out = [Vector3(-cb.xD, cb.hy, cb.eyeZ - 0.1)]
+	var out = [Vector3(-cb.xD, min(cb.hy - 0.1, cb.roofY - 1.06), cb.eyeZ - 0.1)]
 	if cb.rear:
-		out += [Vector3(-cb.xD * 0.92, cb.rhy, cb.rz - 0.08), Vector3(cb.xD * 0.92, cb.rhy, cb.rz - 0.08), Vector3(0, cb.rhy + 0.02, cb.rz - 0.04)]
+		# under the roof's slope over the back row, hat and all
+		var ry = min(cb.rhy - 0.1, cb.rtop - 1.06)
+		out += [Vector3(-cb.xD * 0.92, ry, cb.rz - 0.08), Vector3(cb.xD * 0.92, ry, cb.rz - 0.08), Vector3(0, ry + 0.02, cb.rz - 0.04)]
 	return out
 
 # the car's frame for people sitting in it: the cockpit's while you're in first person (so they
@@ -510,7 +515,8 @@ func _rear_cabin(v, g, cb, W, xD, eyeZ, yWB, zRB, roofY, soft, insert, trim, lin
 		_bar(g, Vector3(s * (W / 2 - 0.08), yWB + 0.08, min(gz + 0.1, rz - 0.4)), Vector3(s * (W / 2 - 0.15), roofY - 0.05, zRB + 0.04), 0.07, trim)
 		var x = s * (W / 2 - 0.035)
 		# front side window, between the A and B pillars; rear side window, between B and C
-		_poly(g, [Vector3(x, yWB + 0.1, float(G.D["CAR_GEOM"][v.model].zWB) - 0.05), Vector3(x, roofY - 0.06, float(G.D["CAR_GEOM"][v.model].zWT)), Vector3(x, roofY - 0.06, eyeZ - 0.45), Vector3(x, yWB + 0.1, eyeZ - 0.45)], glass)
+		side_glass[s] = _poly(g, [Vector3(x, yWB + 0.1, float(G.D["CAR_GEOM"][v.model].zWB) - 0.05), Vector3(x, roofY - 0.06, float(G.D["CAR_GEOM"][v.model].zWT)), Vector3(x, roofY - 0.06, eyeZ - 0.45), Vector3(x, yWB + 0.1, eyeZ - 0.45)], glass)
+		side_glass_h = roofY - yWB - 0.1
 		_poly(g, [Vector3(x, yWB + 0.1, eyeZ - 0.52), Vector3(x, roofY - 0.06, eyeZ - 0.52), Vector3(x, roofY - 0.06, zRB + 0.06), Vector3(x, yWB + 0.1, min(gz + 0.12, zRB))], glass)
 	# the headliner over the back row, a dome light
 	_box(g, W - 0.18, 0.04, max(0.3, eyeZ - 0.4 - zRB), 0, roofY - 0.04, (eyeZ - 0.4 + zRB) / 2, liner)
@@ -564,6 +570,7 @@ func clear():
 	if root: root.queue_free()
 	root = null; key = ""
 	mirror_vp = null; mirror_cam = null; dice = null; shifter = null; hb_lever = null; pedals = []; wipers = []; dash_light = null
+	side_glass = {}
 	if shown_car and is_instance_valid(shown_car.node): shown_car.node.visible = true
 	shown_car = null
 
@@ -599,6 +606,8 @@ func update(v, cam, dt):
 	var fe = flip_k * flip_k * (3.0 - 2.0 * flip_k)
 	hands[0].visible = fe < 0.35
 	flip_hand.visible = fe > 0.01
+	for gs in side_glass.keys():
+		if is_instance_valid(side_glass[gs]): side_glass[gs].translation = Vector3(0, -side_glass_h * main.vehicles.window_down(v, "DFL" if gs > 0 else "DFR"), 0)
 	# leaning out for a drive-by: that arm is out of the window (Offense.gd draws it)
 	var dbo = main.offense != null and main.offense.db_k > 0.05
 	var dbi = 0 if (main.offense == null or main.offense.db_left) else 1
