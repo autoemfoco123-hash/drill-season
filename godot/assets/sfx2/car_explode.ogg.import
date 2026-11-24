@@ -1,0 +1,15 @@
+[remap]
+
+importer="ogg_vorbis"
+type="AudioStreamOGGVorbis"
+path="res://.import/car_explode.ogg-477fdd423e713810868ed0c2dd9cc264.oggstr"
+
+[deps]
+
+source_file="res://assets/sfx2/car_explode.ogg"
+dest_files=[ "res://.import/car_explode.ogg-477fdd423e713810868ed0c2dd9cc264.oggstr" ]
+
+[params]
+
+loop=true
+loop_offset=0

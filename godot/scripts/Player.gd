@@ -769,7 +769,9 @@ func try_fire():
 			hit_any = true; head_any = head_any or res.head
 		elif res.t != INF:
 			main.sfx.impact(hp, res.car != null)
-			if res.car: res.car.hp -= float(st.dmg) * 0.3
+			if res.car:
+				res.car.hp -= float(st.dmg) * 0.3
+				res.car.by_player = true
 	if hit_any:
 		main.hud.hitmarker(head_any); main.sfx.play("imp_flesh", 0.3)
 	main.sfx.shot(G.S["cur"], muzzle, 1.0, GUN.cfg_of(G.S["cur"]).get("muzzle") == "supp")

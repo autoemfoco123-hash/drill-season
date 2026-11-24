@@ -117,6 +117,27 @@ func _add_new_cars():
 	for m in ["bruiser", "boulder"]:
 		if not m in D["CAR_MODELS"]: D["CAR_MODELS"].append(m)
 		if D.has("CIVIL_MODELS") and not m in D["CIVIL_MODELS"]: D["CIVIL_MODELS"].append(m)
+	_tune_cars()
+
+# faster cars (0-100 km/h from about 4 s in the muscle fastback to 9 in the van), an
+# eight-speed automatic, all-wheel drive on the fast ones, and the cabin measures from the
+# bodies the cars are built with now (scripts/CarGen.gd)
+func _tune_cars():
+	var C = D["CAR_SPECS"]
+	# model: acc (m/s2 off the line), top (m/s), v0 (where power starts to run out), awd
+	var T = { "hatch": [7.6, 44, 13, false], "sedan": [8.6, 52, 15, false], "taxi": [7.9, 48, 14, false], "suv": [8.2, 50, 14, false],
+		"pickup": [8.4, 50, 14, false], "van": [6.6, 42, 12, false], "coupe": [10.6, 64, 18, false], "police": [10.2, 62, 18, true],
+		"bruiser": [11.6, 68, 20, true], "boulder": [10.6, 62, 18, true] }
+	var CG = load("res://scripts/CarGen.gd")
+	for m in C:
+		if T.has(m):
+			C[m]["acc"] = T[m][0]; C[m]["top"] = T[m][1]; C[m]["v0"] = T[m][2]; C[m]["awd"] = T[m][3]
+			if m in ["coupe", "bruiser", "police"]: C[m]["grip"] = 1.12      # performance tires
+		var g = CG.geom(m, C[m])
+		C[m]["wbLen"] = g.wbLen; C[m]["r"] = g.r; C[m]["roofY"] = g.roofY
+		D["CAR_GEOM"][m] = g
+	D["GEARS"] = [4.71, 3.14, 2.11, 1.67, 1.29, 1.0, 0.84, 0.67]
+	D["FINAL"] = 3.07
 
 # older saves: add what newer versions have (new guns and their parts)
 func migrate(st):

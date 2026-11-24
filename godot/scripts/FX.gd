@@ -10,6 +10,10 @@ var balls = []
 var _near_t = 0.0
 # tires: smoke when they spin or slide, and the black marks they leave on the road
 var smoke = []
+var carfx = {}          # burning cars: car id -> { smoke, fire, light }
+var _timed = []         # [node, seconds left]
+var _flashes = []       # [OmniLight, seconds left, energy]
+var _soft = null
 var skid_mm = null
 var skid_i = 0
 var skid_last = [null, null]
@@ -147,10 +151,122 @@ func tires(v, dt):
 		else:
 			skid_last[i] = null
 
+func _filter_live(a):
+	var out = []
+	for t in a:
+		if t[1] > 0: out.append(t)
+	return out
+
 func set_quality(q):
 	snow.amount = 900 if q == "high" else (650 if q == "medium" else 420)
 
+# ---------- a car shot to pieces: engine smoke, fire, the explosion ----------
+func car_fx(v, smoke_k, fire, at):
+	var e = carfx.get(v.id)
+	if e == null:
+		if smoke_k <= 0.0 and not fire: return
+		if _soft == null: _soft = _soft_tex()
+		var sm = _particles(36, 2.6, Color(1, 1, 1, 1), 1.0, false)
+		sm.mesh.material.albedo_texture = _soft
+		sm.mesh.material.flags_unshaded = false
+		sm.emission_shape = CPUParticles.EMISSION_SHAPE_SPHERE; sm.emission_sphere_radius = 0.3
+		sm.direction = Vector3(0, 1, 0); sm.spread = 25; sm.gravity = Vector3(0.6, 1.6, 0)
+		sm.initial_velocity = 1.2; sm.initial_velocity_random = 0.5; sm.damping = 0.4
+		sm.scale_amount = 2.2; sm.scale_amount_random = 0.4
+		var cv = Curve.new(); cv.add_point(Vector2(0, 0.3)); cv.add_point(Vector2(1, 1.6)); sm.scale_amount_curve = cv
+		sm.visible = true
+		var fi = _particles(34, 0.75, Color(1, 0.6, 0.2, 0.95), 0.75, true)
+		fi.mesh.material.albedo_texture = _soft
+		fi.emission_shape = CPUParticles.EMISSION_SHAPE_BOX; fi.emission_box_extents = Vector3(0.5, 0.1, 0.5)
+		fi.direction = Vector3(0, 1, 0); fi.spread = 15; fi.gravity = Vector3(0, 2.5, 0); fi.initial_velocity = 1.4; fi.initial_velocity_random = 0.5
+		fi.scale_amount = 1.3; fi.scale_amount_random = 0.5
+		# (kept red and not too bright: many flames added together would clip to yellow-green)
+		fi.mesh.material.albedo_color = Color(1, 1, 1, 1)
+		var g = Gradient.new(); g.set_color(0, Color(0.9, 0.55, 0.2, 0.55)); g.set_color(1, Color(0.4, 0.05, 0.01, 0)); g.add_point(0.4, Color(0.85, 0.28, 0.04, 0.5)); fi.color_ramp = g
+		fi.visible = true
+		var li = OmniLight.new(); li.light_color = Color(1, 0.55, 0.2); li.omni_range = 9; li.light_energy = 0.0; li.shadow_enabled = false
+		main.add_child(li)
+		e = { "smoke": sm, "fire": fi, "light": li }
+		carfx[v.id] = e
+	e.smoke.translation = at
+	e.smoke.emitting = smoke_k > 0.0
+	var grey = lerp(0.62, 0.09, clamp(smoke_k, 0.0, 1.0))
+	var g2 = Gradient.new(); g2.set_color(0, Color(grey, grey, grey, 0.9)); g2.add_point(0.3, Color(grey, grey, grey, 0.8)); g2.set_color(g2.get_point_count() - 1, Color(grey * 0.8, grey * 0.8, grey * 0.8, 0.0))
+	e.smoke.color_ramp = g2
+	e.fire.translation = at + Vector3(0, 0.05, 0)
+	e.fire.emitting = fire
+	e.light.translation = at + Vector3(0, 0.6, 0)
+	e.light.visible = fire
+	e.light.light_energy = (1.6 + sin(G.REAL_T * 23.0) * 0.3 + sin(G.REAL_T * 7.0) * 0.25) if fire else 0.0
+
+func car_fx_clear(v):
+	var e = carfx.get(v.id)
+	if e == null: return
+	for k in ["smoke", "fire", "light"]:
+		if is_instance_valid(e[k]): e[k].queue_free()
+	carfx.erase(v.id)
+
+func explosion(at):
+	if _soft == null: _soft = _soft_tex()
+	# the fireball
+	var fb = _particles(46, 1.0, Color(1, 0.7, 0.3, 1), 2.2, true)
+	fb.mesh.material.albedo_texture = _soft
+	fb.one_shot = true; fb.explosiveness = 0.92
+	fb.emission_shape = CPUParticles.EMISSION_SHAPE_SPHERE; fb.emission_sphere_radius = 0.9
+	fb.direction = Vector3(0, 1, 0); fb.spread = 180; fb.initial_velocity = 6.5; fb.initial_velocity_random = 0.5
+	fb.damping = 7.0; fb.gravity = Vector3(0, 3.0, 0); fb.scale_amount = 2.4; fb.scale_amount_random = 0.5
+	var cv = Curve.new(); cv.add_point(Vector2(0, 0.5)); cv.add_point(Vector2(1, 1.5)); fb.scale_amount_curve = cv
+	fb.mesh.material.albedo_color = Color(1, 1, 1, 1)
+	var g = Gradient.new(); g.set_color(0, Color(1, 0.85, 0.55, 0.9)); g.add_point(0.25, Color(0.95, 0.42, 0.08, 0.75)); g.add_point(0.6, Color(0.5, 0.1, 0.02, 0.5)); g.set_color(g.get_point_count() - 1, Color(0.1, 0.05, 0.03, 0))
+	fb.color_ramp = g
+	# the black cloud rolling up after it
+	var sm = _particles(30, 4.0, Color(1, 1, 1, 1), 3.0, false)
+	sm.mesh.material.albedo_texture = _soft
+	sm.mesh.material.flags_unshaded = false
+	sm.one_shot = true; sm.explosiveness = 0.6
+	sm.emission_shape = CPUParticles.EMISSION_SHAPE_SPHERE; sm.emission_sphere_radius = 1.0
+	sm.direction = Vector3(0, 1, 0); sm.spread = 60; sm.initial_velocity = 3.5; sm.initial_velocity_random = 0.5; sm.damping = 1.2
+	sm.gravity = Vector3(0.5, 1.2, 0); sm.scale_amount = 2.5; sm.scale_amount_random = 0.4
+	var cv2 = Curve.new(); cv2.add_point(Vector2(0, 0.6)); cv2.add_point(Vector2(1, 2.4)); sm.scale_amount_curve = cv2
+	var g2 = Gradient.new(); g2.set_color(0, Color(0.12, 0.1, 0.09, 0.0)); g2.add_point(0.12, Color(0.1, 0.09, 0.08, 0.85)); g2.set_color(g2.get_point_count() - 1, Color(0.2, 0.2, 0.2, 0.0))
+	sm.color_ramp = g2
+	# debris and sparks
+	var db = _particles(26, 2.4, Color(0.06, 0.06, 0.07, 1), 0.16, false)
+	db.one_shot = true; db.explosiveness = 1.0
+	db.direction = Vector3(0, 1, 0); db.spread = 70; db.initial_velocity = 11.0; db.initial_velocity_random = 0.6
+	db.gravity = Vector3(0, -18, 0); db.scale_amount_random = 0.8
+	var sp = _particles(40, 1.1, Color(1, 0.8, 0.4, 1), 0.07, true)
+	sp.one_shot = true; sp.explosiveness = 1.0
+	sp.direction = Vector3(0, 1, 0); sp.spread = 100; sp.initial_velocity = 14.0; sp.initial_velocity_random = 0.6; sp.gravity = Vector3(0, -12, 0)
+	for n in [fb, sm, db, sp]:
+		n.translation = at
+		n.visible = true
+		n.emitting = true
+		_timed.append([n, 6.0])
+	# the flash
+	var li = OmniLight.new(); li.light_color = Color(1, 0.65, 0.3); li.omni_range = 28; li.light_energy = 7.0; li.shadow_enabled = false
+	li.translation = at + Vector3(0, 1.5, 0)
+	main.add_child(li)
+	_flashes.append([li, 0.7, 7.0])
+	# a scorch mark on the road
+	var mi = MeshInstance.new(); var q = QuadMesh.new(); q.size = Vector2(6.5, 6.5); mi.mesh = q
+	var m = SpatialMaterial.new(); m.flags_transparent = true; m.flags_unshaded = true; m.albedo_texture = _soft; m.albedo_color = Color(0.03, 0.025, 0.02, 0.85)
+	mi.material_override = m; mi.cast_shadow = GeometryInstance.SHADOW_CASTING_SETTING_OFF
+	mi.transform = Transform(Basis(Vector3(1, 0, 0), -PI / 2), Vector3(at.x, 0.035, at.z))
+	main.add_child(mi)
+	_timed.append([mi, 150.0])
+
 func update(dt):
+	for t in _timed:
+		t[1] -= dt
+		if t[1] <= 0 and is_instance_valid(t[0]): t[0].queue_free()
+	_timed = _filter_live(_timed)
+	for f in _flashes:
+		f[1] -= dt
+		if is_instance_valid(f[0]):
+			f[0].light_energy = max(0.0, f[2] * f[1] / 0.7)
+			if f[1] <= 0: f[0].queue_free()
+	_flashes = _filter_live(_flashes)
 	_brass_update(dt)
 	if main.player.car == null:
 		for p in smoke: p.emitting = false

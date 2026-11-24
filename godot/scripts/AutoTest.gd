@@ -32,6 +32,7 @@ func run(m):
 	elif OS.get_environment("DS_COCKPITTEST") != "": call_deferred("_cockpit_test")
 	elif OS.get_environment("DS_BACKSEATTEST") != "": call_deferred("_backseat_test")
 	elif OS.get_environment("DS_PHONETEST") != "": call_deferred("_phone_test")
+	elif OS.get_environment("DS_CARTEST") != "": call_deferred("_car_test")
 	else: call_deferred("_go")
 
 func _wait(s):
@@ -1578,7 +1579,9 @@ func _drive_test():
 	G.time_offset += (13 * 60 - G.world_minutes())
 	var V = main.vehicles
 	var I = { "thr": 0.0, "gas": 0.0, "brk": 0.0, "steer": 0.0, "hand": false }
-	for model in ["hatch", "sedan", "coupe", "boulder", "van"]:
+	var dmodels = ["hatch", "sedan", "coupe", "boulder", "van"]
+	if OS.get_environment("DS_DRIVETEST") == "num": dmodels = ["hatch", "sedan", "taxi", "suv", "pickup", "van", "coupe", "police", "bruiser", "boulder"]
+	for model in dmodels:
 		_dv = V.spawn(model, 0, -40, 0.0, { "color": 0x8a1c24, "owned": true })
 		_dv.driver = "remote"           # the test drives it, not the game loop
 		_log("== %s (acc %.1f, top %d)" % [model, float(_dv.sp.acc), int(_dv.sp.top)])
@@ -1898,4 +1901,51 @@ func _phone_test():
 		yield(_shot("p_%s_app" % where), "completed")
 		main.phone.close(true)
 		yield(_wait(0.3), "completed")
+	get_tree().quit()
+
+# ---------------------------------------------------------------- the cars (DS_CARTEST)
+# every model from the front three-quarter and the back, then one shot until it goes up
+func _car_test():
+	yield(_wait(1.0), "completed")
+	main.title._close(); main.start_game(G.new_state("cartest"))
+	yield(_wait(1.5), "completed")
+	_clean_view(true)
+	G.time_offset += (13 * 60 - G.world_minutes())
+	var V = main.vehicles
+	var P = main.player
+	P.place(-95 + 8, 0, -120, 0)
+	var only = OS.get_environment("DS_CARTEST")
+	var models = ["bruiser", "boulder", "sedan", "suv", "pickup", "coupe", "police", "taxi", "hatch", "van"]
+	var cols = { "bruiser": 0x101114, "boulder": 0x6b0d12, "sedan": 0x1a1c20, "suv": 0x0d0e10, "pickup": 0xd8dade, "coupe": 0xd9a93a, "police": 0x101216, "taxi": 0xe8b81a, "hatch": 0x2b4a7a, "van": 0xe8e8ea }
+	if only != "boom":
+		for m in models:
+			var car = V.spawn(m, -95, -150, 0.0, { "color": cols[m], "owned": true })
+			yield(_wait(0.2), "completed")
+			_frame(car.pos + Vector3(3.6, 1.35, 4.6), car.pos + Vector3(0, 0.75, 0.2), 45)
+			yield(_wait(0.25), "completed")
+			yield(_shot("v_%s_front" % m), "completed")
+			main.cutscene.end()
+			_frame(car.pos + Vector3(-3.4, 1.5, -4.8), car.pos + Vector3(0, 0.75, -0.2), 45)
+			yield(_wait(0.25), "completed")
+			yield(_shot("v_%s_rear" % m), "completed")
+			main.cutscene.end()
+			V.remove(car)
+	# shot to pieces
+	var c2 = V.spawn("bruiser", -95, -150, 0.6, { "color": 0x6b0d12 })
+	var c3 = V.spawn("sedan", -95 + 4.5, -147, 0.2, { "color": 0x1a1c20 })
+	_frame(c2.pos + Vector3(7, 3.2, 8), c2.pos + Vector3(0, 1.0, 0), 50)
+	for step in [["smoke", 35.0, 1.2], ["fire", 10.0, 2.0]]:
+		c2.hp = step[1]; c2.by_player = true
+		yield(_wait(step[2]), "completed")
+		yield(_shot("x_%s" % step[0]), "completed")
+	while not c2.blown:
+		yield(get_tree(), "idle_frame")
+	yield(_wait(0.12), "completed")
+	yield(_shot("x_boom"), "completed")
+	yield(_wait(0.5), "completed")
+	yield(_shot("x_boom2"), "completed")
+	yield(_wait(3.0), "completed")
+	yield(_shot("x_wreck"), "completed")
+	_log("blast: wreck at y %.2f, neighbour hp %.0f, wanted %s" % [c2.blast.y, c3.hp, str(G.S.get("wanted", "?"))])
+	main.cutscene.end()
 	get_tree().quit()

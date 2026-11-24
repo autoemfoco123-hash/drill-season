@@ -56,6 +56,12 @@ class Car:
 	var drift = 0.0       # 1 after a handbrake pull, while the tail is out (traction control steps aside)
 	var drift_dir = 0.0   # which way the tail went out
 	var fyr = 0.0         # last step's rear side force (traction control leaves grip for it)
+	var burn_t = 0.0      # how long it's been on fire
+	var blown = false     # exploded: a burnt-out wreck now
+	var wreck_t = 0.0
+	var blast = null      # the wreck thrown up by its own explosion: height, speeds, tilt
+	var by_player = false # you did this (the police care)
+	var warned = false
 
 func setup(m):
 	main = m
@@ -80,10 +86,9 @@ const MB = preload("res://scripts/MeshBuild.gd")
 var _proc = {}
 
 func _car_node(model):
-	if model in ["bruiser", "boulder"]:
-		if not _proc.has(model): _proc[model] = _build_car(model)
-		return _proc[model].duplicate()
-	return _scene(model).instance()
+	# every car is built in code now (scripts/CarGen.gd), once per model, then copied
+	if not _proc.has(model): _proc[model] = load("res://scripts/CarGen.gd").new().build(model, G.D["CAR_SPECS"][model])
+	return _proc[model].duplicate()
 
 func _cmat(col, unshaded = false, gloss = false):
 	var m = SpatialMaterial.new(); m.albedo_color = col; m.roughness = 0.3 if gloss else 0.7
@@ -221,7 +226,7 @@ func _paint(v, n = null):
 			if c.name.begins_with("paint"):
 				var pm = SpatialMaterial.new()
 				pm.vertex_color_use_as_albedo = true; pm.vertex_color_is_srgb = true
-				pm.albedo_color = G.hex_color(v.color); pm.roughness = 0.35; pm.metallic = 0.0; pm.metallic_specular = 0.6
+				pm.albedo_color = G.hex_color(v.color); pm.roughness = 0.5; pm.metallic = 0.0; pm.metallic_specular = 0.28
 				G.toon(pm, true)
 				c.material_override = pm
 				v.paint_mat = pm
@@ -231,6 +236,7 @@ func _paint(v, n = null):
 func remove(v):
 	if v.dead: return
 	v.dead = true
+	main.fx.car_fx_clear(v)
 	W.DYN.erase(v.box); W.DYN.erase(v.cab)
 	VEH.erase(v); TRAFFIC.erase(v)
 	if v.node: v.node.queue_free()
@@ -380,8 +386,9 @@ func physics_player(v, dt, inp):
 	elif v.drift > 0 and abs(beta0) > 0.08 and sign(beta0) != v.drift_dir: v.drift = 0.0     # it snapped the other way: grip back
 	elif abs(beta0) < 0.16 or abs(vF) < 4.0 or (gas < 0.25 and abs(beta0) < 0.3): v.drift = max(0.0, v.drift - dt * 1.5)
 	# the engine: full push off the line, then its power runs out as the speed climbs
-	var v0 = 11.0
+	var v0 = float(sp.get("v0", 11.0))
 	var pw = 0.75
+	var awd = sp.get("awd", false)
 	var Fdrive = float(sp.acc) * m * min(1.0, pow(v0 / max(abs(vF), 0.1), pw))
 	var roll_k = 0.16
 	var cd = max(0.0, float(sp.acc) * m * pow(v0 / top, pw) - m * roll_k) / (top * top)
@@ -403,9 +410,14 @@ func physics_player(v, dt, inp):
 			if vF < -0.6: Fx_f += min(m * g * 0.6 * gas, Fmax_f * 0.9)     # rolling back: gas brakes first
 			else:
 				var want_x = Fdrive * gas
+				if awd and v.drift <= 0.05:
+					# all-wheel drive: the fronts take 40 percent, as much as they can hold
+					var fx = min(want_x * 0.4, Fmax_f * 0.9)
+					Fx_f += fx
+					want_x -= fx
 				# traction control: never more push than the rear tires have left over from cornering,
 				# except launching straight (muscle cars chirp their tires) or in a drift
-				var launch = abs(vF) < 7.0 and abs(inp.steer) < 0.3 and gas > 0.9 and float(sp.acc) >= 7.5
+				var launch = abs(vF) < 7.0 and abs(inp.steer) < 0.3 and gas > 0.9 and float(sp.acc) >= 7.5 and not awd
 				var cap = Fmax_r
 				if v.drift <= 0.05 and not launch:
 					cap = sqrt(max(0.0, Fmax_r * Fmax_r - v.fyr * v.fyr)) * 0.9
@@ -417,10 +429,10 @@ func physics_player(v, dt, inp):
 		if brk > 0:
 			if vF > 0.8:
 				# ABS: hard braking stops you without locking the wheels, so you can still steer
-				var bf = m * g * 1.0 * brk
-				Fx_f -= min(bf * 0.68, Fmax_f * 0.88)
-				Fx_r -= min(bf * 0.32, Fmax_r * 0.8)
-				abs_on = bf * 0.68 > Fmax_f * 0.88
+				var bf = m * g * 1.2 * brk
+				Fx_f -= min(bf * 0.66, Fmax_f * 0.95)
+				Fx_r -= min(bf * 0.34, Fmax_r * 0.88)
+				abs_on = bf * 0.66 > Fmax_f * 0.95
 			else:
 				Fx_r -= min(float(sp.acc) * m * 0.55 * brk, Fmax_r * 0.9)   # reverse
 	# the front wheels follow the slide when you let them (caster), so a drift is easy to catch
@@ -498,6 +510,107 @@ func physics_player(v, dt, inp):
 	var tr = clamp(-v.ay * 0.009, -0.075, 0.075)
 	v.pitch += (tp - v.pitch) * min(1.0, dt * 7.0)
 	v.roll += (tr - v.roll) * min(1.0, dt * 7.0)
+
+# ---------- shot to pieces: smoke, then fire, then it goes up ----------
+# Under 45 hp the engine smokes, grey then black; at 12 it catches fire, and a few seconds
+# later (sooner if you keep shooting) the tank goes: a fireball, a flash and a boom, the
+# wreck thrown up and dropped burnt out, people and cars nearby hurt by the blast (and the
+# next car along can catch too). The wreck burns a while, then smokes, then gets towed.
+func _damage(v, dt):
+	var f = fwd(v)
+	var bay = v.pos + f * (float(v.sp.len) * 0.5 - 0.7) + Vector3(0, float(v.sp.get("roofY", 1.4)) * 0.62, 0)
+	if v.blown:
+		v.wreck_t += dt
+		_wreck_motion(v, dt)
+		var mid = v.pos + Vector3(0, 0.9 + (v.blast.y if v.blast else 0.0), 0)
+		main.fx.car_fx(v, 1.0 if v.wreck_t < 60 else 0.6, v.wreck_t < 16, mid)
+		return
+	if v.hp >= 45:
+		if v.burn_t > 0 or main.fx.carfx.has(v.id): main.fx.car_fx(v, 0.0, false, bay)
+		return
+	var fire = v.hp <= 12
+	main.fx.car_fx(v, clamp((45.0 - v.hp) / 33.0, 0.15, 1.0), fire, bay)
+	if fire:
+		v.burn_t += dt
+		if v.driver == "player" and not v.warned:
+			v.warned = true
+			main.hud.banner("Your car's on fire", "Get out!")
+		if v.burn_t > 4.5 or v.hp < -35:
+			explode(v)
+
+func explode(v):
+	if v.blown: return
+	v.blown = true; v.hp = -100.0; v.siren = false
+	var at = v.pos + Vector3(0, 0.8, 0)
+	main.fx.explosion(at)
+	main.sfx.play3d("car_explode", at, 1.0, rand_range(0.92, 1.05), "Guns")
+	var P = main.player
+	var d = P.pos.distance_to(at)
+	P.shake = max(P.shake, clamp(1.6 - d / 22.0, 0.0, 1.4))
+	G.rumble(1.0, 1.0, 0.5 if d < 15 else 0.2)
+	# whoever is inside
+	if P.car == v:
+		leave(v); P.car = null
+		P.pos = v.pos + side(v) * (float(v.sp.wid) / 2.0 + 0.6)
+		P.hurt(999, null)
+	elif d < 9.0 and not P.dead:
+		P.hurt((1.0 - d / 9.0) * 110.0, null)
+		var push = (P.pos - at).normalized() * (1.0 - d / 9.0) * 9.0 + Vector3(0, 4.0, 0)
+		P.knock(push, 0.0, 2.5)
+	# people around
+	for list in [main.crews.ENEMIES, main.peds.PEDS, main.police.COPS]:
+		for e in list:
+			if e.is_down(): continue
+			var de = e.pos.distance_to(at)
+			if de < 9.0:
+				e.take_hit((1.0 - de / 9.0) * 140.0, false, (e.pos - at).normalized(), v.by_player, false)
+	# cars around: hurt, shoved, and the close ones catch
+	for o in VEH:
+		if o == v or o.dead or o.blown: continue
+		var dc = Vector2(o.pos.x - v.pos.x, o.pos.z - v.pos.z)
+		var l = dc.length()
+		if l < 8.0:
+			o.hp -= (1.0 - l / 8.0) * 75.0
+			o.vel += dc.normalized() * (1.0 - l / 8.0) * 6.0
+			o.by_player = o.by_player or v.by_player
+	if v.by_player:
+		main.police.add_wanted(18, v.pos)
+		G.S["heat"] = min(100, G.S["heat"] + 6)
+	# the wreck: thrown up, spinning a little, burnt black
+	v.blast = { "y": 0.0, "vy": rand_range(5.0, 7.5), "ax": 0.0, "az": 0.0, "wx": rand_range(-2.2, 2.2), "wz": rand_range(-2.8, 2.8) }
+	v.vel = Vector2(rand_range(-2, 2), rand_range(-2, 2))
+	v.speed = 0.0
+	_char(v.node)
+
+var _burnt = null
+func _char(n):
+	if _burnt == null:
+		_burnt = SpatialMaterial.new(); _burnt.albedo_color = Color(0.07, 0.065, 0.06); _burnt.roughness = 1.0
+		G.toon(_burnt, true)
+	for c in n.get_children():
+		if c is MeshInstance: c.material_override = _burnt
+		_char(c)
+
+func _wreck_motion(v, dt):
+	var b = v.blast
+	if b == null: return
+	if b.y > 0.0 or b.vy > 0.0:
+		b.vy -= 22.0 * dt
+		b.y = max(0.0, b.y + b.vy * dt)
+		b.ax += b.wx * dt; b.az += b.wz * dt
+		if b.y <= 0.0 and b.vy < 0.0:
+			# it lands: a small bounce, then it settles on its wheels or its roof
+			b.vy = -b.vy * 0.22 if abs(b.vy) > 3.0 else 0.0
+			b.wx *= 0.3; b.wz *= 0.3
+			if b.vy == 0.0:
+				b.ax = 0.0 if abs(wrapf(b.ax, -PI, PI)) < PI / 2 else PI
+				b.az = 0.0
+	if v.node:
+		v.node.translation = v.pos + Vector3(0, b.y + (0.9 if b.ax == PI else 0.0), 0)
+		v.node.rotation = Vector3(b.ax, v.yaw, b.az)
+	# it slides to a stop
+	v.vel *= max(0.0, 1.0 - dt * 2.5)
+	v.pos.x += v.vel.x * dt; v.pos.z += v.vel.y * dt
 
 # separating axes between two rectangles on the ground: [normal from b to a, depth] or null
 func _sat(ac, aax, aaz, ah, bc, bax, baz, bh):
@@ -707,7 +820,10 @@ func _traffic_director(dt, focus):
 		if v.dead or v.driver != "ai":
 			TRAFFIC.erase(v); continue
 		var d = v.pos.distance_to(focus)
-		if (d > 175 or v.stuck_t > 14 or v.hp <= 0) and (d > 40 or v.hp <= 0):
+		if v.hp <= 12 and not v.blown: continue          # burning: it goes up first
+		if (d > 175 or v.stuck_t > 14) and d > 40:
+			remove(v)
+		elif v.blown and v.wreck_t > 90 and d > 30:
 			remove(v)
 	var want = 6 if OS.get_processor_count() <= 4 else 9
 	if TRAFFIC.size() < want:
@@ -791,6 +907,8 @@ func update(dt):
 		_parked_director(focus)
 	for v in VEH.duplicate():
 		if v.dead: continue
+		_damage(v, dt)
+		if v.blown: continue
 		var inp = { "thr": 0.0, "steer": 0.0, "hand": false }
 		if v.driver == "remote":
 			continue
