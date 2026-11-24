@@ -16,7 +16,30 @@ Requer Android 4.4 ou mais novo e processador ARM. Ao abrir o APK, permita insta
 para o app que você usou. Se o Play Protect avisar que o app é desconhecido, toque em
 **Mais detalhes → Instalar mesmo assim**.
 
+**iPhone e iPad:** [downloads/DrillSeason-iOS-Xcode.zip](downloads/DrillSeason-iOS-Xcode.zip) é o
+projeto Xcode do jogo. Precisa de um Mac com o Xcode para instalar; o passo a passo está no
+LEIAME-iOS.txt dentro do zip.
+
 ## O que tem
+
+**Novo na 1.9.1**
+
+- **iPhone e iPad:** projeto Xcode pronto (iPhone e Simulador). Abra no Mac, escolha o seu
+  Apple ID e instale no celular.
+- **Carros novos por dentro e por fora:** os dez modelos refeitos, com carroceria esculpida,
+  caixas de roda, farol fino de LED, rodas com raios, disco e pinça. O sedã muscle e o SUV de
+  três fileiras seguem o estilo dos muscle cars de 2026 (marcas fictícias). 0 a 100 mais rápido
+  em todos, câmbio de 8 marchas, tração nas quatro nos mais fortes e freio mais forte.
+- **Carros explodem:** tiro demais e o carro solta fumaça, pega fogo e explode, ferindo quem
+  está perto e arremessando a carcaça, que fica queimada na rua.
+- **Banco de trás:** a sua gangue entra no carro com você e senta no carona e atrás. Olhe para
+  trás e veja o banco, os cintos e o vidro traseiro.
+- **Servidor direto:** crie um servidor com conexão direta, mais rápida (o jogo abre a porta no
+  roteador sozinho quando dá; se não der, volta para o relay). Entre pelo endereço na rede de
+  casa. O servidor dedicado aceita `--port`, `--addr` e `--direct`.
+- **Motion blur leve** ao virar a câmera e em alta velocidade (desliga no app Settings do celular do jogo).
+- **Correções:** os prédios e o som do motor voltaram nos downloads, e o celular abre de novo
+  no Android.
 
 **Novo na 1.9**
 

@@ -40,6 +40,7 @@ common/enable_pause_aware_picking=true
 quality/driver/driver_name="GLES2"
 quality/driver/fallback_to_gles2=true
 vram_compression/import_etc=true
+vram_compression/import_pvrtc=true
 quality/directional_shadow/size=1024
 quality/shadows/filter_mode=0
 environment/default_clear_color=Color( 0.62, 0.7, 0.8, 1 )

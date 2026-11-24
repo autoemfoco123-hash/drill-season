@@ -1,4 +1,12 @@
-Drill Season (versão Godot) 1.9
+Drill Season (versão Godot) 1.9.1
+
+Novo na 1.9.1: carros novos modelados (um fastback musculoso de quatro portas no estilo
+dos novos muscle cars, um SUV musculoso de três fileiras, sedã com grade cromada, SUV
+grande, picape cabine dupla, cupê, polícia), 0-100 bem mais rápido (2,9 s no fastback),
+câmbio de 8 marchas e tração integral nos mais fortes; atire num carro até ele fumaçar,
+pegar fogo e explodir; servidores diretos (mais rápidos) e entrar por endereço; o banco
+de trás com a sua gangue andando junto; motion blur leve; correções: o celular abrindo
+no Android, os prédios e o som do motor nas versões exportadas.
 
 Novo na 1.9: som de motor de simulador (cinco motores, por dentro e por fora do carro),
 interior completo (painel, retrovisor ao vivo, limpadores, câmbio e pedais), carros com

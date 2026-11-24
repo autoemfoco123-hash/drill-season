@@ -1,0 +1,31 @@
+Drill Season 1.9.1 para iPhone e iPad (projeto Xcode)
+
+A Apple só deixa compilar e assinar apps de iPhone num Mac, com o Xcode. Este pacote é o
+jogo inteiro pronto para isso: abra no Xcode e instale no seu iPhone.
+
+Do que você precisa
+  - Um Mac com o Xcode 14 ou mais novo (grátis na App Store do Mac).
+  - Um Apple ID (o grátis serve para instalar no seu próprio iPhone; o app vale 7 dias e
+    depois é só rodar de novo pelo Xcode).
+  - Para mandar para outras pessoas (TestFlight) ou publicar na App Store: o Apple Developer
+    Program (US$ 99 por ano).
+
+Passo a passo
+  1. Descompacte este zip no Mac e abra DrillSeason.xcodeproj.
+  2. Clique no projeto "DrillSeason" na barra da esquerda > aba "Signing & Capabilities".
+     Em "Team", escolha o seu Apple ID (Add an Account... se não aparecer).
+     Se reclamar do identificador, troque o "Bundle Identifier" por algo seu, por
+     exemplo com.seunome.drillseason.
+  3. Ligue o iPhone no Mac pelo cabo, desbloqueie e toque em "Confiar".
+     No iPhone: Ajustes > Privacidade e Segurança > Modo de Desenvolvedor > ligar.
+  4. No Xcode, escolha o seu iPhone lá em cima e aperte Play (Product > Run).
+  5. Na primeira vez, no iPhone: Ajustes > Geral > VPN e Gerenciamento de Dispositivo >
+     o seu Apple ID > Confiar.
+
+Para TestFlight ou App Store: Product > Archive > Distribute App.
+
+Online: os servidores e "Join by address" funcionam no iPhone. Para achar jogos na mesma
+rede Wi-Fi, adicione no Info.plist a chave "Privacy - Local Network Usage Description"
+com um texto como "Para achar jogos na sua rede Wi-Fi".
+
+Também roda no Simulador do iPhone no Mac (já vem a versão para o simulador).

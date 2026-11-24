@@ -1308,7 +1308,7 @@ func _app_settings():
 	var qn = { "high": "High", "medium": "Medium" }
 	_cell("Graphics", qn.get(st.get("quality", "low"), "Fast"), "_quality")
 	_switch("Ink outlines", st.get("outlines", true), "_outlines")
-	if OS.get_name() != "Android": _switch("Full screen", OS.window_fullscreen, "_fullscreen")
+	if not OS.get_name() in ["Android", "iOS"]: _switch("Full screen", OS.window_fullscreen, "_fullscreen")
 	_cell("Phone colour", PHONE_COLS.get(str(st.get("phoneCol", "glacier")), PHONE_COLS["glacier"])[0], "_phone_col")
 	_foot("Fast is made for old graphics cards. High adds shadows and four street-lamp lights.")
 	_sec("Progress")
@@ -1463,7 +1463,7 @@ func _app_music():
 		var t = M.lib[own[j]]
 		_cell(("▶ " if M.cur == t else "") + t.title, t.artist, "_mus_pick", ["My music", j])
 	_foot("%sAdd songs you own: put MP3, OGG or WAV files in\n%s\nName them \"Artist - Title\" to show the artist." % ["" if own.empty() else "", M.folder()])
-	if OS.get_name() != "Android": _action("Open the folder", "_mus_folder")
+	if not OS.get_name() in ["Android", "iOS"]: _action("Open the folder", "_mus_folder")
 	_action("Refresh", "_mus_scan")
 	if M.skipped.size() > 0:
 		var names = []
