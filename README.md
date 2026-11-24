@@ -35,6 +35,8 @@ LEIAME-iOS.txt dentro do zip.
   bônus; se não der, os recrutas que ficaram em casa defendem sozinhos (quanto mais, melhor).
 - **No celular:** aba Turf no app Gang, e o mapa e o minimapa com a cor de cada dono.
 - **Online:** todo mundo no mesmo servidor joga no mesmo mapa. O servidor dedicado salva o mapa.
+- **Trailer novo** na página de download, com trilha original. A arte da Steam e o trailer em
+  1080p estão em `marketing/steam/turf-wars/`.
 
 **Novo na 1.9.1**
 
