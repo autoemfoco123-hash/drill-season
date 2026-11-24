@@ -10,6 +10,8 @@ var balls = []
 var _near_t = 0.0
 # tires: smoke when they spin or slide, and the black marks they leave on the road
 var smoke = []
+var spray = []
+var spray_on = true
 var carfx = {}          # burning cars: car id -> { smoke, fire, light }
 var _timed = []         # [node, seconds left]
 var _flashes = []       # [OmniLight, seconds left, energy]
@@ -103,6 +105,16 @@ func _tire_setup():
 		g.add_point(0.35, Color(0.86, 0.86, 0.9, 0.6)); p.color_ramp = g
 		p.emitting = false; p.visible = true
 		smoke.append(p)
+	# snow kicked up behind the rear wheels when you're moving (not on the Fast setting)
+	for i in range(2):
+		var q = _particles(36, 0.55, Color(0.95, 0.97, 1.0, 0.55), 0.4, false)
+		q.mesh.material.albedo_texture = soft
+		q.emission_shape = CPUParticles.EMISSION_SHAPE_SPHERE; q.emission_sphere_radius = 0.12
+		q.spread = 22; q.gravity = Vector3(0, -6.0, 0); q.initial_velocity_random = 0.4; q.damping = 2.0
+		q.scale_amount = 1.0; q.scale_amount_random = 0.5
+		var g2 = Gradient.new(); g2.set_color(0, Color(1, 1, 1, 0.55)); g2.set_color(1, Color(1, 1, 1, 0.0)); q.color_ramp = g2
+		q.emitting = false; q.visible = true
+		spray.append(q)
 	# skid marks: short dark strips on the road, oldest replaced first
 	var st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -140,6 +152,13 @@ func tires(v, dt):
 		var p = smoke[i]
 		p.translation = wheels[i] + Vector3(0, 0.3, 0)
 		p.emitting = s > 0.28
+		if i < spray.size():
+			var q = spray[i]
+			var sp = abs(v.speed)
+			q.translation = wheels[i] + Vector3(0, 0.12, 0) - f * 0.35 * sign(v.speed)
+			q.direction = Vector3(-f.x * sign(v.speed), 0.45, -f.z * sign(v.speed))
+			q.initial_velocity = 1.2 + sp * 0.1
+			q.emitting = spray_on and sp > 7.0 and s < 0.28 and not v.blown
 		var w = wheels[i] + Vector3(0, 0.028, 0)
 		if s > 0.22:
 			var last = skid_last[i]
@@ -159,6 +178,7 @@ func _filter_live(a):
 
 func set_quality(q):
 	snow.amount = 900 if q == "high" else (650 if q == "medium" else 420)
+	spray_on = q != "low"
 
 # ---------- a car shot to pieces: engine smoke, fire, the explosion ----------
 func car_fx(v, smoke_k, fire, at):
@@ -256,6 +276,28 @@ func explosion(at):
 	main.add_child(mi)
 	_timed.append([mi, 150.0])
 
+# afterfire: a short flame and a flash out of each tip (tips in the car's frame)
+var _bf_mat = null
+func backfire(xf, tips, vol):
+	if _soft == null: _soft = _soft_tex()
+	if _bf_mat == null:
+		_bf_mat = SpatialMaterial.new(); _bf_mat.flags_unshaded = true; _bf_mat.flags_transparent = true
+		_bf_mat.params_blend_mode = SpatialMaterial.BLEND_MODE_ADD; _bf_mat.params_billboard_mode = SpatialMaterial.BILLBOARD_ENABLED
+		_bf_mat.albedo_texture = _soft; _bf_mat.albedo_color = Color(1.0, 0.55, 0.18, 1.0)
+	var back = -xf.basis.z.normalized()
+	for t in tips:
+		var mi = MeshInstance.new()
+		var q = QuadMesh.new(); var sz = 0.22 + vol * 0.35 + randf() * 0.12; q.size = Vector2(sz, sz)
+		mi.mesh = q; mi.material_override = _bf_mat; mi.cast_shadow = GeometryInstance.SHADOW_CASTING_SETTING_OFF
+		mi.translation = xf.xform(t) + back * (0.1 + sz * 0.35)
+		main.add_child(mi)
+		_timed.append([mi, 0.07 + randf() * 0.05])
+	var li = OmniLight.new(); li.light_color = Color(1.0, 0.5, 0.18); li.omni_range = 4.0; li.shadow_enabled = false
+	li.translation = xf.xform(tips[0]) + back * 0.3
+	main.add_child(li)
+	var life = 0.09
+	_flashes.append([li, life, (1.2 + vol * 1.5) * 0.7 / life])
+
 func update(dt):
 	for t in _timed:
 		t[1] -= dt
@@ -270,6 +312,7 @@ func update(dt):
 	_brass_update(dt)
 	if main.player.car == null:
 		for p in smoke: p.emitting = false
+		for p in spray: p.emitting = false
 	var cam = main.camera.global_transform.origin
 	var st = main.story
 	var w = Vector3(st.WIND.dx, 0, st.WIND.dz) * (0.6 + st.WIND.gust * 2.2)

@@ -360,7 +360,14 @@ func _guards():
 		if float(guard_cd.get(b, 0)) > float(G.S["playTime"]): continue
 		if take != null and take.b == b: continue
 		if raid != null and raid.b == b: continue
-		guards[b] = _spawn_crew(b, m[b], corners[b], 3 if VAL[b] >= 250 else 2, 0, true)
+		guards[b] = _spawn_crew(b, m[b], _beside(corners[b]), 3 if VAL[b] >= 250 else 2, 0, true)
+
+# where the people on a corner stand: just off the ring, so you can step onto it
+func _beside(c):
+	for d in [Vector3(3.4, 0, 0.6), Vector3(0.6, 0, 3.4), Vector3(-3.0, 0, 0.8), Vector3(0.8, 0, -3.0)]:
+		var p = c + d
+		if not W.is_blocked(p.x, p.z, 0.5): return p
+	return c
 
 func tags():
 	var out = []

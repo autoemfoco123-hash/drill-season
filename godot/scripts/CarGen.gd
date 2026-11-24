@@ -115,6 +115,7 @@ var p
 var L
 var W
 var hw
+var tips = []           # where the exhaust tips are (backfire flames)
 
 func build(model, sp):
 	p = spec(model)
@@ -129,14 +130,39 @@ func build(model, sp):
 	_front()
 	_rear()
 	_sides()
-	for w in [[p.zF, 1], [p.zR, 1]]:
-		for s in [-1, 1]:
-			_wheel(s * (hw - p.tw / 2 + 0.01), w[0], s)
 	if p.get("bar", false): _lightbar()
 	if p.get("push", false): _pushbar()
 	if p.get("taxi", false): _taxi_sign()
 	mb.commit(root)
+	_wheels(root)
+	root.set_meta("tips", tips)
 	return root
+
+# the wheels are their own nodes so they can roll and steer (Vehicles.gd turns them):
+# Wheels/W[F|R][L|R] sits on the hub and steers about y; its "spin" child rolls about x. The
+# caliper stays on the knuckle, outside the spin.
+func _wheels(root):
+	var body = mb
+	var parts = {}
+	for s in [-1, 1]:
+		var got = []
+		for part in ["spin", "cal"]:
+			mb = MB.new(); mb.mats = body.mats
+			_wheel(0.0, 0.0, s, 0.0, part)
+			var n = Spatial.new(); n.name = part
+			mb.commit(n)
+			got.append(n)
+		parts[s] = got
+	mb = body
+	var wr = Spatial.new(); wr.name = "Wheels"
+	root.add_child(wr)
+	for w in [[p.zF, "F"], [p.zR, "R"]]:
+		for s in [-1, 1]:
+			var piv = Spatial.new(); piv.name = "W" + w[1] + ("L" if s > 0 else "R")
+			piv.translation = Vector3(s * (hw - p.tw / 2 + 0.01), p.r, w[0])
+			piv.add_child(parts[s][1].duplicate())
+			piv.add_child(parts[s][0].duplicate())
+			wr.add_child(piv)
 
 func _cm(col, gloss = false, unshaded = false):
 	var m = SpatialMaterial.new()
@@ -159,7 +185,8 @@ func _mats():
 	mb.mat("disc", _cm(Color(0.36, 0.37, 0.39), true))
 	mb.mat("caliper", _cm(Color(0.75, 0.08, 0.06) if p.get("awd", false) else Color(0.3, 0.31, 0.33)))
 	mb.mat("lightw", _cm(Color(1.0, 0.98, 0.92), false, true))
-	mb.mat("lightr", _cm(Color(0.95, 0.06, 0.05), false, true))
+	mb.mat("lightr", _cm(Color(0.62, 0.05, 0.04), false, true))      # running lamps; braking swaps in a bright one
+	mb.mat("rev", _cm(Color(0.4, 0.4, 0.42), false, true))           # reverse lamps, lit when you back up
 	mb.mat("lightb", _cm(Color(0.1, 0.3, 1.0), false, true))
 	mb.mat("amber", _cm(Color(1.0, 0.55, 0.08), false, true))
 	mb.mat("liner", _cm(Color(0.02, 0.02, 0.022)))
@@ -437,11 +464,14 @@ func _rear():
 		"pair":
 			for s in [-1, 1]:
 				_box("lightr", Vector3(s * (wt - 0.2), ly, z), Vector3(0.32, 0.12, 0.02))
-				_box("lightw", Vector3(s * (wt - 0.2), ly - 0.075, z), Vector3(0.12, 0.03, 0.02))
+				_box("rev", Vector3(s * (wt - 0.2), ly - 0.075, z), Vector3(0.12, 0.03, 0.02))
 			_box("chrome" if p.get("chrome", false) else "trim", Vector3(0, ly, z), Vector3(wt * 2.0 - 0.75, 0.05, 0.02))
 		"vertical":
 			for s in [-1, 1]:
 				_box("lightr", Vector3(s * (wt - 0.06), yt - 0.22, z), Vector3(0.1, 0.36, 0.02))
+	if p.rear != "pair":
+		for s in [-1, 1]:
+			_box("rev", Vector3(s * (wt * 0.42), yb + 0.2, z), Vector3(0.14, 0.035, 0.02))
 	# the bumper, the diffuser and the tips
 	_box("trim", Vector3(0, yb + 0.07, z), Vector3(wt * 2.0 - 0.2, 0.12, 0.03))
 	var n = int(p.get("tips", 2))
@@ -451,6 +481,7 @@ func _rear():
 	elif n == 1: xs = [0.45]
 	for x in xs:
 		var c = Vector3(x * wt / 0.95, yb + 0.06, z - 0.02)
+		tips.append(c + Vector3(0, 0, -0.06))
 		mb.lathe("chrome", Transform(Basis(Vector3(1, 0, 0), PI / 2), c), [[0.035, -0.05], [0.045, -0.05], [0.045, 0.05], [0.035, 0.05]], 10)
 		mb.lathe("trim", Transform(Basis(Vector3(1, 0, 0), PI / 2), c + Vector3(0, 0, 0.02)), [[0.0, -0.01], [0.036, -0.01], [0.036, 0.01], [0.0, 0.01]], 10)
 	# spoilers
@@ -504,18 +535,27 @@ func _sides():
 		_box("lightr", Vector3(s * (_halfw(-L / 2.0 + 0.2) + 0.006), _interp(p.top, -L / 2.0 + 0.2) - 0.14, -L / 2.0 + 0.2), Vector3(0.01, 0.03, 0.08))
 
 # ---------------------------------------------------------------- wheels
-func _wheel(x, z, s):
+func _wheel(x, z, s, yc = -1.0, part = ""):
 	var r = p.r
+	if yc < 0: yc = r
 	var w = p.tw
-	var xf = Transform(Basis(Vector3(0, 0, 1), PI / 2), Vector3(x, r, z))
-	# the tire: tread, rounded shoulders, sidewalls down to the rim
+	var spin = part != "cal"
+	var cal = part != "spin"
+	var xf = Transform(Basis(Vector3(0, 0, 1), PI / 2), Vector3(x, yc, z))
 	var rr = r * (0.68 if p.rim in ["five", "split"] else 0.62)
-	mb.lathe("tire", xf, [[rr, -w / 2], [r * 0.93, -w / 2], [r, -w / 2 + 0.03], [r, w / 2 - 0.03], [r * 0.93, w / 2], [rr, w / 2]], 18)
 	var face = x + s * (w / 2 - 0.015)
-	var hub = Transform(Basis(Vector3(0, 0, 1), PI / 2), Vector3(face, r, z))
-	# behind the spokes: the disc and the caliper
-	mb.lathe("disc", Transform(Basis(Vector3(0, 0, 1), PI / 2), Vector3(face - s * 0.06, r, z)), [[0.0, -0.01], [rr * 0.85, -0.01], [rr * 0.85, 0.01], [0.0, 0.01]], 14)
-	_box("caliper", Vector3(face - s * 0.04, r + rr * 0.55, z - 0.05), Vector3(0.05, rr * 0.4, rr * 0.5))
+	if cal:
+		_box("caliper", Vector3(face - s * 0.04, yc + rr * 0.55, z - 0.05), Vector3(0.05, rr * 0.4, rr * 0.5))
+	if not spin: return
+	# the tire: tread, rounded shoulders, sidewalls down to the rim
+	mb.lathe("tire", xf, [[rr, -w / 2], [r * 0.93, -w / 2], [r, -w / 2 + 0.03], [r, w / 2 - 0.03], [r * 0.93, w / 2], [rr, w / 2]], 18)
+	# a few tread blocks, so you can see it roll
+	for k in range(8):
+		var a0 = TAU * k / 8.0
+		mb.box("trim", Transform(Basis(Vector3(1, 0, 0), -a0), Vector3(x, yc + sin(a0) * (r - 0.004), z + cos(a0) * (r - 0.004))), Vector3(w * 0.8, 0.012, 0.05), 0.5, false)
+	var hub = Transform(Basis(Vector3(0, 0, 1), PI / 2), Vector3(face, yc, z))
+	# behind the spokes: the disc
+	mb.lathe("disc", Transform(Basis(Vector3(0, 0, 1), PI / 2), Vector3(face - s * 0.06, yc, z)), [[0.0, -0.01], [rr * 0.85, -0.01], [rr * 0.85, 0.01], [0.0, 0.01]], 14)
 	# the rim: a lip, then spokes or a steel dish
 	mb.lathe("rim", hub, [[rr * 0.92, -0.02], [rr, -0.02], [rr, 0.015], [rr * 0.92, 0.015]], 16)
 	match p.rim:
@@ -523,15 +563,15 @@ func _wheel(x, z, s):
 			mb.lathe("rim", hub, [[0.0, -0.012], [rr * 0.92, -0.012], [rr * 0.92, 0.0], [0.0, 0.0]], 14)
 			for k in range(6):
 				var a = TAU * k / 6.0
-				_box("trim", Vector3(face + s * 0.003, r + sin(a) * rr * 0.6, z + cos(a) * rr * 0.6), Vector3(0.008, 0.03, 0.03))
+				_box("trim", Vector3(face + s * 0.003, yc + sin(a) * rr * 0.6, z + cos(a) * rr * 0.6), Vector3(0.008, 0.03, 0.03))
 		_:
 			var n = { "five": 5, "split": 10, "chrome": 6 }.get(p.rim, 5)
 			var thick = 0.055 if n <= 6 else 0.03
 			for k in range(n):
 				var a = TAU * k / n + (0.12 if p.rim == "split" and k % 2 == 1 else 0.0)
-				var c = Vector3(face, r + sin(a) * rr * 0.5, z + cos(a) * rr * 0.5)
+				var c = Vector3(face, yc + sin(a) * rr * 0.5, z + cos(a) * rr * 0.5)
 				mb.box("rim", Transform(Basis(Vector3(1, 0, 0), -a), c), Vector3(0.025, thick, rr * 0.92), 0.5, false)
-	mb.lathe("rim", Transform(Basis(Vector3(0, 0, 1), PI / 2), Vector3(face + s * 0.005, r, z)), [[0.0, -0.01], [rr * 0.2, -0.01], [rr * 0.2, 0.01], [0.0, 0.01]], 10)
+	mb.lathe("rim", Transform(Basis(Vector3(0, 0, 1), PI / 2), Vector3(face + s * 0.005, yc, z)), [[0.0, -0.01], [rr * 0.2, -0.01], [rr * 0.2, 0.01], [0.0, 0.01]], 10)
 
 # ---------------------------------------------------------------- police, taxi
 func _lightbar():

@@ -62,6 +62,20 @@ class Car:
 	var blast = null      # the wreck thrown up by its own explosion: height, speeds, tilt
 	var by_player = false # you did this (the police care)
 	var warned = false
+	var wheels = []       # [pivot, spin, front] per wheel (CarGen builds them as their own nodes)
+	var wa_f = 0.0        # how far the front and rear wheels have rolled (radians)
+	var wa_r = 0.0
+	var wst = 0.0         # the front wheels' steering angle as drawn
+	var prev_yaw = 0.0
+	var prev_pos = Vector3()
+	var hand = false      # handbrake on (your car): the rears stop turning
+	var lamp_r = null     # the tail lamps and reverse lamps, lit by braking and backing up
+	var lamp_r_m = null
+	var lamp_rev = null
+	var lamp_rev_m = null
+	var lamps = -1
+	var beam = null       # the pool of light in front of a moving car at night
+	var tips = []
 
 func setup(m):
 	main = m
@@ -209,9 +223,93 @@ func spawn(model, x, z, yaw, o = {}):
 	main.add_child(n)
 	v.node = n
 	_paint(v)
+	_rig(v, model)
 	VEH.append(v)
 	place(v)
+	v.prev_yaw = v.yaw; v.prev_pos = v.pos
 	return v
+
+# the moving parts of a car: wheels, lamps, the headlight pool, the exhaust tips
+var BRAKE_MAT = null
+var REV_MAT = null
+var BEAM_MAT = null
+func _rig(v, model):
+	var n = v.node
+	var wn = n.get_node_or_null("Wheels")
+	if wn:
+		for nm in ["WFL", "WFR", "WRL", "WRR"]:
+			var piv = wn.get_node_or_null(nm)
+			if piv and piv.get_node_or_null("spin"): v.wheels.append([piv, piv.get_node("spin"), nm[1] == "F"])
+	v.lamp_r = n.get_node_or_null("lightr")
+	if v.lamp_r: v.lamp_r_m = v.lamp_r.material_override
+	v.lamp_rev = n.get_node_or_null("rev")
+	if v.lamp_rev: v.lamp_rev_m = v.lamp_rev.material_override
+	if _proc.has(model) and _proc[model].has_meta("tips"): v.tips = _proc[model].get_meta("tips")
+	if BRAKE_MAT == null:
+		BRAKE_MAT = SpatialMaterial.new(); BRAKE_MAT.flags_unshaded = true; BRAKE_MAT.albedo_color = Color(1.0, 0.16, 0.1)
+		REV_MAT = SpatialMaterial.new(); REV_MAT.flags_unshaded = true; REV_MAT.albedo_color = Color(1.0, 0.98, 0.92)
+		BEAM_MAT = SpatialMaterial.new(); BEAM_MAT.flags_unshaded = true; BEAM_MAT.flags_transparent = true
+		BEAM_MAT.params_blend_mode = SpatialMaterial.BLEND_MODE_ADD; BEAM_MAT.albedo_texture = main.fx._soft_tex()
+		BEAM_MAT.albedo_color = Color(1.0, 0.9, 0.72, 0.0)
+	var q = QuadMesh.new(); q.size = Vector2(3.6, 8.0)
+	var b = MeshInstance.new(); b.name = "beam"; b.mesh = q; b.material_override = BEAM_MAT
+	b.cast_shadow = GeometryInstance.SHADOW_CASTING_SETTING_OFF
+	b.transform = Transform(Basis(Vector3(1, 0, 0), -PI / 2), Vector3(0, 0.05, float(v.sp.len) / 2.0 + 4.2))
+	b.visible = false
+	n.add_child(b)
+	v.beam = b
+
+# wheels roll with the road, the fronts steer, the rears spin up in a burnout and stop on the
+# handbrake; brake and reverse lamps; at night a pool of light ahead of every moving car
+func _animate(dt):
+	if dt <= 0: return
+	var cam = G.cam_pos
+	var night = main.DN.lamps if main else 0.0
+	if BEAM_MAT: BEAM_MAT.albedo_color.a = 0.17 * night
+	for v in VEH:
+		if v.dead or v.node == null: continue
+		var moved = v.pos - v.prev_pos
+		var yr = G.ang_diff(v.prev_yaw, v.yaw) / dt
+		v.prev_pos = v.pos; v.prev_yaw = v.yaw
+		# (your own car has a real headlight; the pool is for everyone else's)
+		if v.beam: v.beam.visible = night > 0.05 and not v.blown and not v.parked and v.driver != "player" and (v.driver != null or abs(v.speed) > 0.5)
+		if v.blown or v.wheels.empty(): continue
+		if v.pos.distance_squared_to(cam) > 110.0 * 110.0: continue
+		var f = fwd(v)
+		var spd = v.speed if v.driver != "remote" else moved.dot(f) / dt
+		var r = max(0.2, float(v.sp.get("r", 0.36)))
+		var wf = spd / r
+		var wrr = wf
+		if v.driver == "player":
+			if v.spin > 0: wrr = wf + v.spin * 45.0 * (1.0 if spd >= -0.5 else -1.0)
+			elif v.slip > 0.4 and v.drift <= 0: wrr = wf * (1.0 + v.slip)
+			if v.hand and abs(spd) > 1.0: wrr = 0.0
+		# no more than about a fifth of a turn a frame, or the spokes strobe backwards
+		var cap = 1.2
+		v.wa_f = fmod(v.wa_f + clamp(wf * dt, -cap, cap), TAU)
+		v.wa_r = fmod(v.wa_r + clamp(wrr * dt, -cap, cap), TAU)
+		var want = v.steer
+		if v.driver == "remote" or v.driver == null:
+			# someone else's car online (or one rolling free): steer from how fast it turns
+			var wb = float(v.sp.get("wbLen", 2.8))
+			want = atan(yr * wb / max(2.5, abs(spd))) * (1.0 if spd >= 0 else -1.0)
+		want = clamp(want, -0.6, 0.6)
+		v.wst += (want - v.wst) * min(1.0, dt * 9.0)
+		for w in v.wheels:
+			w[0].rotation = Vector3(0, v.wst if w[2] else 0.0, 0)
+			w[1].rotation = Vector3(v.wa_f if w[2] else v.wa_r, 0, 0)
+		# lamps: 1 braking, 2 reversing
+		var st = (1 if v.brake else 0) + (2 if v.driver == "player" and spd < -0.3 else 0)
+		if st != v.lamps:
+			v.lamps = st
+			if v.lamp_r: v.lamp_r.material_override = BRAKE_MAT if st & 1 else v.lamp_r_m
+			if v.lamp_rev: v.lamp_rev.material_override = REV_MAT if st & 2 else v.lamp_rev_m
+
+# a flame out of each tailpipe when the engine pops (scripts/EngineAudio.gd)
+func backfire(vol):
+	var v = main.player.car
+	if v == null or v.node == null or v.tips.empty() or not v.node.visible: return
+	main.fx.backfire(v.node.global_transform, v.tips, vol)
 
 func _paint(v, n = null):
 	if n == null: n = v.node
@@ -914,6 +1012,7 @@ func update(dt):
 			continue
 		if v.driver == "player":
 			inp = _player_input()
+			v.hand = inp.get("hand", false)
 		elif v.cop:
 			inp = main.police.cop_drive(v, dt)
 		elif v.ai:
@@ -931,6 +1030,7 @@ func update(dt):
 		elif v.slip > 0: v.slip = 0.0
 		hit_people(v)
 		place(v)
+	_animate(dt)
 	# headlight for your car after dark
 	var P = main.player
 	if P.car and main.DN.lamps > 0.1:

@@ -201,6 +201,7 @@ func pop(vol):
 	p.volume_db = linear2db(vol * level * lerp(1.0, 0.55, interior))
 	p.pitch_scale = rand_range(0.85, 1.15)
 	p.play()
+	if main and main.vehicles: main.vehicles.backfire(vol)
 
 func upshift(eload, rpm):
 	if eload > 0.7 and rpm > red_rpm() * 0.7 and pname in SPORTY:

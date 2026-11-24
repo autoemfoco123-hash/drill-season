@@ -36,6 +36,7 @@ func run(m):
 	elif OS.get_environment("DS_DIRECTTEST") != "": call_deferred("_direct_test")
 	elif OS.get_environment("DS_BLURTEST") != "": call_deferred("_blur_test")
 	elif OS.get_environment("DS_TURFTEST") != "": call_deferred("_turf_test")
+	elif OS.get_environment("DS_WHEELTEST") != "": call_deferred("_wheel_test")
 	else: call_deferred("_go")
 
 func _wait(s):
@@ -2198,4 +2199,109 @@ func _turf_test():
 	G.save_game()
 	var st = G.load_save()
 	_log("saved turf: %s" % str(st.get("turf")))
+	get_tree().quit()
+
+
+# ---------------------------------------------------------------- wheels and lamps (DS_WHEELTEST)
+func _cam_at(from, look, fov = 46.0):
+	main.cutscene.end()
+	main.cutscene.play([{ "dur": 999.0, "from": from, "to": from, "look": look, "look_to": look, "fov": fov }])
+	main.vehicles.trailer_drive = true
+
+func _wheel_test():
+	yield(_wait(1.0), "completed")
+	main.title._close(); main.start_game(G.new_state("wheels"))
+	yield(_wait(1.5), "completed")
+	G.time_offset += (21.4 * 60 - G.world_minutes())
+	G.S["settings"]["quality"] = "high"; main.set_quality("high")
+	G.S["settings"]["fp"] = false
+	var V = main.vehicles
+	var P = main.player
+	var at = Vector3(-60, 0, 1.8)
+	var car = V.spawn("bruiser", at.x, at.z, PI / 2, { "color": 0x8a1c24, "owned": true })
+	V.enter(car)
+	_log("wheels on the car: %d, tips %d, lamps %s %s" % [car.wheels.size(), car.tips.size(), str(car.lamp_r != null), str(car.lamp_rev != null)])
+	yield(_wait(0.5), "completed")
+	# steering at a standstill, close on the front wheel
+	Input.action_press("move_l")
+	yield(_wait(0.6), "completed")
+	var f = V.fwd(car); var sd = V.side(car)
+	_cam_at(car.pos + f * 3.6 + sd * 2.4 + Vector3(0, 0.7, 0), car.pos + f * 1.5 + sd * 0.8 + Vector3(0, 0.35, 0), 44)
+	yield(_wait(0.5), "completed")
+	_log("steer %.2f, front wheel turned %.2f" % [car.steer, car.wheels[0][0].rotation.y])
+	yield(_shot("w_steer"), "completed")
+	Input.action_release("move_l")
+	main.cutscene.end()
+	# rolling: the spin angle moves with the road
+	Input.action_press("move_f")
+	yield(_wait(1.5), "completed")
+	var a0 = car.wa_f
+	yield(_wait(0.2), "completed")
+	_log("rolling at %.1f m/s: front spin %.2f -> %.2f" % [car.speed, a0, car.wa_f])
+	f = V.fwd(car); sd = V.side(car)
+	_cam_at(car.pos + f * 6 + sd * 2.0 + Vector3(0, 0.5, 0), car.pos + Vector3(0, 0.5, 0), 40)
+	yield(_wait(0.15), "completed")
+	yield(_shot("w_roll"), "completed")
+	main.cutscene.end()
+	# braking: the tail lamps light up
+	Input.action_release("move_f"); Input.action_press("move_b")
+	yield(_wait(0.25), "completed")
+	f = V.fwd(car)
+	_cam_at(car.pos - f * 7 + Vector3(0, 1.4, 0), car.pos + Vector3(0, 0.7, 0), 44)
+	yield(_wait(0.15), "completed")
+	_log("braking: brake %s lamps %d" % [str(car.brake), car.lamps])
+	yield(_shot("w_brake"), "completed")
+	yield(_wait(2.0), "completed")
+	# backing up: the reverse lamps
+	yield(_wait(1.2), "completed")
+	f = V.fwd(car)
+	_cam_at(car.pos - f * 6 + Vector3(0, 1.2, 0), car.pos + Vector3(0, 0.6, 0), 44)
+	yield(_wait(0.2), "completed")
+	_log("reversing at %.1f m/s: lamps %d" % [car.speed, car.lamps])
+	yield(_shot("w_reverse"), "completed")
+	Input.action_release("move_b")
+	main.cutscene.end()
+	yield(_wait(1.5), "completed")
+	# a burnout: the rears spin, the car stays put
+	Input.action_press("move_f"); Input.action_press("move_b")
+	yield(_wait(1.2), "completed")
+	var r0 = car.wa_r
+	var f0 = car.wa_f
+	yield(_wait(0.3), "completed")
+	_log("burnout: spin %.2f speed %.1f, rear turned %.2f, front %.2f" % [car.spin, car.speed, abs(car.wa_r - r0), abs(car.wa_f - f0)])
+	Input.action_release("move_f"); Input.action_release("move_b")
+	# a backfire, from behind
+	yield(_wait(0.8), "completed")
+	f = V.fwd(car)
+	_cam_at(car.pos - f * 4.5 + V.side(car) * 1.2 + Vector3(0, 0.8, 0), car.pos - f * 2.4 + Vector3(0, 0.3, 0), 44)
+	yield(_wait(0.1), "completed")
+	yield(_wait(2.5), "completed")
+	V.backfire(0.9)
+	var img = get_viewport().get_texture().get_data()
+	yield(get_tree(), "idle_frame")
+	img = get_viewport().get_texture().get_data(); img.flip_y(); img.save_png(out.plus_file("w_backfire.png"))
+	_log("backfire flames alive: %d" % main.fx._timed.size())
+	# the pool of light ahead of the car, seen from in front
+	f = V.fwd(car)
+	_cam_at(car.pos + f * 13 + Vector3(0, 2.2, 0.5), car.pos + f * 4 + Vector3(0, 0, 0), 50)
+	yield(_wait(0.3), "completed")
+	_log("own beam visible %s (the real headlight lights your road)" % str(car.beam.visible))
+	yield(_shot("w_beam"), "completed")
+	main.cutscene.end()
+	# traffic at night: pools of light, wheels turning at the corners
+	V.leave(car); P.car = null
+	P.place(-7, 0, 34, 0)
+	var steering = 0.0
+	var t0 = OS.get_ticks_msec()
+	while OS.get_ticks_msec() - t0 < 25000:
+		yield(get_tree(), "idle_frame")
+		for v in V.VEH:
+			if v.driver != "player" and not v.wheels.empty(): steering = max(steering, abs(v.wst))
+	var lit = 0
+	for v in V.VEH:
+		if v.beam and v.beam.visible: lit += 1
+	_log("traffic: %d cars, %d with headlight pools, biggest steer %.2f" % [V.VEH.size(), lit, steering])
+	_cam_at(Vector3(-4.5, 1.9, 24), Vector3(0.5, 0.4, -12), 52)
+	yield(_wait(0.3), "completed")
+	yield(_shot("w_traffic"), "completed")
 	get_tree().quit()
