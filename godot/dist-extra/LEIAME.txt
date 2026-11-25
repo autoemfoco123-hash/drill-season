@@ -1,6 +1,18 @@
-Drill Season (versão Godot) 1.9.2
+Drill Season (versão Godot) 1.9.3
 
-Novo na 1.9.2: TURF WARS. As ruas cortam o Calder Park em 16 quarteirões, e cada um é de
+Novo na 1.9.3: ATAQUE. Drive-by: no carro, segure o botão direito (ou Q / LB) e o vidro
+desce, você senta na janela com a arma pra fora e atira com o botão esquerdo (RB); a sua
+gangue no carro também atira, e à noite carros das crews rivais passam atirando em você.
+Granada e molotov na roda de armas (segure para ver o arco, solte para jogar, ou X), taco e
+faca na Ironside Arms, e neutralizar sem barulho por trás (E, agachado). Mirando num rival:
+toque E e a gangue vai pra cima, segure E para as ordens (atacar, flanquear, segurar o
+ponto, reagrupar). Emboscadas: as crews andam pelas ruas à noite; acerte antes e ganhe um
+bônus. Missões online no celular (corrida, entrega da mochila, tomada de quarteirão).
+Portas e vidros de verdade: você vai até a porta, abre, senta e fecha para dirigir; num
+roubo de carro o motorista é puxado pra fora. Rodas que giram, luz de freio e de ré.
+No carro, W/S e os gatilhos aceleram e freiam; os botões do mouse ficam para o drive-by.
+
+Na 1.9.2: TURF WARS. As ruas cortam o Calder Park em 16 quarteirões, e cada um é de
 alguém: Halo, Low End, Sable Row (crews inventadas), ninguém, ou a delegacia da Area 7.
 Com uma gangue, vá até a esquina de um quarteirão (o anel na calçada, na cor do dono) e
 segure E: o pessoal do dono vem em ondas; segure a esquina e limpe o quarteirão. Cada

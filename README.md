@@ -22,7 +22,7 @@ LEIAME-iOS.txt dentro do zip.
 
 ## O que tem
 
-**Na próxima versão (1.9.3): ataque**
+**Novo na 1.9.3: Ataque**
 
 - **Drive-by:** no carro, segure o botão direito (ou Q / LB) para pôr o braço com a arma pra fora
   da janela e atire com o botão esquerdo (RB). Funciona com a K9, a Draft e a Buzzsaw. A sua

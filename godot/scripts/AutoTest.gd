@@ -2467,6 +2467,9 @@ func _offense_test():
 	yield(_wait(1.0), "completed")
 	main.title._close(); main.start_game(G.new_state("shooter"))
 	yield(_wait(1.5), "completed")
+	if OS.get_environment("DS_NOHUD") != "":
+		# pictures for the download page: no blur, the nice settings
+		G.S["settings"]["motionblur"] = false; G.S["settings"]["quality"] = "high"; main.set_quality("high")
 	G.time_offset += (22.0 * 60 - G.world_minutes())
 	G.S["settings"]["fp"] = false
 	G.S["cash"] = 20000; G.S["buzz"] = 80
@@ -2757,6 +2760,9 @@ func _board_test():
 	yield(_wait(1.0), "completed")
 	main.title._close(); main.start_game(G.new_state("rider"))
 	yield(_wait(1.5), "completed")
+	if OS.get_environment("DS_NOHUD") != "":
+		# pictures for the download page: no blur, the nice settings
+		G.S["settings"]["motionblur"] = false; G.S["settings"]["quality"] = "high"; main.set_quality("high")
 	G.time_offset += (14.0 * 60 - G.world_minutes())
 	G.S["settings"]["fp"] = false
 	G.S["cash"] = 20000; G.S["buzz"] = 80
@@ -2852,10 +2858,10 @@ func _board_test():
 	for f in main.gang.FOL: fp.append(stepify(f.pos.distance_to(car.pos), 0.1))
 	_log("out: in car %s, you %.1f m from it, crew at %s m" % [str(P.car != null), P.pos.distance_to(car.pos), str(fp)])
 	# ---- a carjacking: the driver is dragged out and doesn't get up
-	var tv = V.spawn("hatch", -40, 2.1, PI / 2, {})
+	var tv = V.spawn("hatch", -27, 2.1, PI / 2, {})
 	tv.ai = { "axis": "x", "line": 0.0, "dir": 1, "speed": 0.0, "turn": null, "turnFor": null }; tv.driver = "ai"
 	V.TRAFFIC.append(tv)
-	P.place(-41.0, 0, -1.6, 0)
+	P.place(-28.0, 0, -1.6, 0)
 	yield(_wait(0.4), "completed")
 	var downs0 = 0
 	for p in main.peds.PEDS:

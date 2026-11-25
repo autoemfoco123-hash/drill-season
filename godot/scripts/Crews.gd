@@ -117,7 +117,8 @@ func engage(c, why = ""):
 	elif was: main.hud.banner("Fight", "")
 
 func damage(e, dmg, head, dir, melee):
-	if e.is_down(): return
+	# (someone can still be aiming at a rival who's already gone: walked off, or cleared away)
+	if e.is_down() or not e in ENEMIES or not is_instance_valid(e.h): return
 	e.hp -= dmg
 	if not melee: main.sfx.blood(e.pos + Vector3(0, 1.6 if head else 1.15, 0), dir)
 	if e.crew.state != "combat":
